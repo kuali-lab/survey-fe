@@ -1,0 +1,24 @@
+/* Design tokens */
+:root {
+  --primary-50: #f7bb00;
+  --primary-30: #fce18e;
+  --primary-10: #fffbed;
+  --tertiary-10: #ffffff;
+  --tertiary-20: #f7f8f9;
+  --tertiary-30: #d9dde3;
+  --tertiary-40: #c8ccd2;
+  --tertiary-60: #8c8f93;
+  --tertiary-70: #5c5e61;
+  --tertiary-80: #2e3032;
+  --tertiary-100: #151718;
+  --error-50: #dc2626;
+  --font: 'Source Sans 3', sans-serif;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 24px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { font-family: var(--font); background: var(--tertiary-20); color: var(--tertiary-80); }
