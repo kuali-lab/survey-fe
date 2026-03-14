@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Logo from './Logo.svelte'
+
   let {
     title,
     description,
@@ -15,16 +17,13 @@
 </script>
 
 <div class="card">
+  <div class="logo-bar">
+    <Logo height={24} />
+  </div>
+
   {#if imageUrl}
     <div class="cover">
       <img src={imageUrl} alt={title} />
-    </div>
-  {:else}
-    <div class="cover-placeholder">
-      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="3" y="3" width="18" height="18" rx="3" stroke="#f7bb00" stroke-width="1.5"/>
-        <path d="M7 8h10M7 12h10M7 16h6" stroke="#f7bb00" stroke-width="1.5" stroke-linecap="round"/>
-      </svg>
     </div>
   {/if}
 
@@ -65,13 +64,8 @@
     object-fit: cover;
   }
 
-  .cover-placeholder {
-    width: 100%;
-    height: 160px;
-    background: var(--primary-10);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  .logo-bar {
+    padding: 20px 32px 0;
   }
 
   .body {

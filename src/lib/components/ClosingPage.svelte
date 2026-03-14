@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Logo from './Logo.svelte'
+
   let {
     title,
     description,
@@ -11,6 +13,10 @@
 </script>
 
 <div class="card">
+  <div class="logo-bar">
+    <Logo height={24} />
+  </div>
+
   {#if imageUrl}
     <div class="cover">
       <img src={imageUrl} alt={title} />
@@ -43,6 +49,12 @@
     width: 100%;
     box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
     overflow: hidden;
+  }
+
+  .logo-bar {
+    padding: 20px 32px 0;
+    display: flex;
+    justify-content: center;
   }
 
   .cover {
