@@ -2,6 +2,12 @@
   import Logo from '$lib/components/Logo.svelte'
 </script>
 
+<svelte:head>
+  <title>Logika Teta Survey</title>
+  <meta name="description" content="Isi survei dari Logika Teta — platform riset dan analisis statistik." />
+  <meta name="robots" content="noindex, nofollow" />
+</svelte:head>
+
 <div class="container">
   <div class="card">
     <Logo height={32} />

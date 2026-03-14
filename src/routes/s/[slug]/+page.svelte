@@ -176,7 +176,43 @@
     : data.error === 'server_error' ? 'server_error' as const
     : 'unknown' as const
   )
+
+  // Metadata
+  const pageTitle = $derived(
+    survey ? `${survey.title} | Logika Teta` : 'Logika Teta Survey'
+  )
+  const metaDescription = $derived(
+    (welcomeQuestion?.description ?? survey?.title ?? 'Isi survei dari Logika Teta — platform riset dan analisis statistik.').slice(0, 160)
+  )
+  const ogImage = $derived(
+    welcomeQuestion?.imageUrl ?? 'https://survey.logika-teta.web.id/logo-logika-teta.png'
+  )
+  const canonicalUrl = $derived(
+    `https://survey.logika-teta.web.id/s/${data.slug}`
+  )
 </script>
+
+<svelte:head>
+  <title>{pageTitle}</title>
+  <meta name="description" content={metaDescription} />
+  <link rel="canonical" href={canonicalUrl} />
+
+  <!-- Survey pages are reached via direct link, not search -->
+  <meta name="robots" content="noindex, nofollow" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content={pageTitle} />
+  <meta property="og:description" content={metaDescription} />
+  <meta property="og:url" content={canonicalUrl} />
+  <meta property="og:image" content={ogImage} />
+  <meta property="og:type" content="website" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:title" content={pageTitle} />
+  <meta name="twitter:description" content={metaDescription} />
+  <meta name="twitter:image" content={ogImage} />
+  <meta name="twitter:card" content={welcomeQuestion?.imageUrl ? 'summary_large_image' : 'summary'} />
+</svelte:head>
 
 <div class="page">
   {#if viewState === 'error'}

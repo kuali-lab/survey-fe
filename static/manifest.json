@@ -1,0 +1,24 @@
+{
+  "name": "Logika Teta Survey",
+  "short_name": "LT Survey",
+  "description": "Isi survei dari Logika Teta — platform riset dan analisis statistik.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f8f9",
+  "theme_color": "#f7bb00",
+  "lang": "id",
+  "icons": [
+    {
+      "src": "/logo-logika-teta.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

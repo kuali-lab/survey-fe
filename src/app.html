@@ -2,11 +2,39 @@
 <html lang="id">
   <head>
     <meta charset="utf-8" />
-    <link rel="icon" href="%sveltekit.assets%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Default title & description (overridden per-page via <svelte:head>) -->
+    <title>Logika Teta Survey</title>
+    <meta name="description" content="Isi survei dari Logika Teta — platform riset dan analisis statistik." />
+    <meta name="application-name" content="Logika Teta Survey" />
+
+    <!-- Favicon chain: SVG (modern) → ICO (legacy) -->
+    <link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="%sveltekit.assets%/favicon.ico" sizes="any" />
+    <link rel="apple-touch-icon" href="%sveltekit.assets%/logo-logika-teta.png" />
+
+    <!-- PWA manifest -->
+    <link rel="manifest" href="%sveltekit.assets%/manifest.json" />
+
+    <!-- Browser chrome color -->
+    <meta name="theme-color" content="#f7bb00" />
+
+    <!-- Default Open Graph (overridden per-page) -->
+    <meta property="og:site_name" content="Logika Teta" />
+    <meta property="og:locale" content="id_ID" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://survey.logika-teta.web.id/logo-logika-teta.png" />
+
+    <!-- Default Twitter Card (overridden per-page) -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:image" content="https://survey.logika-teta.web.id/logo-logika-teta.png" />
+
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
     <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">
