@@ -22,8 +22,6 @@
   // Determine initial view state
   function getInitialViewState(): ViewState {
     if (!survey || data.error) return 'error'
-    if (survey.status === 'closed') return 'closed'
-    if (survey.status !== 'active') return 'error'
     return 'welcome'
   }
 

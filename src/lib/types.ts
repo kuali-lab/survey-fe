@@ -39,7 +39,7 @@ export interface SurveySettings {
 export interface Survey {
   id: string
   title: string
-  status: 'draft' | 'active' | 'closed'
+  status?: 'draft' | 'active' | 'closed'
   settings: SurveySettings
   questions: Question[]
   skipRules: SkipRule[]
