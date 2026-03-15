@@ -230,7 +230,7 @@
   {:else if viewState === 'welcome'}
     <div class="centered-wrap">
       <WelcomePage
-        title={survey?.title ?? ''}
+        title={welcomeQuestion?.title || survey?.title || ''}
         description={welcomeQuestion?.description ?? null}
         imageUrl={welcomeQuestion?.imageUrl ?? null}
         ctaText={String(welcomeQuestion?.config?.buttonText ?? 'Mulai Survei')}
