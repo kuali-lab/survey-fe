@@ -11,8 +11,6 @@
     onChange: (v: AnswerValue) => void
   } = $props()
 
-  const config = $derived(question.config)
-
   // Text helpers
   const strValue = $derived(typeof value === 'string' ? value : (value != null ? String(value) : ''))
   const numValue = $derived(typeof value === 'number' ? value : null)
@@ -25,28 +23,13 @@
   )
 
   // Checkbox / single_choice helpers
-  const arrValue = $derived(Array.isArray(value) ? value : [])
+  const arrValue = $derived(Array.isArray(value) ? (value as string[]) : [])
 
-  function getOptions(): Array<{ label: string; value: string }> {
-    const opts = config.options
-    if (!Array.isArray(opts)) return []
-    return opts.map((o: unknown) => {
-      if (typeof o === 'string') return { label: o, value: o }
-      if (o && typeof o === 'object' && 'label' in o) {
-        const obj = o as Record<string, unknown>
-        return {
-          label: String(obj.label ?? ''),
-          value: String(obj.value ?? obj.label ?? '')
-        }
-      }
-      return { label: String(o), value: String(o) }
-    })
-  }
-
-  const options = $derived(getOptions())
+  // Options for choice types — already a typed array from the normalized schema
+  const options = $derived(question.options ?? [])
 
   // Rating
-  const ratingScale = $derived(typeof config.scale === 'number' ? config.scale : 5)
+  const ratingScale = $derived(question.maxStars ?? 5)
   const ratingStars = $derived(Array.from({ length: ratingScale }, (_, i) => i + 1))
   const ratingValue = $derived(typeof value === 'number' ? value : 0)
 
@@ -55,20 +38,34 @@
   const npsValue = $derived(typeof value === 'number' ? value : -1)
 
   // Opinion scale
-  const opMin = $derived(typeof config.min === 'number' ? config.min : 1)
-  const opMax = $derived(typeof config.max === 'number' ? config.max : 10)
+  const opMin = $derived(question.minValue ?? 1)
+  const opMax = $derived(question.maxValue ?? 10)
   const opButtons = $derived(Array.from({ length: opMax - opMin + 1 }, (_, i) => opMin + i))
   const opValue = $derived(typeof value === 'number' ? value : null)
-  const opMinLabel = $derived(typeof config.minLabel === 'string' ? config.minLabel : '')
-  const opMaxLabel = $derived(typeof config.maxLabel === 'string' ? config.maxLabel : '')
+  const opMinLabel = $derived(question.minLabel ?? '')
+  const opMaxLabel = $derived(question.maxLabel ?? '')
 
-  function toggleCheckbox(val: string) {
-    const current = Array.isArray(value) ? [...value] : []
-    const idx = current.indexOf(val)
+  // Matrix — value is Record<rowLabel, colLabel>
+  const matrixRows = $derived(question.matrixRows ?? [])
+  const matrixCols = $derived(question.matrixCols ?? [])
+  const matrixValue = $derived(
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, string>)
+      : {} as Record<string, string>
+  )
+
+  function setMatrixCell(rowLabel: string, colLabel: string) {
+    const updated = { ...matrixValue, [rowLabel]: colLabel }
+    onChange(updated)
+  }
+
+  function toggleCheckbox(label: string) {
+    const current = Array.isArray(value) ? [...(value as string[])] : []
+    const idx = current.indexOf(label)
     if (idx >= 0) {
       current.splice(idx, 1)
     } else {
-      current.push(val)
+      current.push(label)
     }
     onChange(current)
   }
@@ -78,7 +75,7 @@
   <input
     class="text-input"
     type="text"
-    placeholder={typeof config.placeholder === 'string' ? config.placeholder : ''}
+    placeholder={question.placeholder ?? ''}
     value={strValue}
     oninput={(e) => onChange((e.currentTarget as HTMLInputElement).value)}
   />
@@ -87,7 +84,7 @@
   <textarea
     class="textarea-input"
     rows="4"
-    placeholder={typeof config.placeholder === 'string' ? config.placeholder : ''}
+    placeholder={question.placeholder ?? ''}
     value={strValue}
     oninput={(e) => onChange((e.currentTarget as HTMLTextAreaElement).value)}
   ></textarea>
@@ -116,7 +113,7 @@
     <input
       class="url-input"
       type="text"
-      placeholder={typeof config.placeholder === 'string' ? config.placeholder : 'contoh.com'}
+      placeholder={question.placeholder ?? 'contoh.com'}
       value={websiteDisplay}
       oninput={(e) => onChange('https://' + (e.currentTarget as HTMLInputElement).value)}
     />
@@ -126,8 +123,8 @@
   <input
     class="text-input"
     type="number"
-    min={typeof config.min === 'number' ? config.min : undefined}
-    max={typeof config.max === 'number' ? config.max : undefined}
+    min={question.minValue}
+    max={question.maxValue}
     value={numValue !== null ? numValue : ''}
     oninput={(e) => {
       const v = (e.currentTarget as HTMLInputElement).value
@@ -147,11 +144,11 @@
   <div class="options-list">
     {#each options as opt}
       <button
-        class="option-card {strValue === opt.value ? 'selected' : ''}"
+        class="option-card {strValue === opt.label ? 'selected' : ''}"
         type="button"
-        onclick={() => onChange(opt.value)}
+        onclick={() => onChange(opt.label)}
       >
-        <span class="radio-indicator {strValue === opt.value ? 'selected' : ''}"></span>
+        <span class="radio-indicator {strValue === opt.label ? 'selected' : ''}"></span>
         <span class="option-label">{opt.label}</span>
       </button>
     {/each}
@@ -160,11 +157,11 @@
 {:else if question.type === 'checkbox'}
   <div class="options-list">
     {#each options as opt}
-      {@const checked = arrValue.includes(opt.value)}
+      {@const checked = arrValue.includes(opt.label)}
       <button
         class="option-card {checked ? 'selected' : ''}"
         type="button"
-        onclick={() => toggleCheckbox(opt.value)}
+        onclick={() => toggleCheckbox(opt.label)}
       >
         <span class="checkbox-indicator {checked ? 'selected' : ''}">
           {#if checked}
@@ -186,7 +183,7 @@
   >
     <option value="">-- Pilih salah satu --</option>
     {#each options as opt}
-      <option value={opt.value}>{opt.label}</option>
+      <option value={opt.label}>{opt.label}</option>
     {/each}
   </select>
 
@@ -269,6 +266,40 @@
         <span>{opMaxLabel}</span>
       </div>
     {/if}
+  </div>
+
+{:else if question.type === 'matrix'}
+  <div class="matrix-wrap">
+    <table class="matrix-table">
+      <thead>
+        <tr>
+          <th class="matrix-row-header"></th>
+          {#each matrixCols as col}
+            <th class="matrix-col-header">{col.label}</th>
+          {/each}
+        </tr>
+      </thead>
+      <tbody>
+        {#each matrixRows as row}
+          <tr class="matrix-row">
+            <td class="matrix-row-label">{row.label}</td>
+            {#each matrixCols as col}
+              {@const selected = matrixValue[row.label] === col.label}
+              <td class="matrix-cell">
+                <button
+                  class="matrix-radio {selected ? 'selected' : ''}"
+                  type="button"
+                  aria-label="{row.label}: {col.label}"
+                  onclick={() => setMatrixCell(row.label, col.label)}
+                >
+                  <span class="radio-dot"></span>
+                </button>
+              </td>
+            {/each}
+          </tr>
+        {/each}
+      </tbody>
+    </table>
   </div>
 
 {:else if question.type === 'statement'}
@@ -621,6 +652,86 @@
     font-size: 12px;
     color: var(--tertiary-60);
     padding: 0 2px;
+  }
+
+  /* ── Matrix ── */
+  .matrix-wrap {
+    overflow-x: auto;
+  }
+
+  .matrix-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  .matrix-col-header {
+    text-align: center;
+    padding: 8px 12px;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--tertiary-60);
+    white-space: nowrap;
+    border-bottom: 1px solid #e8eaed;
+  }
+
+  .matrix-row-header {
+    padding: 8px;
+    border-bottom: 1px solid #e8eaed;
+  }
+
+  .matrix-row:nth-child(even) {
+    background: var(--tertiary-10, #f9fafb);
+  }
+
+  .matrix-row-label {
+    padding: 12px 16px 12px 4px;
+    font-size: 14px;
+    color: var(--tertiary-80);
+    line-height: 1.4;
+    min-width: 120px;
+  }
+
+  .matrix-cell {
+    text-align: center;
+    padding: 8px 12px;
+    vertical-align: middle;
+  }
+
+  .matrix-radio {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid #d9dde3;
+    background: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  .matrix-radio:hover {
+    border-color: #f7bb00;
+    background: #fffbed;
+  }
+
+  .matrix-radio.selected {
+    border-color: #f7bb00;
+    background: #f7bb00;
+  }
+
+  .matrix-radio .radio-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: transparent;
+    transition: background 0.15s;
+  }
+
+  .matrix-radio.selected .radio-dot {
+    background: #221500;
   }
 
   /* ── Statement ── */

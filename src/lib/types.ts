@@ -5,6 +5,27 @@ export type QuestionType =
   | 'single_choice' | 'checkbox' | 'dropdown' | 'yes_no' | 'image_choice'
   | 'nps' | 'opinion_scale' | 'rating' | 'matrix'
 
+export interface QuestionOption {
+  id: string
+  label: string
+  value?: string
+  imageUrl?: string
+  sortOrder: number
+}
+
+export interface MatrixRow {
+  id: string
+  label: string
+  sortOrder: number
+}
+
+export interface MatrixCol {
+  id: string
+  label: string
+  value?: string
+  sortOrder: number
+}
+
 export interface Question {
   id: string
   type: QuestionType
@@ -13,9 +34,22 @@ export interface Question {
   required: boolean
   sortOrder: number
   groupId: string | null
-  config: Record<string, unknown>
   imageUrl: string | null
   imageLayout: string | null
+
+  // Scalar config
+  maxStars?: number
+  minValue?: number
+  maxValue?: number
+  minLabel?: string
+  maxLabel?: string
+  placeholder?: string
+  dateFormat?: string
+
+  // Relational config
+  options?: QuestionOption[]
+  matrixRows?: MatrixRow[]
+  matrixCols?: MatrixCol[]
 }
 
 export interface SkipRule {
