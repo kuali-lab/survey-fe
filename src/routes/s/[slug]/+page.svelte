@@ -4,6 +4,7 @@
   import { submitSurveyAnswers } from '$lib/api.js'
   import { getAnswerableQuestions, getQuestionNumber } from '$lib/utils.js'
   import { evaluateNext } from '$lib/skipLogic.js'
+  import { page } from '$app/stores'
 
   import ProgressBar from '$lib/components/ProgressBar.svelte'
   import SectionHeader from '$lib/components/SectionHeader.svelte'
@@ -183,10 +184,10 @@
     (welcomeQuestion?.description ?? survey?.title ?? 'Isi survei dari Logika Teta — platform riset dan analisis statistik.').slice(0, 160)
   )
   const ogImage = $derived(
-    welcomeQuestion?.imageUrl ?? 'https://survey.logika-teta.web.id/logo-logika-teta.png'
+    welcomeQuestion?.imageUrl ?? `${$page.url.origin}/logo-logika-teta.png`
   )
   const canonicalUrl = $derived(
-    `https://survey.logika-teta.web.id/s/${data.slug}`
+    `${$page.url.origin}/s/${data.slug}`
   )
 </script>
 
