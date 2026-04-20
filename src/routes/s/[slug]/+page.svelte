@@ -22,6 +22,7 @@
 
   // Determine initial view state
   function getInitialViewState(): ViewState {
+    if (data.error === 'survey_closed') return 'closed'
     if (!survey || data.error) return 'error'
     return 'welcome'
   }
@@ -106,6 +107,15 @@
       const filled = [c.firstName, c.lastName, c.phone, c.email].some(v => v && v.trim() !== '')
       if (!filled) {
         validationError = 'Isi minimal satu data kontak.'
+        return false
+      }
+    }
+
+    // File upload: block next while upload is in progress
+    if (currentQuestion.type === 'file_upload') {
+      const val = answers[currentQuestion.id]
+      if (typeof val === 'string' && val === '__uploading__') {
+        validationError = 'Tunggu hingga file selesai diunggah.'
         return false
       }
     }

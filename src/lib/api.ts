@@ -4,6 +4,7 @@ import type { Survey, Answers } from './types.js'
 export async function fetchSurvey(slug: string, fetchFn: typeof fetch = fetch): Promise<Survey> {
   const res = await fetchFn(`${PUBLIC_API_BASE_URL}/s/${slug}`)
   if (res.status === 404) throw new Error('not_found')
+  if (res.status === 410) throw new Error('survey_closed')
   if (!res.ok) throw new Error('server_error')
   const data = await res.json()
   return data.survey as Survey

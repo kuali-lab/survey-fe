@@ -36,19 +36,45 @@
   {/if}
 
   {#if question.imageUrl}
-    <div class="image-wrap">
-      <img src={question.imageUrl} alt={question.title} />
+    {#if question.imageLayout === 'left' || question.imageLayout === 'right'}
+      <!-- Inline layout: image beside content -->
+      <div class="card-inline-wrap card-inline-{question.imageLayout}">
+        <div class="inline-img-wrap">
+          <img src={question.imageUrl} alt={question.title} class="inline-img" />
+        </div>
+        <div class="inline-input-wrap">
+          <QuestionInput
+            {question}
+            value={answer}
+            onChange={onAnswer}
+            {slug}
+          />
+        </div>
+      </div>
+    {:else}
+      <!-- Top layout (default) -->
+      <div class="image-wrap">
+        <img src={question.imageUrl} alt={question.title} />
+      </div>
+      <div class="input-wrap">
+        <QuestionInput
+          {question}
+          value={answer}
+          onChange={onAnswer}
+          {slug}
+        />
+      </div>
+    {/if}
+  {:else}
+    <div class="input-wrap">
+      <QuestionInput
+        {question}
+        value={answer}
+        onChange={onAnswer}
+        {slug}
+      />
     </div>
   {/if}
-
-  <div class="input-wrap">
-    <QuestionInput
-      {question}
-      value={answer}
-      onChange={onAnswer}
-      {slug}
-    />
-  </div>
 
   {#if validationError}
     <div class="error" role="alert">
@@ -127,6 +153,32 @@
 
   .input-wrap {
     margin-top: 4px;
+  }
+
+  /* Inline image layout (left / right) */
+  .card-inline-wrap {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .card-inline-left { flex-direction: row; }
+  .card-inline-right { flex-direction: row-reverse; }
+
+  .inline-img-wrap {
+    flex: 0 0 160px;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .inline-img {
+    width: 160px;
+    height: 160px;
+    object-fit: cover;
+    display: block;
+  }
+
+  .inline-input-wrap {
+    flex: 1;
   }
 
   .error {

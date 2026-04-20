@@ -13,6 +13,9 @@ export const load: PageLoad = async ({ params, fetch }) => {
     if (message === 'not_found') {
       return { survey: null as Survey | null, slug, error: 'not_found' as const }
     }
+    if (message === 'survey_closed') {
+      return { survey: null as Survey | null, slug, error: 'survey_closed' as const }
+    }
     return { survey: null as Survey | null, slug, error: 'server_error' as const }
   }
 }

@@ -48,6 +48,7 @@
   const opValue = $derived(typeof value === 'number' ? value : null)
   const opMinLabel = $derived(question.minLabel ?? '')
   const opMaxLabel = $derived(question.maxLabel ?? '')
+  const opMidLabel = $derived(question.midLabel ?? '')
 
   // Matrix — value is Record<rowLabel, colLabel>
   const matrixRows = $derived(question.matrixRows ?? [])
@@ -135,6 +136,7 @@
     uploadFile = file
     uploadError = null
     uploading = true
+    onChange('__uploading__') // sentinel — blocks validation until done
 
     try {
       const form = new FormData()
@@ -339,7 +341,18 @@
           type="text"
           placeholder="Tuliskan jawaban Anda..."
           value={otherText}
-          oninput={(e) => { otherText = (e.currentTarget as HTMLInputElement).value }}
+          oninput={(e) => {
+            const text = (e.currentTarget as HTMLInputElement).value
+            otherText = text
+            // Replace the placeholder label with the typed text in the array
+            const current = arrValue.filter(v => v !== otherOption!.label)
+            if (text.trim()) {
+              current.push(text)
+            } else {
+              current.push(otherOption!.label)
+            }
+            onChange(current)
+          }}
         />
       {/if}
     {/if}
@@ -416,8 +429,8 @@
       {/each}
     </div>
     <div class="nps-labels">
-      <span>Sangat Tidak Mungkin</span>
-      <span>Sangat Mungkin</span>
+      <span>{question.minLabel ?? 'Sangat Tidak Mungkin'}</span>
+      <span>{question.maxLabel ?? 'Sangat Mungkin'}</span>
     </div>
   </div>
 
@@ -432,9 +445,10 @@
         >{n}</button>
       {/each}
     </div>
-    {#if opMinLabel || opMaxLabel}
+    {#if opMinLabel || opMaxLabel || opMidLabel}
       <div class="opinion-labels">
         <span>{opMinLabel}</span>
+        {#if opMidLabel}<span class="opinion-mid-label">{opMidLabel}</span>{/if}
         <span>{opMaxLabel}</span>
       </div>
     {/if}
@@ -537,11 +551,12 @@
             <line x1="12" y1="3" x2="12" y2="15" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
           <span>Klik atau seret file ke sini</span>
-          <span class="file-hint">Maks. 10 MB</span>
+          <span class="file-hint">Gambar, PDF, atau Word — Maks. 10 MB</span>
         {/if}
         <input
           type="file"
           class="file-input-hidden"
+          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
           disabled={uploading}
           onchange={handleFileChange}
         />
