@@ -45,6 +45,7 @@ export interface Question {
   maxValue?: number
   minLabel?: string
   maxLabel?: string
+  midLabel?: string
   placeholder?: string
   dateFormat?: string
 
