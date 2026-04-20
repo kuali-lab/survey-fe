@@ -1,14 +1,17 @@
 <script lang="ts">
-  import type { Question, AnswerValue } from '$lib/types.js'
+  import type { Question, AnswerValue, ContactInfo } from '$lib/types.js'
+  import { PUBLIC_API_BASE_URL } from '$env/static/public'
 
   let {
     question,
     value,
-    onChange
+    onChange,
+    slug = ''
   }: {
     question: Question
     value: AnswerValue
     onChange: (v: AnswerValue) => void
+    slug?: string
   } = $props()
 
   // Text helpers
@@ -32,6 +35,7 @@
   const ratingScale = $derived(question.maxStars ?? 5)
   const ratingStars = $derived(Array.from({ length: ratingScale }, (_, i) => i + 1))
   const ratingValue = $derived(typeof value === 'number' ? value : 0)
+  let hoverRating = $state(0)
 
   // NPS: 0-10
   const npsButtons = $derived(Array.from({ length: 11 }, (_, i) => i))
@@ -69,9 +73,130 @@
     }
     onChange(current)
   }
+
+  // contact_info helpers — value is a ContactInfo object
+  const contactValue = $derived(
+    value && typeof value === 'object' && !Array.isArray(value) && 'firstName' in (value as object)
+      ? (value as ContactInfo)
+      : { firstName: '', lastName: '', phone: '', email: '' }
+  )
+
+  function updateContact(field: keyof ContactInfo, val: string) {
+    onChange({ ...contactValue, [field]: val })
+  }
+
+  // ── is_other ("Lainnya") state ──
+  const otherOption = $derived(options.find(o => o.isOther))
+
+  // For single_choice: selected = strValue matches the isOther label OR user typed its own text
+  const isOtherSelected = $derived(
+    otherOption ? (
+      question.type === 'single_choice'
+        ? strValue !== '' && !options.filter(o => !o.isOther).some(o => o.label === strValue)
+        : arrValue.some(v => !options.filter(o => !o.isOther).some(o => o.label === v) && v !== '')
+    ) : false
+  )
+
+  let otherText = $state('')
+
+  function selectOtherSingle() {
+    if (!otherOption) return
+    onChange(otherText || otherOption.label)
+  }
+  function updateOtherSingle(text: string) {
+    otherText = text
+    onChange(text || otherOption?.label || '')
+  }
+  function toggleOtherCheckbox() {
+    if (!otherOption) return
+    const label = otherOption.label
+    const current = Array.isArray(value) ? [...(value as string[])] : []
+    const hasOther = current.includes(label)
+    if (hasOther) {
+      // Remove other
+      onChange(current.filter(v => v !== label))
+    } else {
+      current.push(label)
+      onChange(current)
+    }
+  }
+
+  // ── file_upload state ──
+  let uploadFile = $state<File | null>(null)
+  let uploadUrl = $state<string | null>(strValue || null)
+  let uploading = $state(false)
+  let uploadError = $state<string | null>(null)
+
+  async function handleFileChange(e: Event) {
+    const input = e.currentTarget as HTMLInputElement
+    const file = input.files?.[0] ?? null
+    if (!file) return
+
+    uploadFile = file
+    uploadError = null
+    uploading = true
+
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(`${PUBLIC_API_BASE_URL}/s/${slug}/upload`, {
+        method: 'POST',
+        body: form,
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err?.message ?? 'Upload gagal')
+      }
+      const json = await res.json() as { url: string; name: string }
+      uploadUrl = json.url
+      onChange(json.url)
+    } catch (err) {
+      uploadError = err instanceof Error ? err.message : 'Upload gagal'
+      uploadUrl = null
+      onChange(null)
+    } finally {
+      uploading = false
+    }
+  }
+
+  function removeUpload() {
+    uploadFile = null
+    uploadUrl = null
+    uploadError = null
+    onChange(null)
+  }
 </script>
 
-{#if question.type === 'short_text'}
+{#if question.type === 'image_choice'}
+  <div class="image-choice-grid">
+    {#each options as opt}
+      <button
+        class="image-option-card {strValue === opt.label ? 'selected' : ''}"
+        type="button"
+        onclick={() => onChange(opt.label)}
+      >
+        <div class="image-option-img-wrap">
+          {#if opt.imageUrl}
+            <img src={opt.imageUrl} alt={opt.label} class="image-option-img" />
+          {:else}
+            <div class="image-option-placeholder">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                <rect x="3" y="3" width="18" height="18" rx="3" stroke="#d9dde3" stroke-width="1.5"/>
+                <circle cx="8.5" cy="8.5" r="1.5" fill="#d9dde3"/>
+                <path d="M3 16l5-5 4 4 3-3 6 5" stroke="#d9dde3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+          {/if}
+        </div>
+        <div class="image-option-footer">
+          <span class="radio-indicator {strValue === opt.label ? 'selected' : ''}"></span>
+          <span class="image-option-label">{opt.label}</span>
+        </div>
+      </button>
+    {/each}
+  </div>
+
+{:else if question.type === 'short_text'}
   <input
     class="text-input"
     type="text"
@@ -142,7 +267,7 @@
 
 {:else if question.type === 'single_choice'}
   <div class="options-list">
-    {#each options as opt}
+    {#each options.filter(o => !o.isOther) as opt}
       <button
         class="option-card {strValue === opt.label ? 'selected' : ''}"
         type="button"
@@ -152,11 +277,30 @@
         <span class="option-label">{opt.label}</span>
       </button>
     {/each}
+    {#if otherOption}
+      <button
+        class="option-card {isOtherSelected ? 'selected' : ''}"
+        type="button"
+        onclick={selectOtherSingle}
+      >
+        <span class="radio-indicator {isOtherSelected ? 'selected' : ''}"></span>
+        <span class="option-label">{otherOption.label}</span>
+      </button>
+      {#if isOtherSelected}
+        <input
+          class="text-input other-text-input"
+          type="text"
+          placeholder="Tuliskan jawaban Anda..."
+          value={otherText}
+          oninput={(e) => updateOtherSingle((e.currentTarget as HTMLInputElement).value)}
+        />
+      {/if}
+    {/if}
   </div>
 
 {:else if question.type === 'checkbox'}
   <div class="options-list">
-    {#each options as opt}
+    {#each options.filter(o => !o.isOther) as opt}
       {@const checked = arrValue.includes(opt.label)}
       <button
         class="option-card {checked ? 'selected' : ''}"
@@ -173,6 +317,32 @@
         <span class="option-label">{opt.label}</span>
       </button>
     {/each}
+    {#if otherOption}
+      {@const otherChecked = arrValue.includes(otherOption.label)}
+      <button
+        class="option-card {otherChecked ? 'selected' : ''}"
+        type="button"
+        onclick={toggleOtherCheckbox}
+      >
+        <span class="checkbox-indicator {otherChecked ? 'selected' : ''}">
+          {#if otherChecked}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+              <path d="M5 12.5l5 5 9-10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          {/if}
+        </span>
+        <span class="option-label">{otherOption.label}</span>
+      </button>
+      {#if otherChecked}
+        <input
+          class="text-input other-text-input"
+          type="text"
+          placeholder="Tuliskan jawaban Anda..."
+          value={otherText}
+          oninput={(e) => { otherText = (e.currentTarget as HTMLInputElement).value }}
+        />
+      {/if}
+    {/if}
   </div>
 
 {:else if question.type === 'dropdown'}
@@ -218,13 +388,15 @@
         class="star-btn"
         type="button"
         aria-label="Beri nilai {star}"
-        onclick={() => onChange(star)}
+        onmouseenter={() => hoverRating = star}
+        onmouseleave={() => hoverRating = 0}
+        onclick={() => { onChange(star); hoverRating = 0 }}
       >
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path
             d="M12 2l2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77 5.82 21.02 7 14.14 2 9.27l7.1-1.01L12 2z"
-            fill={star <= ratingValue ? '#f7bb00' : '#d9dde3'}
-            stroke={star <= ratingValue ? '#e8ae00' : '#c8ccd2'}
+            fill={star <= (hoverRating || ratingValue) ? '#f7bb00' : '#d9dde3'}
+            stroke={star <= (hoverRating || ratingValue) ? '#e8ae00' : '#c8ccd2'}
             stroke-width="1"
           />
         </svg>
@@ -300,6 +472,84 @@
         {/each}
       </tbody>
     </table>
+  </div>
+
+{:else if question.type === 'contact_info'}
+  <div class="contact-grid">
+    <input
+      class="text-input"
+      type="text"
+      placeholder="Nama Depan"
+      value={contactValue.firstName}
+      oninput={(e) => updateContact('firstName', (e.currentTarget as HTMLInputElement).value)}
+    />
+    <input
+      class="text-input"
+      type="text"
+      placeholder="Nama Belakang"
+      value={contactValue.lastName}
+      oninput={(e) => updateContact('lastName', (e.currentTarget as HTMLInputElement).value)}
+    />
+    <input
+      class="text-input"
+      type="tel"
+      placeholder="+62 8xx xxxx xxxx"
+      value={contactValue.phone}
+      oninput={(e) => updateContact('phone', (e.currentTarget as HTMLInputElement).value)}
+    />
+    <input
+      class="text-input"
+      type="email"
+      placeholder="contoh@email.com"
+      value={contactValue.email}
+      oninput={(e) => updateContact('email', (e.currentTarget as HTMLInputElement).value)}
+    />
+  </div>
+
+{:else if question.type === 'file_upload'}
+  <div class="file-upload-area">
+    {#if uploadUrl}
+      <!-- File already uploaded -->
+      <div class="file-uploaded">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" class="file-icon">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span class="file-name">{uploadFile?.name ?? 'File diunggah'}</span>
+        <button class="file-remove" type="button" onclick={removeUpload} aria-label="Hapus file">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    {:else}
+      <label class="file-drop-zone {uploading ? 'uploading' : ''}">
+        {#if uploading}
+          <svg class="upload-spinner" width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="#d9dde3" stroke-width="2"/>
+            <path d="M12 2a10 10 0 0 1 10 10" stroke="#f7bb00" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <span>Mengunggah...</span>
+        {:else}
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>
+            <polyline points="17 8 12 3 7 8" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="12" y1="3" x2="12" y2="15" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <span>Klik atau seret file ke sini</span>
+          <span class="file-hint">Maks. 10 MB</span>
+        {/if}
+        <input
+          type="file"
+          class="file-input-hidden"
+          disabled={uploading}
+          onchange={handleFileChange}
+        />
+      </label>
+    {/if}
+    {#if uploadError}
+      <p class="upload-error">{uploadError}</p>
+    {/if}
   </div>
 
 {:else if question.type === 'statement'}
@@ -747,4 +997,207 @@
     line-height: 1.6;
     white-space: pre-wrap;
   }
+
+  /* ── Image Choice ── */
+  .image-choice-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .image-option-card {
+    border: 2px solid #d9dde3;
+    border-radius: 12px;
+    overflow: hidden;
+    background: white;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s, background 0.15s;
+    padding: 0;
+  }
+
+  .image-option-card:hover {
+    border-color: #f7bb00;
+  }
+
+  .image-option-card.selected {
+    border-color: #f7bb00;
+    background: #fffbed;
+  }
+
+  .image-option-img-wrap {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background: #f5f6f8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .image-option-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .image-option-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+  }
+
+  .image-option-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  .image-option-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--tertiary-80);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ── Contact Info ── */
+  .contact-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  @media (max-width: 480px) {
+    .image-choice-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+    .contact-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* ── Other text input ── */
+  .other-text-input {
+    margin-top: 6px;
+    margin-left: 32px;
+    width: calc(100% - 32px);
+    height: 44px;
+  }
+
+  /* ── File Upload ── */
+  .file-upload-area {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .file-drop-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 2px dashed #d9dde3;
+    border-radius: 14px;
+    padding: 32px 24px;
+    cursor: pointer;
+    text-align: center;
+    transition: border-color 0.2s, background 0.2s;
+    color: var(--tertiary-60);
+    font-size: 14px;
+    font-weight: 500;
+    position: relative;
+  }
+
+  .file-drop-zone:hover {
+    border-color: #f7bb00;
+    background: #fffdf0;
+  }
+
+  .file-drop-zone.uploading {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  .file-hint {
+    font-size: 12px;
+    color: var(--tertiary-40);
+  }
+
+  .file-input-hidden {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .file-input-hidden:disabled {
+    cursor: not-allowed;
+  }
+
+  .file-uploaded {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 12px;
+    padding: 12px 16px;
+    color: #166534;
+  }
+
+  .file-icon {
+    flex-shrink: 0;
+  }
+
+  .file-name {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .file-remove {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #166534;
+    padding: 4px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+
+  .file-remove:hover {
+    background: #dcfce7;
+  }
+
+  .upload-error {
+    font-size: 12px;
+    color: var(--error-50, #dc2626);
+    font-weight: 600;
+    padding: 0 4px;
+  }
+
+  .upload-spinner {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
 </style>
+
+

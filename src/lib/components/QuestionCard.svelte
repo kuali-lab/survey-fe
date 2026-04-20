@@ -7,13 +7,15 @@
     questionNumber,
     answer,
     validationError,
-    onAnswer
+    onAnswer,
+    slug = ''
   }: {
     question: Question
     questionNumber: string
     answer: AnswerValue
     validationError: string | null
     onAnswer: (value: AnswerValue) => void
+    slug?: string
   } = $props()
 </script>
 
@@ -44,6 +46,7 @@
       {question}
       value={answer}
       onChange={onAnswer}
+      {slug}
     />
   </div>
 

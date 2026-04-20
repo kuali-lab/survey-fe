@@ -87,8 +87,32 @@
       return false
     }
 
+    // Number: validate min/max range
+    if (currentQuestion.type === 'number' && typeof answer === 'number') {
+      const { minValue, maxValue } = currentQuestion
+      if (minValue !== undefined && minValue !== null && answer < minValue) {
+        validationError = `Nilai minimal adalah ${minValue}.`
+        return false
+      }
+      if (maxValue !== undefined && maxValue !== null && answer > maxValue) {
+        validationError = `Nilai maksimal adalah ${maxValue}.`
+        return false
+      }
+    }
+
+    // Contact info: at least one field must be filled
+    if (currentQuestion.type === 'contact_info') {
+      const c = answer as { firstName?: string; lastName?: string; phone?: string; email?: string }
+      const filled = [c.firstName, c.lastName, c.phone, c.email].some(v => v && v.trim() !== '')
+      if (!filled) {
+        validationError = 'Isi minimal satu data kontak.'
+        return false
+      }
+    }
+
     return true
   }
+
 
   function handleStart() {
     viewState = 'question'
@@ -234,7 +258,7 @@
         title={welcomeQuestion?.title || survey?.title || ''}
         description={welcomeQuestion?.description ?? null}
         imageUrl={welcomeQuestion?.imageUrl ?? null}
-        ctaText={String(welcomeQuestion?.config?.buttonText ?? 'Mulai Survei')}
+        ctaText={'Mulai Survei'}
         onStart={handleStart}
       />
     </div>
@@ -260,6 +284,7 @@
             answer={answers[currentQuestion.id] ?? null}
             validationError={validationError}
             onAnswer={handleAnswer}
+            {slug}
           />
         {/if}
 
