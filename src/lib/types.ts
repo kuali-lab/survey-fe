@@ -4,6 +4,7 @@ export type QuestionType =
   | 'phone' | 'email' | 'website' | 'number' | 'date'
   | 'single_choice' | 'checkbox' | 'dropdown' | 'yes_no' | 'image_choice'
   | 'nps' | 'opinion_scale' | 'rating' | 'matrix'
+  | 'contact_info' | 'file_upload'
 
 export interface QuestionOption {
   id: string
@@ -11,6 +12,7 @@ export interface QuestionOption {
   value?: string
   imageUrl?: string
   sortOrder: number
+  isOther?: boolean
 }
 
 export interface MatrixRow {
@@ -81,7 +83,15 @@ export interface Survey {
   closeImageUrl: string | null
 }
 
-export type AnswerValue = string | number | string[] | Record<string, string> | null
+/** Structured answer for contact_info questions */
+export interface ContactInfo {
+  firstName: string
+  lastName: string
+  phone: string
+  email: string
+}
+
+export type AnswerValue = string | number | string[] | Record<string, string> | ContactInfo | null
 
 export type Answers = Record<string, AnswerValue>
 
