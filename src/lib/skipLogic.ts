@@ -5,12 +5,31 @@ function matchesOperator(
   operator: SkipRule['operator'],
   value: string
 ): boolean {
-  const str = Array.isArray(answer) ? answer.join(',') : String(answer ?? '')
+  let comparisonStr = ''
+  
+  if (Array.isArray(answer)) {
+    comparisonStr = answer.join(',')
+  } else {
+    comparisonStr = String(answer ?? '')
+  }
+
+  const parsedComp = parseFloat(comparisonStr)
+  const parsedVal = parseFloat(value)
+
   switch (operator) {
-    case 'equals':     return str === value
-    case 'not_equals': return str !== value
-    case 'empty':      return !answer || str === '' || (Array.isArray(answer) && answer.length === 0)
-    case 'not_empty':  return !!answer && str !== '' && !(Array.isArray(answer) && answer.length === 0)
+    case 'equals':     return comparisonStr === value || comparisonStr.split(',').includes(value)
+    case 'not_equals': return comparisonStr !== value && !comparisonStr.split(',').includes(value)
+    case 'contains':   return comparisonStr.includes(value)
+    case 'not_contains': return !comparisonStr.includes(value)
+    case 'greater_than': return !isNaN(parsedComp) && !isNaN(parsedVal) && parsedComp > parsedVal
+    case 'less_than': return !isNaN(parsedComp) && !isNaN(parsedVal) && parsedComp < parsedVal
+    case 'greater_than_equals': return !isNaN(parsedComp) && !isNaN(parsedVal) && parsedComp >= parsedVal
+    case 'less_than_equals': return !isNaN(parsedComp) && !isNaN(parsedVal) && parsedComp <= parsedVal
+    case 'before':
+    case 'after':
+         return operator === 'before' ? comparisonStr < value : comparisonStr > value
+    case 'empty':      return !answer || comparisonStr === '' || (Array.isArray(answer) && answer.length === 0)
+    case 'not_empty':  return !!answer && comparisonStr !== '' && !(Array.isArray(answer) && answer.length === 0)
     default:           return false
   }
 }
@@ -19,29 +38,38 @@ function matchesOperator(
 export function evaluateNext(
   currentQuestionId: string,
   answers: Answers,
-  _questions: Question[],
+  questions: Question[],
   skipRules: SkipRule[]
 ): string | 'END' | null {
   const rules = skipRules.filter(r => r.questionId === currentQuestionId)
   if (rules.length === 0) return null
 
-  // Group by logicGroup type
-  const andRules = rules.filter(r => r.logicGroup === 'AND')
-  const orRules  = rules.filter(r => r.logicGroup === 'OR')
-
-  // Check AND group: all rules must match
-  if (andRules.length > 0) {
-    const allMatch = andRules.every(r => matchesOperator(answers[r.sourceQuestionId], r.operator, r.value))
-    if (allMatch) {
-      const rule = andRules[0]
-      return rule.action === 'end_survey' ? 'END' : rule.targetQuestionId
-    }
+  const checkRule = (r: SkipRule) => {
+    return matchesOperator(answers[r.sourceQuestionId], r.operator, r.value ?? '')
   }
 
-  // Check OR group: any rule matches
-  for (const rule of orRules) {
-    if (matchesOperator(answers[rule.sourceQuestionId], rule.operator, rule.value)) {
-      return rule.action === 'end_survey' ? 'END' : rule.targetQuestionId
+  const groupMap = new Map<string, SkipRule[]>()
+  for (const r of rules) {
+    const group = r.logicGroup ?? `AND:${r.id}`
+    if (!groupMap.has(group)) {
+      groupMap.set(group, [])
+    }
+    groupMap.get(group)!.push(r)
+  }
+
+  for (const [groupName, groupRules] of groupMap.entries()) {
+    const connector = groupName.startsWith('OR') ? 'OR' : 'AND'
+    let isSatisfied = false
+    
+    if (connector === 'AND') {
+      isSatisfied = groupRules.every(checkRule)
+    } else {
+      isSatisfied = groupRules.some(checkRule)
+    }
+
+    if (isSatisfied) {
+      const rule = groupRules[0]
+      return rule.action === 'end_survey' ? 'END' : (rule.targetQuestionId ?? null)
     }
   }
 

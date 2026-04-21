@@ -46,9 +46,9 @@
   const opMax = $derived(question.maxValue ?? 10)
   const opButtons = $derived(Array.from({ length: opMax - opMin + 1 }, (_, i) => opMin + i))
   const opValue = $derived(typeof value === 'number' ? value : null)
-  const opMinLabel = $derived(question.minLabel ?? '')
-  const opMaxLabel = $derived(question.maxLabel ?? '')
-  const opMidLabel = $derived(question.midLabel ?? '')
+  const opMinLabel = $derived(question.minLabel || 'Sangat Tidak Setuju')
+  const opMaxLabel = $derived(question.maxLabel || 'Sangat Setuju')
+  const opMidLabel = $derived(question.midLabel || '')
 
   // Matrix — value is Record<rowLabel, colLabel>
   const matrixRows = $derived(question.matrixRows ?? [])
@@ -92,7 +92,7 @@
   // For single_choice: selected = strValue matches the isOther label OR user typed its own text
   const isOtherSelected = $derived(
     otherOption ? (
-      question.type === 'single_choice'
+      question.type === 'single_choice' || question.type === 'dropdown'
         ? strValue !== '' && !options.filter(o => !o.isOther).some(o => o.label === strValue)
         : arrValue.some(v => !options.filter(o => !o.isOther).some(o => o.label === v) && v !== '')
     ) : false
@@ -110,16 +110,27 @@
   }
   function toggleOtherCheckbox() {
     if (!otherOption) return
-    const label = otherOption.label
     const current = Array.isArray(value) ? [...(value as string[])] : []
-    const hasOther = current.includes(label)
+    const hasOther = isOtherSelected;
     if (hasOther) {
       // Remove other
-      onChange(current.filter(v => v !== label))
+      const standardLabels = options.filter(o => !o.isOther).map(o => o.label)
+      onChange(current.filter(v => standardLabels.includes(v)))
     } else {
-      current.push(label)
+      current.push(otherOption.label)
       onChange(current)
     }
+  }
+  
+  function updateOtherCheckbox(text: string) {
+    if (!otherOption) return
+    otherText = text
+    const current = Array.isArray(value) ? [...(value as string[])] : []
+    const standardLabels = options.filter(o => !o.isOther).map(o => o.label)
+    const cleaned = current.filter(v => standardLabels.includes(v))
+    if (text) cleaned.push(text)
+    else cleaned.push(otherOption.label)
+    onChange(cleaned)
   }
 
   // ── file_upload state ──
@@ -171,15 +182,15 @@
 
 {#if question.type === 'image_choice'}
   <div class="image-choice-grid">
-    {#each options as opt}
+    {#each options as opt, idx}
       <button
         class="image-option-card {strValue === opt.label ? 'selected' : ''}"
         type="button"
         onclick={() => onChange(opt.label)}
       >
         <div class="image-option-img-wrap">
-          {#if opt.imageUrl}
-            <img src={opt.imageUrl} alt={opt.label} class="image-option-img" />
+          {#if question.optionImages && question.optionImages[idx]}
+            <img src={question.optionImages[idx]} alt={opt.label} class="image-option-img" />
           {:else}
             <div class="image-option-placeholder">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
@@ -220,7 +231,7 @@
   <input
     class="text-input"
     type="email"
-    placeholder="contoh@email.com"
+    placeholder="nama@email.com"
     value={strValue}
     oninput={(e) => onChange((e.currentTarget as HTMLInputElement).value)}
   />
@@ -229,7 +240,7 @@
   <input
     class="text-input"
     type="tel"
-    placeholder="+62 8xx xxxx xxxx"
+    placeholder="+62 812 3456 7890"
     value={strValue}
     oninput={(e) => onChange((e.currentTarget as HTMLInputElement).value)}
   />
@@ -320,14 +331,13 @@
       </button>
     {/each}
     {#if otherOption}
-      {@const otherChecked = arrValue.includes(otherOption.label)}
       <button
-        class="option-card {otherChecked ? 'selected' : ''}"
+        class="option-card {isOtherSelected ? 'selected' : ''}"
         type="button"
         onclick={toggleOtherCheckbox}
       >
-        <span class="checkbox-indicator {otherChecked ? 'selected' : ''}">
-          {#if otherChecked}
+        <span class="checkbox-indicator {isOtherSelected ? 'selected' : ''}">
+          {#if isOtherSelected}
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
               <path d="M5 12.5l5 5 9-10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
@@ -335,40 +345,50 @@
         </span>
         <span class="option-label">{otherOption.label}</span>
       </button>
-      {#if otherChecked}
+      {#if isOtherSelected}
         <input
           class="text-input other-text-input"
           type="text"
           placeholder="Tuliskan jawaban Anda..."
           value={otherText}
-          oninput={(e) => {
-            const text = (e.currentTarget as HTMLInputElement).value
-            otherText = text
-            // Replace the placeholder label with the typed text in the array
-            const current = arrValue.filter(v => v !== otherOption!.label)
-            if (text.trim()) {
-              current.push(text)
-            } else {
-              current.push(otherOption!.label)
-            }
-            onChange(current)
-          }}
+          oninput={(e) => updateOtherCheckbox((e.currentTarget as HTMLInputElement).value)}
         />
       {/if}
     {/if}
   </div>
 
 {:else if question.type === 'dropdown'}
-  <select
-    class="select-input"
-    value={strValue}
-    onchange={(e) => onChange((e.currentTarget as HTMLSelectElement).value)}
-  >
-    <option value="">-- Pilih salah satu --</option>
-    {#each options as opt}
-      <option value={opt.label}>{opt.label}</option>
-    {/each}
-  </select>
+  <div class="options-list">
+    <select
+      class="select-input"
+      value={isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue}
+      onchange={(e) => {
+        const val = (e.currentTarget as HTMLSelectElement).value;
+        if (otherOption && val === otherOption.label) {
+          onChange(otherText || otherOption.label);
+        } else {
+          onChange(val);
+        }
+      }}
+    >
+      <option value="">-- Pilih salah satu --</option>
+      {#each options.filter(o => !o.isOther) as opt}
+        <option value={opt.label}>{opt.label}</option>
+      {/each}
+      {#if otherOption}
+        <option value={otherOption.label}>{otherOption.label}</option>
+      {/if}
+    </select>
+    {#if isOtherSelected}
+      <input
+        class="text-input other-text-input"
+        type="text"
+        placeholder="Tuliskan jawaban Anda..."
+        value={otherText}
+        oninput={(e) => updateOtherSingle((e.currentTarget as HTMLInputElement).value)}
+      />
+    {/if}
+  </div>
 
 {:else if question.type === 'yes_no'}
   <div class="yes-no-wrap">
@@ -429,8 +449,8 @@
       {/each}
     </div>
     <div class="nps-labels">
-      <span>{question.minLabel ?? 'Sangat Tidak Mungkin'}</span>
-      <span>{question.maxLabel ?? 'Sangat Mungkin'}</span>
+      <span>{question.minLabel || 'Sangat Tidak Mungkin'}</span>
+      <span>{question.maxLabel || 'Sangat Mungkin'}</span>
     </div>
   </div>
 
@@ -507,20 +527,20 @@
     <input
       class="text-input"
       type="tel"
-      placeholder="+62 8xx xxxx xxxx"
+      placeholder="Nomor Telepon"
       value={contactValue.phone}
       oninput={(e) => updateContact('phone', (e.currentTarget as HTMLInputElement).value)}
     />
     <input
       class="text-input"
       type="email"
-      placeholder="contoh@email.com"
+      placeholder="Email"
       value={contactValue.email}
       oninput={(e) => updateContact('email', (e.currentTarget as HTMLInputElement).value)}
     />
   </div>
 
-{:else if question.type === 'file_upload'}
+{:else if question.type === 'file_upload' || question.type === 'upload_file'}
   <div class="file-upload-area">
     {#if uploadUrl}
       <!-- File already uploaded -->
