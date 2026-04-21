@@ -2,16 +2,15 @@
   import Logo from './Logo.svelte'
 
   let {
-    title,
-    description,
-    imageUrl,
-    ctaText,
-    onStart
+    title = 'Akses Lokasi Dibutuhkan',
+    description = 'Survei ini memerlukan akses lokasi Anda (GPS) untuk keperluan validasi data. Silakan izinkan akses lokasi pada prompt browser yang akan muncul.',
+    ctaText = 'Izinkan Lokasi & Mulai',
+    onStart,
+    error = null
   }: {
-    title: string
-    description: string | null
-    imageUrl: string | null
-    ctaText: string
+    title?: string
+    description?: string
+    ctaText?: string
     onStart: () => void
     error?: string | null
   } = $props()
@@ -22,17 +21,18 @@
     <Logo height={24} />
   </div>
 
-  {#if imageUrl}
-    <div class="cover">
-      <img src={imageUrl} alt={title} />
+  <div class="location-icon-wrap">
+    <div class="icon-circle">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" class="location-icon">
+        <path d="M12 11a3 3 0 100-6 3 3 0 000 6z" fill="currentColor"/>
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M21 10.5c0 5-8.083 11.238-8.528 11.572a.75.75 0 01-.944 0C11.083 21.738 3 15.5 3 10.5a9 9 0 0118 0zM12 11.5a4 4 0 100-8 4 4 0 000 8z" fill="currentColor"/>
+      </svg>
     </div>
-  {/if}
+  </div>
 
   <div class="body">
     <h1 class="title">{title}</h1>
-    {#if description}
-      <p class="description">{description}</p>
-    {/if}
+    <p class="description">{description}</p>
 
     {#if error}
       <div class="error-msg">
@@ -47,9 +47,6 @@
 
     <button class="cta" onclick={onStart}>
       {ctaText}
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
     </button>
   </div>
 </div>
@@ -64,48 +61,58 @@
     overflow: hidden;
   }
 
-  .cover {
-    width: 100%;
-    height: 220px;
-    overflow: hidden;
-  }
-
-  .cover img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
   .logo-bar {
     padding: 20px 32px 0;
   }
 
+  .location-icon-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 32px 32px 0;
+  }
+
+  .icon-circle {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: var(--primary-10, #fff7d6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .location-icon {
+    color: var(--primary-50, #f7bb00);
+  }
+
   .body {
-    padding: 32px;
+    padding: 24px 32px 32px 32px;
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
+    text-align: center;
     gap: 16px;
   }
 
   .title {
-    font-size: 28px;
+    font-size: 24px;
     font-weight: 700;
     color: var(--tertiary-100);
-    line-height: 1.2;
+    line-height: 1.3;
   }
 
   .description {
-    font-size: 16px;
+    font-size: 15px;
     color: var(--tertiary-70);
     line-height: 1.6;
-    white-space: pre-wrap;
+    max-width: 90%;
   }
 
   .cta {
     display: inline-flex;
+    justify-content: center;
     align-items: center;
-    gap: 8px;
+    width: 100%;
     background: var(--primary-50);
     color: #221500;
     font-family: var(--font);
@@ -113,10 +120,10 @@
     font-weight: 700;
     border: none;
     border-radius: var(--radius-xl);
-    padding: 14px 28px;
+    padding: 16px 28px;
     cursor: pointer;
     transition: background 0.2s, transform 0.1s;
-    margin-top: 8px;
+    margin-top: 16px;
   }
 
   .cta:hover {
@@ -129,15 +136,21 @@
 
   .error-msg {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
+    text-align: left;
     gap: 8px;
     background: #fee2e2;
     color: #dc2626;
     padding: 12px 16px;
     border-radius: var(--radius-lg);
-    font-size: 14px;
+    font-size: 13.5px;
     font-weight: 500;
     width: 100%;
     margin-top: 4px;
+  }
+  
+  .error-msg svg {
+    flex-shrink: 0;
+    margin-top: 1px;
   }
 </style>

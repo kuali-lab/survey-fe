@@ -9,6 +9,7 @@
   import ProgressBar from '$lib/components/ProgressBar.svelte'
   import SectionHeader from '$lib/components/SectionHeader.svelte'
   import WelcomePage from '$lib/components/WelcomePage.svelte'
+  import LocationPromptPage from '$lib/components/LocationPromptPage.svelte'
   import ClosingPage from '$lib/components/ClosingPage.svelte'
   import ClosedPage from '$lib/components/ClosedPage.svelte'
   import ErrorPage from '$lib/components/ErrorPage.svelte'
@@ -33,6 +34,7 @@
   let validationError = $state<string | null>(null)
   let submitting = $state(false)
   let submitError = $state<string | null>(null)
+  let location = $state<{ latitude: number, longitude: number } | null>(null)
 
   const questions = $derived(survey?.questions ?? [])
   const skipRules = $derived(survey?.skipRules ?? [])
@@ -69,45 +71,58 @@
 
   function validateAnswer(): boolean {
     if (!currentQuestion) return true
-    if (!currentQuestion.required) return true
 
     const answer = answers[currentQuestion.id]
 
-    if (answer === null || answer === undefined) {
-      validationError = 'Pertanyaan ini wajib diisi.'
-      return false
+    // 1. Required Check
+    if (currentQuestion.required) {
+      if (answer === null || answer === undefined) {
+        validationError = 'Pertanyaan ini wajib diisi.'
+        return false
+      }
+      if (typeof answer === 'string' && answer.trim() === '') {
+        validationError = 'Pertanyaan ini wajib diisi.'
+        return false
+      }
+      if (Array.isArray(answer) && answer.length === 0) {
+        validationError = 'Pilih minimal satu jawaban.'
+        return false
+      }
+      if (currentQuestion.type === 'contact_info') {
+        const c = answer as { firstName?: string; lastName?: string; phone?: string; email?: string }
+        const filled = [c.firstName, c.lastName, c.phone, c.email].some(v => v && v.trim() !== '')
+        if (!filled) {
+          validationError = 'Isi minimal satu data kontak.'
+          return false
+        }
+      }
     }
 
-    if (typeof answer === 'string' && answer.trim() === '') {
-      validationError = 'Pertanyaan ini wajib diisi.'
-      return false
+    // If not required and answer is empty, fast-track success.
+    const isEmpty = answer === null || answer === undefined || (typeof answer === 'string' && answer.trim() === '') || (Array.isArray(answer) && answer.length === 0)
+    if (!currentQuestion.required && isEmpty && currentQuestion.type !== 'file_upload') {
+      return true
     }
 
-    if (Array.isArray(answer) && answer.length === 0) {
-      validationError = 'Pilih minimal satu jawaban.'
-      return false
-    }
-
+    // 2. Range & Format Validation (Applies if required OR if optionally answered)
     // Number: validate min/max range
-    if (currentQuestion.type === 'number' && typeof answer === 'number') {
-      const { minValue, maxValue } = currentQuestion
-      if (minValue !== undefined && minValue !== null && answer < minValue) {
-        validationError = `Nilai minimal adalah ${minValue}.`
-        return false
+    if (currentQuestion.type === 'number') {
+      let answerNum = answer;
+      if (typeof answer === 'string' && answer.trim() !== '') {
+        answerNum = Number(answer);
       }
-      if (maxValue !== undefined && maxValue !== null && answer > maxValue) {
-        validationError = `Nilai maksimal adalah ${maxValue}.`
-        return false
-      }
-    }
-
-    // Contact info: at least one field must be filled
-    if (currentQuestion.type === 'contact_info') {
-      const c = answer as { firstName?: string; lastName?: string; phone?: string; email?: string }
-      const filled = [c.firstName, c.lastName, c.phone, c.email].some(v => v && v.trim() !== '')
-      if (!filled) {
-        validationError = 'Isi minimal satu data kontak.'
-        return false
+      if (typeof answerNum === 'number' && !isNaN(answerNum)) {
+        const minVal = currentQuestion.minValue !== undefined && currentQuestion.minValue !== null ? Number(currentQuestion.minValue) : null;
+        const maxVal = currentQuestion.maxValue !== undefined && currentQuestion.maxValue !== null ? Number(currentQuestion.maxValue) : null;
+        
+        if (minVal !== null && answerNum < minVal) {
+          validationError = `Nilai minimal adalah ${minVal}.`;
+          return false;
+        }
+        if (maxVal !== null && answerNum > maxVal) {
+          validationError = `Nilai maksimal adalah ${maxVal}.`;
+          return false;
+        }
       }
     }
 
@@ -124,7 +139,42 @@
   }
 
 
-  function handleStart() {
+  async function handleStart() {
+    validationError = null
+    if (settings.requireLocation) {
+      viewState = 'location_prompt'
+      return
+    }
+
+    viewState = 'question'
+    currentIndex = 0
+  }
+
+  async function requestLocationAndStart() {
+    validationError = null
+    try {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0
+        })
+      })
+      location = {
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude
+      }
+    } catch (err) {
+      let errMsg = 'Akses lokasi diperlukan untuk mengisi survei ini.'
+      if (err instanceof GeolocationPositionError) {
+        if (err.code === err.PERMISSION_DENIED) errMsg = 'Harap izinkan akses lokasi (GPS) di browser Anda untuk melanjutkan.'
+        else if (err.code === err.POSITION_UNAVAILABLE) errMsg = 'Informasi lokasi tidak tersedia atau mode penyamaran mencegah pendeteksian.'
+        else if (err.code === err.TIMEOUT) errMsg = 'Waktu permintaan lokasi habis. Coba lagi.'
+      }
+      validationError = errMsg
+      return
+    }
+
     viewState = 'question'
     currentIndex = 0
   }
@@ -139,18 +189,19 @@
       const emailQuestion = answerableQuestions.find(q => q.type === 'email')
       const respondentEmail = emailQuestion ? (answers[emailQuestion.id] as string | undefined) : undefined
 
-      await submitSurveyAnswers(slug, answers, respondentEmail)
+      await submitSurveyAnswers(slug, answers, respondentEmail, location)
       viewState = 'closing'
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'submit_error'
       if (msg === 'already_submitted') {
         submitError = 'Survei ini sudah pernah Anda isi sebelumnya.'
+        viewState = 'question'
       } else if (msg === 'survey_closed') {
-        submitError = 'Maaf, survei ini sudah ditutup.'
+        viewState = 'closed'
       } else {
         submitError = 'Terjadi kesalahan saat mengirim jawaban. Silakan coba lagi.'
+        viewState = 'question'
       }
-      viewState = 'question'
     } finally {
       submitting = false
     }
@@ -270,6 +321,15 @@
         imageUrl={welcomeQuestion?.imageUrl ?? null}
         ctaText={'Mulai Survei'}
         onStart={handleStart}
+        error={validationError}
+      />
+    </div>
+
+  {:else if viewState === 'location_prompt'}
+    <div class="centered-wrap">
+      <LocationPromptPage
+        onStart={requestLocationAndStart}
+        error={validationError}
       />
     </div>
 
