@@ -6,7 +6,8 @@
     description,
     imageUrl,
     ctaText,
-    onStart
+    onStart,
+    error = null
   }: {
     title: string
     description: string | null
