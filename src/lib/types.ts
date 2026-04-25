@@ -51,6 +51,9 @@ export interface Question {
 
   // Relational config
   options?: QuestionOption[]
+  // Flat array of image URLs for image_choice options, parallel to options[].
+  // Derived from options[].imageUrl when normalized from the API response.
+  optionImages?: string[]
   matrixRows?: MatrixRow[]
   matrixCols?: MatrixCol[]
 }
