@@ -56,12 +56,13 @@ export async function submitSurveyAnswers(
   slug: string,
   answers: Answers,
   respondentEmail?: string,
-  location?: { latitude: number, longitude: number } | null
+  location?: { latitude: number, longitude: number } | null,
+  fingerprintHash?: string | null
 ): Promise<void> {
   const res = await fetch(`${PUBLIC_API_BASE_URL}/s/${slug}/submit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ answers, respondentEmail, location })
+    body: JSON.stringify({ answers, respondentEmail, location, fingerprintHash })
   })
   if (res.status === 409) throw new Error('already_submitted')
   if (res.status === 410) throw new Error('survey_closed')

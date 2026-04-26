@@ -2,9 +2,11 @@
   import type { PageData } from './$types.js'
   import type { ViewState, Answers, AnswerValue, Question } from '$lib/types.js'
   import { submitSurveyAnswers } from '$lib/api.js'
+  import { computeFingerprint } from '$lib/fingerprint.js'
   import { getAnswerableQuestions, getQuestionNumber } from '$lib/utils.js'
   import { evaluateNext } from '$lib/skipLogic.js'
   import { page } from '$app/stores'
+  import { onMount } from 'svelte'
 
   import ProgressBar from '$lib/components/ProgressBar.svelte'
   import SectionHeader from '$lib/components/SectionHeader.svelte'
@@ -35,6 +37,11 @@
   let submitting = $state(false)
   let submitError = $state<string | null>(null)
   let location = $state<{ latitude: number, longitude: number } | null>(null)
+  let fingerprintHash = $state<string | null>(null)
+
+  onMount(() => {
+    computeFingerprint().then(fp => { fingerprintHash = fp })
+  })
 
   const questions = $derived(survey?.questions ?? [])
   const skipRules = $derived(survey?.skipRules ?? [])
@@ -189,7 +196,7 @@
       const emailQuestion = answerableQuestions.find(q => q.type === 'email')
       const respondentEmail = emailQuestion ? (answers[emailQuestion.id] as string | undefined) : undefined
 
-      await submitSurveyAnswers(slug, answers, respondentEmail, location)
+      await submitSurveyAnswers(slug, answers, respondentEmail, location, fingerprintHash)
       viewState = 'closing'
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'submit_error'
