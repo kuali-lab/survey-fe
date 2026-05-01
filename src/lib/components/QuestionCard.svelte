@@ -31,7 +31,7 @@
     {/if}
   </div>
 
-  {#if question.description}
+  {#if question.description && question.type !== 'statement'}
     <p class="description">{question.description}</p>
   {/if}
 
