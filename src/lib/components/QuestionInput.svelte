@@ -98,7 +98,22 @@
     ) : false
   )
 
-  let otherText = $state('')
+  function deriveInitialOtherText(): string {
+    const opts = question.options ?? []
+    const otherOpt = opts.find(o => o.isOther)
+    if (!otherOpt) return ''
+    const standardLabels = opts.filter(o => !o.isOther).map(o => o.label)
+    if (question.type === 'single_choice' || question.type === 'dropdown') {
+      const sv = typeof value === 'string' ? value : ''
+      return sv && !standardLabels.includes(sv) && sv !== otherOpt.label ? sv : ''
+    }
+    if (question.type === 'checkbox') {
+      const av = Array.isArray(value) ? (value as string[]) : []
+      return av.find(v => !standardLabels.includes(v) && v !== otherOpt.label) ?? ''
+    }
+    return ''
+  }
+  let otherText = $state(deriveInitialOtherText())
 
   function selectOtherSingle() {
     if (!otherOption) return
@@ -726,12 +741,13 @@
     width: 100%;
     text-align: left;
     border: 1px solid #d9dde3;
-    border-radius: 8px;
+    border-radius: 12px;
     padding: 12px 16px;
     background: white;
     cursor: pointer;
     font-family: var(--font);
     font-size: 15px;
+    font-weight: 600;
     color: var(--tertiary-80);
     transition: border-color 0.15s, background 0.15s;
   }
@@ -747,8 +763,8 @@
   }
 
   .radio-indicator {
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     border: 2px solid #d9dde3;
     flex-shrink: 0;
@@ -761,13 +777,13 @@
 
   .radio-indicator.selected {
     border-color: #f7bb00;
-    border-width: 5px;
+    border-width: 6px;
   }
 
   .checkbox-indicator {
-    width: 18px;
-    height: 18px;
-    border-radius: 4px;
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
     border: 2px solid #d9dde3;
     flex-shrink: 0;
     transition: border-color 0.15s, background 0.15s;

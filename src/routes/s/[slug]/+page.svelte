@@ -355,14 +355,16 @@
         {/if}
 
         {#if currentQuestion}
-          <QuestionCard
-            question={currentQuestion}
-            questionNumber={settings.showNumbers ? questionNumber : ''}
-            answer={answers[currentQuestion.id] ?? null}
-            validationError={validationError}
-            onAnswer={handleAnswer}
-            {slug}
-          />
+          {#key currentQuestion.id}
+            <QuestionCard
+              question={currentQuestion}
+              questionNumber={settings.showNumbers ? questionNumber : ''}
+              answer={answers[currentQuestion.id] ?? null}
+              validationError={validationError}
+              onAnswer={handleAnswer}
+              {slug}
+            />
+          {/key}
         {/if}
 
         {#if submitError}
