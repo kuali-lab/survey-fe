@@ -14,11 +14,26 @@
 
   type Stage = 'intro' | 'requesting' | 'streaming' | 'captured'
 
+  // Minimal FaceDetector typing — not in lib.dom and only available in Chrome on Android.
+  type FaceDetection = { boundingBox: { x: number; y: number; width: number; height: number } }
+  type FaceDetectorInstance = { detect: (src: HTMLVideoElement) => Promise<FaceDetection[]> }
+  type FaceDetectorCtor = new (opts?: { fastMode?: boolean; maxDetectedFaces?: number }) => FaceDetectorInstance
+
   let stage = $state<Stage>('intro')
   let videoEl = $state<HTMLVideoElement | null>(null)
   let stream: MediaStream | null = null
   let capturedDataUrl = $state<string | null>(null)
   let errorMsg = $state<string | null>(null)
+  let faceAligned = $state(false)
+  let detector: FaceDetectorInstance | null = null
+  let detectTimer: ReturnType<typeof setInterval> | null = null
+
+  // Oval geometry — kept in sync with the SVG below so face-alignment math matches the visual guide.
+  const OVAL_CX = 0.5
+  const OVAL_CY = 0.44
+  const OVAL_RX = 0.34
+  const OVAL_RY = 0.28
+  const FACE_MIN_AREA = 0.05 // face must occupy ≥5% of frame to count as "close enough"
 
   async function startCamera() {
     errorMsg = null
@@ -30,12 +45,12 @@
       })
       stream = ms
       stage = 'streaming'
-      // wait a tick for video element to mount
       await Promise.resolve()
       if (videoEl) {
         videoEl.srcObject = ms
         await videoEl.play().catch(() => {})
       }
+      startFaceDetection()
     } catch (err) {
       stage = 'intro'
       const e = err as DOMException
@@ -55,7 +70,55 @@
     }
   }
 
+  function startFaceDetection() {
+    const FD = (window as unknown as { FaceDetector?: FaceDetectorCtor }).FaceDetector
+    if (!FD) return
+    try {
+      detector = new FD({ fastMode: true, maxDetectedFaces: 1 })
+    } catch {
+      detector = null
+      return
+    }
+    detectTimer = setInterval(runDetection, 400)
+  }
+
+  async function runDetection() {
+    if (!detector || !videoEl || stage !== 'streaming') return
+    const vw = videoEl.videoWidth
+    const vh = videoEl.videoHeight
+    if (!vw || !vh) return
+    try {
+      const faces = await detector.detect(videoEl)
+      if (faces.length === 0) {
+        faceAligned = false
+        return
+      }
+      const bb = faces[0].boundingBox
+      // Front camera output is un-mirrored. The oval is symmetric horizontally,
+      // so we don't need to flip the math even though the preview is mirrored.
+      const fx = (bb.x + bb.width / 2) / vw
+      const fy = (bb.y + bb.height / 2) / vh
+      const dx = (fx - OVAL_CX) / OVAL_RX
+      const dy = (fy - OVAL_CY) / OVAL_RY
+      const inside = (dx * dx + dy * dy) <= 1
+      const area = (bb.width / vw) * (bb.height / vh)
+      faceAligned = inside && area >= FACE_MIN_AREA
+    } catch {
+      // detect() can transiently fail; leave previous state.
+    }
+  }
+
+  function stopFaceDetection() {
+    if (detectTimer) {
+      clearInterval(detectTimer)
+      detectTimer = null
+    }
+    detector = null
+    faceAligned = false
+  }
+
   function stopStream() {
+    stopFaceDetection()
     if (stream) {
       stream.getTracks().forEach(t => t.stop())
       stream = null
@@ -69,7 +132,6 @@
     const vh = videoEl.videoHeight
     if (!vw || !vh) return
 
-    // Resize to max 800px on the long edge for ~150KB JPEG.
     const maxEdge = 800
     const scale = Math.min(1, maxEdge / Math.max(vw, vh))
     const cw = Math.round(vw * scale)
@@ -80,15 +142,16 @@
     canvas.height = ch
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    // Draw un-mirrored (the CSS scaleX(-1) on <video> only affects the preview).
     ctx.drawImage(videoEl, 0, 0, cw, ch)
     capturedDataUrl = canvas.toDataURL('image/jpeg', 0.7)
+    stopFaceDetection()
     stage = 'captured'
   }
 
   function retake() {
     capturedDataUrl = null
     stage = 'streaming'
+    startFaceDetection()
   }
 
   function confirm() {
@@ -97,16 +160,26 @@
     onComplete(capturedDataUrl)
   }
 
+  function cancelToIntro() {
+    stopStream()
+    capturedDataUrl = null
+    stage = 'intro'
+  }
+
   onDestroy(() => stopStream())
+
+  const isFullScreen = $derived(stage === 'requesting' || stage === 'streaming' || stage === 'captured')
 </script>
 
-<div class="card">
-  <div class="logo-bar">
-    <Logo height={24} />
-    <span class="title-pill">Foto Selfie</span>
-  </div>
+{#if !isFullScreen}
+  <!-- Intro card: shown before camera opens. Tips live here so user reads them
+       once, before being immersed in the camera UI. -->
+  <div class="card">
+    <div class="logo-bar">
+      <Logo height={24} />
+      <span class="title-pill">Foto Selfie</span>
+    </div>
 
-  {#if stage === 'intro'}
     <div class="intro-icon-wrap">
       <div class="icon-circle">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
@@ -115,11 +188,18 @@
         </svg>
       </div>
     </div>
+
     <div class="body">
       <h1 class="title">Hampir selesai</h1>
       <p class="description">
         Untuk verifikasi keaslian responden, kami memerlukan satu foto selfie Anda.
       </p>
+
+      <ul class="tips">
+        <li><span class="check">✓</span> Wajah terlihat jelas dan terang</li>
+        <li><span class="check">✓</span> Lepas masker dan kacamata gelap</li>
+        <li><span class="check">✓</span> Hindari cahaya dari belakang</li>
+      </ul>
 
       {#if errorMsg}
         <div class="error-msg">
@@ -136,29 +216,56 @@
         Mulai Foto Selfie
       </button>
     </div>
-
-  {:else}
-    <div class="camera-stage">
+  </div>
+{:else}
+  <!-- Full-screen camera. Escapes any parent layout via `position: fixed`. -->
+  <div class="fullscreen">
+    <!-- A 9:16 inner column keeps the oval correctly proportioned even on
+         landscape desktop viewports — black bars frame the camera column. -->
+    <div class="cam-column">
       {#if stage === 'captured' && capturedDataUrl}
-        <img class="cam-frozen" src={capturedDataUrl} alt="Selfie hasil" />
+        <img class="cam-media" src={capturedDataUrl} alt="Selfie hasil" />
       {:else}
-        <video bind:this={videoEl} class="cam-video" autoplay playsinline muted></video>
+        <video bind:this={videoEl} class="cam-media" autoplay playsinline muted></video>
       {/if}
 
-      <!-- Spotlight mask + oval guide. Percentages reference the parent SVG viewport. -->
-      <svg class="overlay" xmlns="http://www.w3.org/2000/svg">
+      <svg class="overlay" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
         <defs>
-          <mask id="selfie-oval-mask">
+          <mask id="selfie-oval-mask-fs">
             <rect x="0" y="0" width="100%" height="100%" fill="white" />
             <ellipse cx="50%" cy="44%" rx="34%" ry="28%" fill="black" />
           </mask>
         </defs>
-        <rect x="0" y="0" width="100%" height="100%" fill="rgba(0,0,0,0.55)" mask="url(#selfie-oval-mask)" />
+        <rect x="0" y="0" width="100%" height="100%" fill="rgba(0,0,0,0.55)" mask="url(#selfie-oval-mask-fs)" />
         <ellipse
           cx="50%" cy="44%" rx="34%" ry="28%"
-          fill="none" stroke="white" stroke-width="2" stroke-opacity="0.9"
+          fill="none"
+          stroke={faceAligned ? '#22c55e' : 'white'}
+          stroke-width={faceAligned ? 3 : 2}
+          stroke-opacity="0.95"
         />
       </svg>
+
+      <!-- Top bar (overlaid): close button + status pill -->
+      <div class="top-bar">
+        <button class="icon-btn" aria-label="Tutup kamera" onclick={cancelToIntro}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path d="M6 6l12 12M18 6l-12 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+          </svg>
+        </button>
+        {#if stage === 'streaming'}
+          <span class="status-pill" class:aligned={faceAligned}>
+            {#if faceAligned}
+              ✓ Wajah terdeteksi
+            {:else}
+              Posisikan wajah dalam bingkai
+            {/if}
+          </span>
+        {:else if stage === 'captured'}
+          <span class="status-pill">Pratinjau foto</span>
+        {/if}
+        <span class="icon-btn-spacer" aria-hidden="true"></span>
+      </div>
 
       {#if stage === 'requesting'}
         <div class="loading">
@@ -166,40 +273,36 @@
           <span>Mengaktifkan kamera…</span>
         </div>
       {/if}
-    </div>
 
-    {#if stage === 'streaming'}
-      <div class="hint">Posisikan wajah dalam bingkai</div>
-      <ul class="tips">
-        <li><span class="check">✓</span> Wajah terlihat jelas dan terang</li>
-        <li><span class="check">✓</span> Lepas masker dan kacamata gelap</li>
-        <li><span class="check">✓</span> Hindari cahaya dari belakang</li>
-      </ul>
-      <div class="controls">
-        <button class="shutter" onclick={takePhoto} aria-label="Ambil foto">
-          <span class="shutter-inner"></span>
-        </button>
+      <!-- Bottom action bar (overlaid). Anchored to the bottom of the camera
+           column so the shutter is always thumb-reachable. -->
+      <div class="bottom-bar">
+        {#if stage === 'streaming'}
+          <button class="shutter" onclick={takePhoto} aria-label="Ambil foto">
+            <span class="shutter-inner"></span>
+          </button>
+        {:else if stage === 'captured'}
+          <div class="confirm-row">
+            <button class="btn-secondary" onclick={retake} disabled={loading}>
+              Ambil ulang
+            </button>
+            <button class="btn-primary" onclick={confirm} disabled={loading}>
+              {#if loading}
+                <span class="spinner" aria-hidden="true"></span>
+                Mengirim…
+              {:else}
+                Pakai foto ini
+              {/if}
+            </button>
+          </div>
+        {/if}
       </div>
-    {:else if stage === 'captured'}
-      <div class="hint">Pastikan wajah terlihat jelas</div>
-      <div class="controls confirm-row">
-        <button class="btn-secondary" onclick={retake} disabled={loading}>
-          Ambil ulang
-        </button>
-        <button class="btn-primary" onclick={confirm} disabled={loading}>
-          {#if loading}
-            <span class="spinner" aria-hidden="true"></span>
-            Mengirim…
-          {:else}
-            Pakai foto ini
-          {/if}
-        </button>
-      </div>
-    {/if}
-  {/if}
-</div>
+    </div>
+  </div>
+{/if}
 
 <style>
+  /* ─── Intro card ───────────────────────────────────────────────────────── */
   .card {
     background: white;
     border-radius: var(--radius-xl);
@@ -268,6 +371,34 @@
     max-width: 90%;
   }
 
+  .tips {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    background: var(--tertiary-10, #f7f7f4);
+    border-radius: var(--radius-lg);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-align: left;
+  }
+
+  .tips li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13.5px;
+    color: var(--tertiary-90, #2a2a25);
+    font-weight: 500;
+  }
+
+  .check {
+    color: #16a34a;
+    font-weight: 800;
+  }
+
   .cta {
     width: 100%;
     background: var(--primary-50);
@@ -280,7 +411,7 @@
     padding: 16px 28px;
     cursor: pointer;
     transition: background 0.2s, transform 0.1s;
-    margin-top: 8px;
+    margin-top: 4px;
   }
 
   .cta:hover:not(:disabled) { background: #e8ae00; }
@@ -301,24 +432,47 @@
     width: 100%;
   }
 
-  .camera-stage {
+  /* ─── Full-screen camera ───────────────────────────────────────────────── */
+  .fullscreen {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Use dynamic viewport height where supported (iOS Safari hides URL bar). */
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .cam-column {
     position: relative;
-    width: 100%;
-    aspect-ratio: 3 / 4;
+    height: 100%;
+    /* Portrait 9:16 column so the oval stays correctly proportioned at any
+       viewport aspect ratio; on landscape desktops, black bars frame it. */
+    aspect-ratio: 9 / 16;
+    max-width: 100vw;
     background: #000;
     overflow: hidden;
   }
 
-  .cam-video,
-  .cam-frozen {
+  /* On portrait / mobile, fill the width fully (don't apply aspect). */
+  @media (max-aspect-ratio: 9/16) {
+    .cam-column {
+      width: 100%;
+      aspect-ratio: auto;
+    }
+  }
+
+  .cam-media {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
-    /* Mirror the live preview so it feels like a real mirror to the user.
-       The captured frame is drawn from the un-mirrored video stream, so the
-       saved image is in correct orientation. */
+    /* Mirror live preview for "real mirror" feel. The captured frame is drawn
+       from the un-mirrored video stream so saved images are correctly oriented. */
     transform: scaleX(-1);
   }
 
@@ -328,6 +482,61 @@
     width: 100%;
     height: 100%;
     pointer-events: none;
+  }
+
+  .top-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 12px 12px 16px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.5), rgba(0,0,0,0));
+    pointer-events: none; /* let underlying elements receive events except for buttons */
+  }
+
+  .icon-btn,
+  .icon-btn-spacer {
+    pointer-events: auto;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+  }
+
+  .icon-btn {
+    border-radius: 50%;
+    background: rgba(0,0,0,0.5);
+    border: none;
+    color: white;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .icon-btn:hover { background: rgba(0,0,0,0.7); }
+  .icon-btn:active { transform: scale(0.94); }
+
+  .status-pill {
+    pointer-events: auto;
+    background: rgba(0,0,0,0.55);
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 999px;
+    backdrop-filter: blur(4px);
+    transition: background 0.2s;
+    text-align: center;
+    max-width: 70%;
+  }
+
+  .status-pill.aligned {
+    background: rgba(34, 197, 94, 0.85);
   }
 
   .loading {
@@ -341,82 +550,64 @@
     color: white;
     font-size: 14px;
     font-weight: 600;
-    background: rgba(0, 0, 0, 0.4);
+    background: rgba(0, 0, 0, 0.55);
   }
 
   .spinner-lg {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     border: 3px solid rgba(255, 255, 255, 0.3);
     border-top-color: white;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
 
-  .hint {
-    text-align: center;
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--tertiary-100);
-    padding: 16px 24px 4px;
-  }
-
-  .tips {
-    list-style: none;
-    margin: 0;
-    padding: 8px 24px 0;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    font-size: 13px;
-    color: var(--tertiary-70);
-  }
-
-  .tips li {
+  .bottom-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 16px 20px 20px;
+    padding-bottom: max(20px, calc(env(safe-area-inset-bottom) + 12px));
     display: flex;
     align-items: center;
-    gap: 8px;
-  }
-
-  .check {
-    color: #16a34a;
-    font-weight: 800;
-  }
-
-  .controls {
-    display: flex;
     justify-content: center;
-    align-items: center;
-    padding: 20px 24px 28px;
-  }
-
-  .controls.confirm-row {
-    gap: 12px;
+    background: linear-gradient(to top, rgba(0,0,0,0.65), rgba(0,0,0,0));
   }
 
   .shutter {
-    width: 72px;
-    height: 72px;
+    width: 76px;
+    height: 76px;
     border-radius: 50%;
     background: white;
-    border: 4px solid var(--tertiary-30, #d8d8d2);
+    border: 4px solid rgba(255,255,255,0.6);
     cursor: pointer;
     padding: 0;
-    transition: transform 0.1s, border-color 0.2s;
+    transition: transform 0.1s;
     display: flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 0 0 0 4px rgba(0,0,0,0.25);
   }
 
-  .shutter:hover { border-color: var(--primary-50); }
   .shutter:active { transform: scale(0.94); }
 
   .shutter-inner {
     display: block;
-    width: 56px;
-    height: 56px;
+    width: 60px;
+    height: 60px;
     border-radius: 50%;
-    background: var(--primary-50, #f7bb00);
+    background: white;
+    transition: background 0.2s;
+  }
+
+  .shutter:hover .shutter-inner { background: var(--primary-50, #f7bb00); }
+
+  .confirm-row {
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    gap: 12px;
   }
 
   .btn-primary,
@@ -437,19 +628,20 @@
   }
 
   .btn-primary {
-    background: var(--primary-50);
+    background: var(--primary-50, #f7bb00);
     color: #221500;
   }
   .btn-primary:hover:not(:disabled) { background: #e8ae00; }
   .btn-primary:disabled { opacity: 0.7; cursor: not-allowed; }
 
   .btn-secondary {
-    background: var(--tertiary-10, #f7f7f4);
-    color: var(--tertiary-100);
-    border: 1px solid var(--tertiary-30, #d8d8d2);
+    background: rgba(255,255,255,0.15);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.4);
+    backdrop-filter: blur(4px);
   }
-  .btn-secondary:hover:not(:disabled) { background: var(--tertiary-20, #ececea); }
-  .btn-secondary:disabled { opacity: 0.7; cursor: not-allowed; }
+  .btn-secondary:hover:not(:disabled) { background: rgba(255,255,255,0.25); }
+  .btn-secondary:disabled { opacity: 0.6; cursor: not-allowed; }
 
   .spinner {
     width: 14px;
