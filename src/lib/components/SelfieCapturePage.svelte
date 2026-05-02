@@ -33,7 +33,9 @@
   const OVAL_CY = 0.44
   const OVAL_RX = 0.34
   const OVAL_RY = 0.28
-  const FACE_MIN_AREA = 0.05 // face must occupy ≥5% of frame to count as "close enough"
+  // Face must occupy ≥20% of the displayed column width to count as "close enough"
+  // (a face filling the oval is ~50% of column width; 20% allows distance variation).
+  const FACE_MIN_WIDTH_FRAC = 0.20
 
   async function startCamera() {
     errorMsg = null
@@ -86,7 +88,9 @@
     if (!detector || !videoEl || stage !== 'streaming') return
     const vw = videoEl.videoWidth
     const vh = videoEl.videoHeight
-    if (!vw || !vh) return
+    const cw = videoEl.clientWidth
+    const ch = videoEl.clientHeight
+    if (!vw || !vh || !cw || !ch) return
     try {
       const faces = await detector.detect(videoEl)
       if (faces.length === 0) {
@@ -94,15 +98,22 @@
         return
       }
       const bb = faces[0].boundingBox
-      // Front camera output is un-mirrored. The oval is symmetric horizontally,
-      // so we don't need to flip the math even though the preview is mirrored.
-      const fx = (bb.x + bb.width / 2) / vw
-      const fy = (bb.y + bb.height / 2) / vh
+      // The face's bounding box from FaceDetector is in source-video coordinates,
+      // but the oval is positioned in displayed-column coordinates. With
+      // object-fit: cover, the video is scaled and cropped to fill the column —
+      // we need to translate face coords through that same transform.
+      const scale = Math.max(cw / vw, ch / vh)
+      const offsetX = (vw * scale - cw) / 2
+      const offsetY = (vh * scale - ch) / 2
+      const faceCx = (bb.x + bb.width / 2) * scale - offsetX
+      const faceCy = (bb.y + bb.height / 2) * scale - offsetY
+      const fx = faceCx / cw
+      const fy = faceCy / ch
       const dx = (fx - OVAL_CX) / OVAL_RX
       const dy = (fy - OVAL_CY) / OVAL_RY
       const inside = (dx * dx + dy * dy) <= 1
-      const area = (bb.width / vw) * (bb.height / vh)
-      faceAligned = inside && area >= FACE_MIN_AREA
+      const faceWidthFrac = (bb.width * scale) / cw
+      faceAligned = inside && faceWidthFrac >= FACE_MIN_WIDTH_FRAC
     } catch {
       // detect() can transiently fail; leave previous state.
     }
@@ -223,10 +234,12 @@
     <!-- A 9:16 inner column keeps the oval correctly proportioned even on
          landscape desktop viewports — black bars frame the camera column. -->
     <div class="cam-column">
+      <!-- Video stays mounted across requesting/streaming/captured stages so the
+           stream survives a retake without needing to be reattached. The frozen
+           image overlays it during 'captured'. -->
+      <video bind:this={videoEl} class="cam-media" autoplay playsinline muted></video>
       {#if stage === 'captured' && capturedDataUrl}
         <img class="cam-media" src={capturedDataUrl} alt="Selfie hasil" />
-      {:else}
-        <video bind:this={videoEl} class="cam-media" autoplay playsinline muted></video>
       {/if}
 
       <svg class="overlay" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">

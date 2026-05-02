@@ -471,7 +471,15 @@
       />
     </div>
 
-  {:else if viewState === 'question' || viewState === 'submitting'}
+  {:else if viewState === 'submitting'}
+    <div class="centered-wrap">
+      <div class="submitting-card">
+        <span class="big-spinner" aria-hidden="true"></span>
+        <p>Mengirim jawaban…</p>
+      </div>
+    </div>
+
+  {:else if viewState === 'question'}
     <div class="survey-wrap">
       {#if settings.showProgress}
         <ProgressBar progress={progress} />
@@ -560,6 +568,37 @@
     border-radius: 999px;
     padding: 6px 14px;
     letter-spacing: 0.02em;
+  }
+
+  .submitting-card {
+    background: white;
+    border-radius: var(--radius-xl);
+    padding: 40px 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
+  }
+
+  .submitting-card p {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--tertiary-90, #2a2a25);
+    margin: 0;
+  }
+
+  .big-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--tertiary-30, #d8d8d2);
+    border-top-color: var(--primary-50, #f7bb00);
+    border-radius: 50%;
+    animation: submit-spin 0.8s linear infinite;
+  }
+
+  @keyframes submit-spin {
+    to { transform: rotate(360deg); }
   }
 
   .survey-wrap {
