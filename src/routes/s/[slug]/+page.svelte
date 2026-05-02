@@ -13,6 +13,8 @@
   import WelcomePage from '$lib/components/WelcomePage.svelte'
   import LocationPromptPage from '$lib/components/LocationPromptPage.svelte'
   import LocationDeniedPage from '$lib/components/LocationDeniedPage.svelte'
+  import SelfieCapturePage from '$lib/components/SelfieCapturePage.svelte'
+  import SelfieDeniedPage from '$lib/components/SelfieDeniedPage.svelte'
   import ClosingPage from '$lib/components/ClosingPage.svelte'
   import ClosedPage from '$lib/components/ClosedPage.svelte'
   import ErrorPage from '$lib/components/ErrorPage.svelte'
@@ -39,6 +41,7 @@
   let submitError = $state<string | null>(null)
   let location = $state<{ latitude: number, longitude: number, accuracy?: number } | null>(null)
   let locationRequesting = $state(false)
+  let selfie = $state<{ imageBase64: string } | null>(null)
   let fingerprintHash = $state<string | null>(null)
 
   onMount(() => {
@@ -154,12 +157,49 @@
     currentIndex = 0
   }
 
+  // End-of-survey verification gate.
+  // Order: selfie first (higher friction, capture while sunk-cost fresh), then location.
   async function handleFinish() {
-    if (!settings.requireLocation) {
-      await handleSubmit()
+    if (settings.requireSelfie && !selfie) {
+      await runSelfieGate()
       return
     }
-    await requestLocationAndSubmit()
+    if (settings.requireLocation && !location) {
+      await requestLocationAndSubmit()
+      return
+    }
+    await handleSubmit()
+  }
+
+  async function runSelfieGate() {
+    validationError = null
+    let permState: PermissionState | null = null
+    try {
+      if (typeof navigator !== 'undefined' && 'permissions' in navigator) {
+        // 'camera' may not be a recognized name in some browsers — query throws and we fall through.
+        const status = await navigator.permissions.query({ name: 'camera' as PermissionName })
+        permState = status.state
+      }
+    } catch {
+      // Permissions API for camera is not universally supported (notably Safari).
+      // Fall through to letting SelfieCapturePage call getUserMedia and surface NotAllowedError.
+    }
+
+    if (permState === 'denied') {
+      viewState = 'selfie_denied'
+      return
+    }
+    viewState = 'selfie_capture'
+  }
+
+  function onSelfieComplete(imageBase64: string) {
+    selfie = { imageBase64 }
+    // Continue the gate chain: location next if required, else submit.
+    handleFinish()
+  }
+
+  function onSelfieDenied() {
+    viewState = 'selfie_denied'
   }
 
   async function requestLocationAndSubmit() {
@@ -232,7 +272,7 @@
       const emailQuestion = answerableQuestions.find(q => q.type === 'email')
       const respondentEmail = emailQuestion ? (answers[emailQuestion.id] as string | undefined) : undefined
 
-      await submitSurveyAnswers(slug, answers, respondentEmail, location, fingerprintHash)
+      await submitSurveyAnswers(slug, answers, respondentEmail, location, fingerprintHash, selfie)
       viewState = 'closing'
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'submit_error'
@@ -249,6 +289,23 @@
       submitting = false
     }
   }
+
+  // Step indicator for the verification gate.
+  // Counts how many gates the survey requires and what step the user is currently on.
+  const gateSteps = $derived.by(() => {
+    const steps: Array<'selfie' | 'location'> = []
+    if (settings.requireSelfie) steps.push('selfie')
+    if (settings.requireLocation) steps.push('location')
+    return steps
+  })
+
+  const gateCurrentIndex = $derived.by(() => {
+    if (viewState === 'selfie_capture' || viewState === 'selfie_denied') return gateSteps.indexOf('selfie')
+    if (viewState === 'location_prompt' || viewState === 'location_denied') return gateSteps.indexOf('location')
+    return -1
+  })
+
+  const showStepIndicator = $derived(gateSteps.length > 1 && gateCurrentIndex >= 0)
 
   async function handleNext() {
     validationError = null
@@ -368,8 +425,34 @@
       />
     </div>
 
+  {:else if viewState === 'selfie_capture'}
+    <div class="centered-wrap">
+      {#if showStepIndicator}
+        <div class="step-indicator">Langkah {gateCurrentIndex + 1} dari {gateSteps.length} · Foto Selfie</div>
+      {/if}
+      <SelfieCapturePage
+        onComplete={onSelfieComplete}
+        onDenied={onSelfieDenied}
+        loading={submitting}
+      />
+    </div>
+
+  {:else if viewState === 'selfie_denied'}
+    <div class="centered-wrap">
+      {#if showStepIndicator}
+        <div class="step-indicator">Langkah {gateCurrentIndex + 1} dari {gateSteps.length} · Foto Selfie</div>
+      {/if}
+      <SelfieDeniedPage
+        onRetry={() => { viewState = 'selfie_capture' }}
+        loading={false}
+      />
+    </div>
+
   {:else if viewState === 'location_prompt'}
     <div class="centered-wrap">
+      {#if showStepIndicator}
+        <div class="step-indicator">Langkah {gateCurrentIndex + 1} dari {gateSteps.length} · Lokasi GPS</div>
+      {/if}
       <LocationPromptPage
         onStart={fetchLocationThenSubmit}
         loading={locationRequesting}
@@ -379,6 +462,9 @@
 
   {:else if viewState === 'location_denied'}
     <div class="centered-wrap">
+      {#if showStepIndicator}
+        <div class="step-indicator">Langkah {gateCurrentIndex + 1} dari {gateSteps.length} · Lokasi GPS</div>
+      {/if}
       <LocationDeniedPage
         onRetry={fetchLocationThenSubmit}
         loading={locationRequesting}
@@ -458,9 +544,22 @@
   .centered-wrap {
     min-height: 100vh;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     padding: 16px;
+    gap: 12px;
+  }
+
+  .step-indicator {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--tertiary-80, #4a4a45);
+    background: white;
+    border: 1px solid var(--tertiary-20, #ececea);
+    border-radius: 999px;
+    padding: 6px 14px;
+    letter-spacing: 0.02em;
   }
 
   .survey-wrap {
