@@ -12,6 +12,7 @@
   import SectionHeader from '$lib/components/SectionHeader.svelte'
   import WelcomePage from '$lib/components/WelcomePage.svelte'
   import LocationPromptPage from '$lib/components/LocationPromptPage.svelte'
+  import LocationDeniedPage from '$lib/components/LocationDeniedPage.svelte'
   import ClosingPage from '$lib/components/ClosingPage.svelte'
   import ClosedPage from '$lib/components/ClosedPage.svelte'
   import ErrorPage from '$lib/components/ErrorPage.svelte'
@@ -36,7 +37,8 @@
   let validationError = $state<string | null>(null)
   let submitting = $state(false)
   let submitError = $state<string | null>(null)
-  let location = $state<{ latitude: number, longitude: number } | null>(null)
+  let location = $state<{ latitude: number, longitude: number, accuracy?: number } | null>(null)
+  let locationRequesting = $state(false)
   let fingerprintHash = $state<string | null>(null)
 
   onMount(() => {
@@ -148,17 +150,47 @@
 
   async function handleStart() {
     validationError = null
-    if (settings.requireLocation) {
-      viewState = 'location_prompt'
-      return
-    }
-
     viewState = 'question'
     currentIndex = 0
   }
 
-  async function requestLocationAndStart() {
+  async function handleFinish() {
+    if (!settings.requireLocation) {
+      await handleSubmit()
+      return
+    }
+    await requestLocationAndSubmit()
+  }
+
+  async function requestLocationAndSubmit() {
     validationError = null
+
+    let permState: PermissionState | null = null
+    try {
+      if (typeof navigator !== 'undefined' && 'permissions' in navigator) {
+        const status = await navigator.permissions.query({ name: 'geolocation' as PermissionName })
+        permState = status.state
+      }
+    } catch {
+      // Older Safari may reject the 'geolocation' query — fall through to prompt path
+    }
+
+    if (permState === 'denied') {
+      viewState = 'location_denied'
+      return
+    }
+
+    if (permState === 'granted') {
+      await fetchLocationThenSubmit()
+      return
+    }
+
+    viewState = 'location_prompt'
+  }
+
+  async function fetchLocationThenSubmit() {
+    validationError = null
+    locationRequesting = true
     try {
       const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
@@ -169,21 +201,25 @@
       })
       location = {
         latitude: pos.coords.latitude,
-        longitude: pos.coords.longitude
+        longitude: pos.coords.longitude,
+        accuracy: pos.coords.accuracy
       }
+      locationRequesting = false
+      await handleSubmit()
     } catch (err) {
-      let errMsg = 'Akses lokasi diperlukan untuk mengisi survei ini.'
+      locationRequesting = false
+      if (err instanceof GeolocationPositionError && err.code === err.PERMISSION_DENIED) {
+        viewState = 'location_denied'
+        return
+      }
+      let errMsg = 'Tidak dapat mengambil lokasi. Coba lagi.'
       if (err instanceof GeolocationPositionError) {
-        if (err.code === err.PERMISSION_DENIED) errMsg = 'Harap izinkan akses lokasi (GPS) di browser Anda untuk melanjutkan.'
-        else if (err.code === err.POSITION_UNAVAILABLE) errMsg = 'Informasi lokasi tidak tersedia atau mode penyamaran mencegah pendeteksian.'
+        if (err.code === err.POSITION_UNAVAILABLE) errMsg = 'Informasi lokasi tidak tersedia. Pastikan GPS / Layanan Lokasi aktif di perangkat Anda.'
         else if (err.code === err.TIMEOUT) errMsg = 'Waktu permintaan lokasi habis. Coba lagi.'
       }
       validationError = errMsg
-      return
+      viewState = 'location_prompt'
     }
-
-    viewState = 'question'
-    currentIndex = 0
   }
 
   async function handleSubmit() {
@@ -225,7 +261,7 @@
     const next = evaluateNext(currentQuestion.id, answers, questions, skipRules)
 
     if (next === 'END') {
-      await handleSubmit()
+      await handleFinish()
       return
     }
 
@@ -242,7 +278,7 @@
     if (currentIndex < answerableQuestions.length - 1) {
       currentIndex += 1
     } else {
-      await handleSubmit()
+      await handleFinish()
     }
   }
 
@@ -335,8 +371,17 @@
   {:else if viewState === 'location_prompt'}
     <div class="centered-wrap">
       <LocationPromptPage
-        onStart={requestLocationAndStart}
+        onStart={fetchLocationThenSubmit}
+        loading={locationRequesting}
         error={validationError}
+      />
+    </div>
+
+  {:else if viewState === 'location_denied'}
+    <div class="centered-wrap">
+      <LocationDeniedPage
+        onRetry={fetchLocationThenSubmit}
+        loading={locationRequesting}
       />
     </div>
 

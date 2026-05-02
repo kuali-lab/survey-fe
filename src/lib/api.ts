@@ -56,7 +56,7 @@ export async function submitSurveyAnswers(
   slug: string,
   answers: Answers,
   respondentEmail?: string,
-  location?: { latitude: number, longitude: number } | null,
+  location?: { latitude: number, longitude: number, accuracy?: number } | null,
   fingerprintHash?: string | null
 ): Promise<void> {
   const res = await fetch(`${PUBLIC_API_BASE_URL}/s/${slug}/submit`, {
