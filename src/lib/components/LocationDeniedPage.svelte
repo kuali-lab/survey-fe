@@ -28,10 +28,9 @@
   </div>
 
   <div class="body">
-    <h1 class="title">Akses lokasi diblokir</h1>
+    <h1 class="title">Lokasi belum aktif</h1>
     <p class="description">
-      Survei ini mewajibkan lokasi untuk dapat dikirim, tetapi browser Anda memblokir akses.
-      Aktifkan kembali akses lokasi untuk situs ini, lalu coba lagi.
+      Untuk mengirim jawaban, aktifkan akses lokasi pada browser ini, lalu coba lagi.
     </p>
 
     <button class="link-btn" onclick={() => (showInstructions = !showInstructions)}>

@@ -2,8 +2,8 @@
   import Logo from './Logo.svelte'
 
   let {
-    title = 'Satu langkah lagi: Izinkan akses lokasi',
-    description = 'Survei ini meminta lokasi Anda sebagai bagian dari pengiriman jawaban.',
+    title = 'Hampir selesai',
+    description = 'Untuk mengirim jawaban, izinkan akses lokasi GPS saat browser meminta.',
     ctaText = 'Izinkan & Kirim Jawaban',
     onStart,
     error = null,
@@ -25,7 +25,7 @@
 
   <div class="location-icon-wrap">
     <div class="icon-circle">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" class="location-icon">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" class="location-icon">
         <path d="M12 11a3 3 0 100-6 3 3 0 000 6z" fill="currentColor"/>
         <path fill-rule="evenodd" clip-rule="evenodd" d="M21 10.5c0 5-8.083 11.238-8.528 11.572a.75.75 0 01-.944 0C11.083 21.738 3 15.5 3 10.5a9 9 0 0118 0zM12 11.5a4 4 0 100-8 4 4 0 000 8z" fill="currentColor"/>
       </svg>
@@ -35,12 +35,6 @@
   <div class="body">
     <h1 class="title">{title}</h1>
     <p class="description">{description}</p>
-
-    <ul class="trust-beats">
-      <li><strong>Apa</strong> — hanya koordinat lokasi saat ini, bukan riwayat atau alamat.</li>
-      <li><strong>Siapa</strong> — hanya pemilik survei yang melihatnya. Logika Teta tidak melacak Anda.</li>
-      <li><strong>Kapan</strong> — diambil sekali, saat tombol di bawah Anda tekan.</li>
-    </ul>
 
     {#if error}
       <div class="error-msg">
@@ -56,15 +50,11 @@
     <button class="cta" onclick={onStart} disabled={loading}>
       {#if loading}
         <span class="spinner" aria-hidden="true"></span>
-        Mengambil lokasi…
+        Sebentar, sedang mengambil lokasi…
       {:else}
         {ctaText}
       {/if}
     </button>
-
-    {#if loading}
-      <p class="hint">Pastikan GPS / Layanan Lokasi aktif di perangkat Anda. Bisa memakan waktu beberapa detik.</p>
-    {/if}
   </div>
 </div>
 
@@ -89,8 +79,8 @@
   }
 
   .icon-circle {
-    width: 80px;
-    height: 80px;
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
     background: var(--primary-10, #fff7d6);
     display: flex;
@@ -123,30 +113,6 @@
     color: var(--tertiary-70);
     line-height: 1.6;
     max-width: 90%;
-  }
-
-  .trust-beats {
-    list-style: none;
-    padding: 12px 16px;
-    margin: 0;
-    background: var(--tertiary-10, #f7f7f4);
-    border-radius: var(--radius-lg);
-    width: 100%;
-    text-align: left;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .trust-beats li {
-    font-size: 13.5px;
-    color: var(--tertiary-80, #4a4a45);
-    line-height: 1.5;
-  }
-
-  .trust-beats strong {
-    color: var(--tertiary-100);
-    font-weight: 600;
   }
 
   .cta {
@@ -192,13 +158,6 @@
 
   @keyframes spin {
     to { transform: rotate(360deg); }
-  }
-
-  .hint {
-    font-size: 13px;
-    color: var(--tertiary-70);
-    line-height: 1.5;
-    margin: 0;
   }
 
   .error-msg {
