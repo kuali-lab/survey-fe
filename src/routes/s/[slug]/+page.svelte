@@ -39,7 +39,6 @@
   let validationError = $state<string | null>(null)
   let submitting = $state(false)
   let submitError = $state<string | null>(null)
-<<<<<<< HEAD
   let location = $state<{ latitude: number, longitude: number, accuracy?: number } | null>(null)
   let locationRequesting = $state(false)
   let selfie = $state<{ imageBase64: string } | null>(null)
