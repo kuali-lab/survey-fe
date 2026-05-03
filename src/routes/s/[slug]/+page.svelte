@@ -35,6 +35,7 @@
   let submitting = $state(false)
   let submitError = $state<string | null>(null)
   let location = $state<{ latitude: number, longitude: number } | null>(null)
+  let startTime = $state(0)
 
   const questions = $derived(survey?.questions ?? [])
   const skipRules = $derived(survey?.skipRules ?? [])
@@ -146,6 +147,7 @@
       return
     }
 
+    startTime = Date.now()
     viewState = 'question'
     currentIndex = 0
   }
@@ -175,6 +177,7 @@
       return
     }
 
+    startTime = Date.now()
     viewState = 'question'
     currentIndex = 0
   }
@@ -189,7 +192,8 @@
       const emailQuestion = answerableQuestions.find(q => q.type === 'email')
       const respondentEmail = emailQuestion ? (answers[emailQuestion.id] as string | undefined) : undefined
 
-      await submitSurveyAnswers(slug, answers, respondentEmail, location)
+      const durationSeconds = startTime > 0 ? Math.round((Date.now() - startTime) / 1000) : undefined
+      await submitSurveyAnswers(slug, answers, respondentEmail, location, durationSeconds)
       viewState = 'closing'
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'submit_error'
