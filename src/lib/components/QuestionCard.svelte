@@ -142,12 +142,13 @@
     border-radius: var(--radius-md);
     overflow: hidden;
     max-height: 320px;
+    background: var(--tertiary-10);
   }
 
   .image-wrap img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     display: block;
   }
 
@@ -168,12 +169,13 @@
     flex: 0 0 160px;
     border-radius: var(--radius-md);
     overflow: hidden;
+    background: var(--tertiary-10);
   }
 
   .inline-img {
     width: 160px;
     height: 160px;
-    object-fit: cover;
+    object-fit: contain;
     display: block;
   }
 
