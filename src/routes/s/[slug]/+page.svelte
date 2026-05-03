@@ -2,14 +2,19 @@
   import type { PageData } from './$types.js'
   import type { ViewState, Answers, AnswerValue, Question } from '$lib/types.js'
   import { submitSurveyAnswers } from '$lib/api.js'
+  import { computeFingerprint } from '$lib/fingerprint.js'
   import { getAnswerableQuestions, getQuestionNumber } from '$lib/utils.js'
   import { evaluateNext } from '$lib/skipLogic.js'
   import { page } from '$app/stores'
+  import { onMount } from 'svelte'
 
   import ProgressBar from '$lib/components/ProgressBar.svelte'
   import SectionHeader from '$lib/components/SectionHeader.svelte'
   import WelcomePage from '$lib/components/WelcomePage.svelte'
   import LocationPromptPage from '$lib/components/LocationPromptPage.svelte'
+  import LocationDeniedPage from '$lib/components/LocationDeniedPage.svelte'
+  import SelfieCapturePage from '$lib/components/SelfieCapturePage.svelte'
+  import SelfieDeniedPage from '$lib/components/SelfieDeniedPage.svelte'
   import ClosingPage from '$lib/components/ClosingPage.svelte'
   import ClosedPage from '$lib/components/ClosedPage.svelte'
   import ErrorPage from '$lib/components/ErrorPage.svelte'
@@ -34,8 +39,16 @@
   let validationError = $state<string | null>(null)
   let submitting = $state(false)
   let submitError = $state<string | null>(null)
-  let location = $state<{ latitude: number, longitude: number } | null>(null)
+<<<<<<< HEAD
+  let location = $state<{ latitude: number, longitude: number, accuracy?: number } | null>(null)
+  let locationRequesting = $state(false)
+  let selfie = $state<{ imageBase64: string } | null>(null)
+  let fingerprintHash = $state<string | null>(null)
   let startTime = $state(0)
+
+  onMount(() => {
+    computeFingerprint().then(fp => { fingerprintHash = fp })
+  })
 
   const questions = $derived(survey?.questions ?? [])
   const skipRules = $derived(survey?.skipRules ?? [])
@@ -142,18 +155,85 @@
 
   async function handleStart() {
     validationError = null
-    if (settings.requireLocation) {
-      viewState = 'location_prompt'
-      return
-    }
-
     startTime = Date.now()
     viewState = 'question'
     currentIndex = 0
   }
 
-  async function requestLocationAndStart() {
+  // End-of-survey verification gate.
+  // Order: selfie first (higher friction, capture while sunk-cost fresh), then location.
+  async function handleFinish() {
+    if (settings.requireSelfie && !selfie) {
+      await runSelfieGate()
+      return
+    }
+    if (settings.requireLocation && !location) {
+      await requestLocationAndSubmit()
+      return
+    }
+    await handleSubmit()
+  }
+
+  async function runSelfieGate() {
     validationError = null
+    let permState: PermissionState | null = null
+    try {
+      if (typeof navigator !== 'undefined' && 'permissions' in navigator) {
+        // 'camera' may not be a recognized name in some browsers — query throws and we fall through.
+        const status = await navigator.permissions.query({ name: 'camera' as PermissionName })
+        permState = status.state
+      }
+    } catch {
+      // Permissions API for camera is not universally supported (notably Safari).
+      // Fall through to letting SelfieCapturePage call getUserMedia and surface NotAllowedError.
+    }
+
+    if (permState === 'denied') {
+      viewState = 'selfie_denied'
+      return
+    }
+    viewState = 'selfie_capture'
+  }
+
+  function onSelfieComplete(imageBase64: string) {
+    selfie = { imageBase64 }
+    // Continue the gate chain: location next if required, else submit.
+    handleFinish()
+  }
+
+  function onSelfieDenied() {
+    viewState = 'selfie_denied'
+  }
+
+  async function requestLocationAndSubmit() {
+    validationError = null
+
+    let permState: PermissionState | null = null
+    try {
+      if (typeof navigator !== 'undefined' && 'permissions' in navigator) {
+        const status = await navigator.permissions.query({ name: 'geolocation' as PermissionName })
+        permState = status.state
+      }
+    } catch {
+      // Older Safari may reject the 'geolocation' query — fall through to prompt path
+    }
+
+    if (permState === 'denied') {
+      viewState = 'location_denied'
+      return
+    }
+
+    if (permState === 'granted') {
+      await fetchLocationThenSubmit()
+      return
+    }
+
+    viewState = 'location_prompt'
+  }
+
+  async function fetchLocationThenSubmit() {
+    validationError = null
+    locationRequesting = true
     try {
       const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
@@ -164,22 +244,32 @@
       })
       location = {
         latitude: pos.coords.latitude,
-        longitude: pos.coords.longitude
+        longitude: pos.coords.longitude,
+        accuracy: pos.coords.accuracy
       }
+      locationRequesting = false
+      await handleSubmit()
     } catch (err) {
-      let errMsg = 'Akses lokasi diperlukan untuk mengisi survei ini.'
+      locationRequesting = false
+      if (err instanceof GeolocationPositionError && err.code === err.PERMISSION_DENIED) {
+        viewState = 'location_denied'
+        return
+      }
+      let errMsg = 'Tidak dapat mengambil lokasi. Coba lagi.'
       if (err instanceof GeolocationPositionError) {
-        if (err.code === err.PERMISSION_DENIED) errMsg = 'Harap izinkan akses lokasi (GPS) di browser Anda untuk melanjutkan.'
-        else if (err.code === err.POSITION_UNAVAILABLE) errMsg = 'Informasi lokasi tidak tersedia atau mode penyamaran mencegah pendeteksian.'
+        if (err.code === err.POSITION_UNAVAILABLE) errMsg = 'Informasi lokasi tidak tersedia. Pastikan GPS / Layanan Lokasi aktif di perangkat Anda.'
         else if (err.code === err.TIMEOUT) errMsg = 'Waktu permintaan lokasi habis. Coba lagi.'
       }
       validationError = errMsg
-      return
+      viewState = 'location_prompt'
     }
+<<<<<<< HEAD
 
     startTime = Date.now()
     viewState = 'question'
     currentIndex = 0
+=======
+>>>>>>> fc1cd080c80ab72b1ce62f0d8c36a3c3efad4d00
   }
 
   async function handleSubmit() {
@@ -193,7 +283,7 @@
       const respondentEmail = emailQuestion ? (answers[emailQuestion.id] as string | undefined) : undefined
 
       const durationSeconds = startTime > 0 ? Math.round((Date.now() - startTime) / 1000) : undefined
-      await submitSurveyAnswers(slug, answers, respondentEmail, location, durationSeconds)
+      await submitSurveyAnswers(slug, answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie)
       viewState = 'closing'
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'submit_error'
@@ -211,6 +301,23 @@
     }
   }
 
+  // Step indicator for the verification gate.
+  // Counts how many gates the survey requires and what step the user is currently on.
+  const gateSteps = $derived.by(() => {
+    const steps: Array<'selfie' | 'location'> = []
+    if (settings.requireSelfie) steps.push('selfie')
+    if (settings.requireLocation) steps.push('location')
+    return steps
+  })
+
+  const gateCurrentIndex = $derived.by(() => {
+    if (viewState === 'selfie_capture' || viewState === 'selfie_denied') return gateSteps.indexOf('selfie')
+    if (viewState === 'location_prompt' || viewState === 'location_denied') return gateSteps.indexOf('location')
+    return -1
+  })
+
+  const showStepIndicator = $derived(gateSteps.length > 1 && gateCurrentIndex >= 0)
+
   async function handleNext() {
     validationError = null
 
@@ -222,7 +329,7 @@
     const next = evaluateNext(currentQuestion.id, answers, questions, skipRules)
 
     if (next === 'END') {
-      await handleSubmit()
+      await handleFinish()
       return
     }
 
@@ -239,7 +346,7 @@
     if (currentIndex < answerableQuestions.length - 1) {
       currentIndex += 1
     } else {
-      await handleSubmit()
+      await handleFinish()
     }
   }
 
@@ -329,15 +436,61 @@
       />
     </div>
 
+  {:else if viewState === 'selfie_capture'}
+    <div class="centered-wrap">
+      {#if showStepIndicator}
+        <div class="step-indicator">Langkah {gateCurrentIndex + 1} dari {gateSteps.length} · Foto Selfie</div>
+      {/if}
+      <SelfieCapturePage
+        onComplete={onSelfieComplete}
+        onDenied={onSelfieDenied}
+        loading={submitting}
+      />
+    </div>
+
+  {:else if viewState === 'selfie_denied'}
+    <div class="centered-wrap">
+      {#if showStepIndicator}
+        <div class="step-indicator">Langkah {gateCurrentIndex + 1} dari {gateSteps.length} · Foto Selfie</div>
+      {/if}
+      <SelfieDeniedPage
+        onRetry={() => { viewState = 'selfie_capture' }}
+        loading={false}
+      />
+    </div>
+
   {:else if viewState === 'location_prompt'}
     <div class="centered-wrap">
+      {#if showStepIndicator}
+        <div class="step-indicator">Langkah {gateCurrentIndex + 1} dari {gateSteps.length} · Lokasi GPS</div>
+      {/if}
       <LocationPromptPage
-        onStart={requestLocationAndStart}
+        onStart={fetchLocationThenSubmit}
+        loading={locationRequesting}
         error={validationError}
       />
     </div>
 
-  {:else if viewState === 'question' || viewState === 'submitting'}
+  {:else if viewState === 'location_denied'}
+    <div class="centered-wrap">
+      {#if showStepIndicator}
+        <div class="step-indicator">Langkah {gateCurrentIndex + 1} dari {gateSteps.length} · Lokasi GPS</div>
+      {/if}
+      <LocationDeniedPage
+        onRetry={fetchLocationThenSubmit}
+        loading={locationRequesting}
+      />
+    </div>
+
+  {:else if viewState === 'submitting'}
+    <div class="centered-wrap">
+      <div class="submitting-card">
+        <span class="big-spinner" aria-hidden="true"></span>
+        <p>Mengirim jawaban…</p>
+      </div>
+    </div>
+
+  {:else if viewState === 'question'}
     <div class="survey-wrap">
       {#if settings.showProgress}
         <ProgressBar progress={progress} />
@@ -410,9 +563,53 @@
   .centered-wrap {
     min-height: 100vh;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     padding: 16px;
+    gap: 12px;
+  }
+
+  .step-indicator {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--tertiary-80, #4a4a45);
+    background: white;
+    border: 1px solid var(--tertiary-20, #ececea);
+    border-radius: 999px;
+    padding: 6px 14px;
+    letter-spacing: 0.02em;
+  }
+
+  .submitting-card {
+    background: white;
+    border-radius: var(--radius-xl);
+    padding: 40px 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
+  }
+
+  .submitting-card p {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--tertiary-90, #2a2a25);
+    margin: 0;
+  }
+
+  .big-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--tertiary-30, #d8d8d2);
+    border-top-color: var(--primary-50, #f7bb00);
+    border-radius: 50%;
+    animation: submit-spin 0.8s linear infinite;
+  }
+
+  @keyframes submit-spin {
+    to { transform: rotate(360deg); }
   }
 
   .survey-wrap {

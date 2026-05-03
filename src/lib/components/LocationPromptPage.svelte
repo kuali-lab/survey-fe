@@ -2,17 +2,19 @@
   import Logo from './Logo.svelte'
 
   let {
-    title = 'Akses Lokasi Dibutuhkan',
-    description = 'Survei ini memerlukan akses lokasi Anda (GPS) untuk keperluan validasi data. Silakan izinkan akses lokasi pada prompt browser yang akan muncul.',
-    ctaText = 'Izinkan Lokasi & Mulai',
+    title = 'Hampir selesai',
+    description = 'Untuk mengirim jawaban, izinkan akses lokasi GPS saat browser meminta.',
+    ctaText = 'Izinkan & Kirim Jawaban',
     onStart,
-    error = null
+    error = null,
+    loading = false
   }: {
     title?: string
     description?: string
     ctaText?: string
     onStart: () => void
     error?: string | null
+    loading?: boolean
   } = $props()
 </script>
 
@@ -23,7 +25,7 @@
 
   <div class="location-icon-wrap">
     <div class="icon-circle">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" class="location-icon">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" class="location-icon">
         <path d="M12 11a3 3 0 100-6 3 3 0 000 6z" fill="currentColor"/>
         <path fill-rule="evenodd" clip-rule="evenodd" d="M21 10.5c0 5-8.083 11.238-8.528 11.572a.75.75 0 01-.944 0C11.083 21.738 3 15.5 3 10.5a9 9 0 0118 0zM12 11.5a4 4 0 100-8 4 4 0 000 8z" fill="currentColor"/>
       </svg>
@@ -45,8 +47,13 @@
       </div>
     {/if}
 
-    <button class="cta" onclick={onStart}>
-      {ctaText}
+    <button class="cta" onclick={onStart} disabled={loading}>
+      {#if loading}
+        <span class="spinner" aria-hidden="true"></span>
+        Sebentar, sedang mengambil lokasi…
+      {:else}
+        {ctaText}
+      {/if}
     </button>
   </div>
 </div>
@@ -72,8 +79,8 @@
   }
 
   .icon-circle {
-    width: 80px;
-    height: 80px;
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
     background: var(--primary-10, #fff7d6);
     display: flex;
@@ -112,6 +119,7 @@
     display: inline-flex;
     justify-content: center;
     align-items: center;
+    gap: 10px;
     width: 100%;
     background: var(--primary-50);
     color: #221500;
@@ -123,15 +131,33 @@
     padding: 16px 28px;
     cursor: pointer;
     transition: background 0.2s, transform 0.1s;
-    margin-top: 16px;
+    margin-top: 8px;
   }
 
-  .cta:hover {
+  .cta:hover:not(:disabled) {
     background: #e8ae00;
   }
 
-  .cta:active {
+  .cta:active:not(:disabled) {
     transform: scale(0.98);
+  }
+
+  .cta:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(34, 21, 0, 0.25);
+    border-top-color: #221500;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 
   .error-msg {
@@ -148,7 +174,7 @@
     width: 100%;
     margin-top: 4px;
   }
-  
+
   .error-msg svg {
     flex-shrink: 0;
     margin-top: 1px;
