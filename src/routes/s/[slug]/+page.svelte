@@ -262,13 +262,7 @@
       validationError = errMsg
       viewState = 'location_prompt'
     }
-<<<<<<< HEAD
 
-    startTime = Date.now()
-    viewState = 'question'
-    currentIndex = 0
-=======
->>>>>>> fc1cd080c80ab72b1ce62f0d8c36a3c3efad4d00
   }
 
   async function handleSubmit() {
