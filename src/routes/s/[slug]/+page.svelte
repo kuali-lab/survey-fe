@@ -39,10 +39,12 @@
   let validationError = $state<string | null>(null)
   let submitting = $state(false)
   let submitError = $state<string | null>(null)
+<<<<<<< HEAD
   let location = $state<{ latitude: number, longitude: number, accuracy?: number } | null>(null)
   let locationRequesting = $state(false)
   let selfie = $state<{ imageBase64: string } | null>(null)
   let fingerprintHash = $state<string | null>(null)
+  let startTime = $state(0)
 
   onMount(() => {
     computeFingerprint().then(fp => { fingerprintHash = fp })
@@ -153,6 +155,7 @@
 
   async function handleStart() {
     validationError = null
+    startTime = Date.now()
     viewState = 'question'
     currentIndex = 0
   }
@@ -260,6 +263,13 @@
       validationError = errMsg
       viewState = 'location_prompt'
     }
+<<<<<<< HEAD
+
+    startTime = Date.now()
+    viewState = 'question'
+    currentIndex = 0
+=======
+>>>>>>> fc1cd080c80ab72b1ce62f0d8c36a3c3efad4d00
   }
 
   async function handleSubmit() {
@@ -272,7 +282,8 @@
       const emailQuestion = answerableQuestions.find(q => q.type === 'email')
       const respondentEmail = emailQuestion ? (answers[emailQuestion.id] as string | undefined) : undefined
 
-      await submitSurveyAnswers(slug, answers, respondentEmail, location, fingerprintHash, selfie)
+      const durationSeconds = startTime > 0 ? Math.round((Date.now() - startTime) / 1000) : undefined
+      await submitSurveyAnswers(slug, answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie)
       viewState = 'closing'
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'submit_error'

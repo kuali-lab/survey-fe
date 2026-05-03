@@ -69,12 +69,13 @@
     width: 100%;
     height: 220px;
     overflow: hidden;
+    background: var(--tertiary-10);
   }
 
   .cover img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
   }
 
   .logo-bar {

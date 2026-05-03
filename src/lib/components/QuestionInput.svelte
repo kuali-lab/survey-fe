@@ -457,7 +457,7 @@
     <div class="nps-buttons">
       {#each npsButtons as n}
         <button
-          class="nps-btn {npsValue === n ? 'selected' : ''}"
+          class="nps-btn {npsValue === n ? 'selected' : ''} {n <= 6 ? 'nps-red' : n <= 8 ? 'nps-amber' : 'nps-green'}"
           type="button"
           onclick={() => onChange(n)}
         >{n}</button>
@@ -866,13 +866,13 @@
   .nps-buttons {
     display: flex;
     gap: 4px;
-    flex-wrap: wrap;
   }
 
   .nps-btn {
-    width: 40px;
+    flex: 1;
+    min-width: 0;
     height: 40px;
-    border: 1px solid #d9dde3;
+    border: 2px solid #d9dde3;
     border-radius: var(--radius-md);
     background: white;
     font-family: var(--font);
@@ -886,16 +886,14 @@
     justify-content: center;
   }
 
-  .nps-btn:hover {
-    border-color: #f7bb00;
-    background: #fffbed;
-  }
+  .nps-btn.nps-red:hover { border-color: #ef4444; background: #fef2f2; }
+  .nps-btn.nps-red.selected { border-color: #ef4444; background: #ef4444; color: white; }
 
-  .nps-btn.selected {
-    border-color: #f7bb00;
-    background: #f7bb00;
-    color: #221500;
-  }
+  .nps-btn.nps-amber:hover { border-color: #f59e0b; background: #fffbeb; }
+  .nps-btn.nps-amber.selected { border-color: #f59e0b; background: #f59e0b; color: #221500; }
+
+  .nps-btn.nps-green:hover { border-color: #22c55e; background: #f0fdf4; }
+  .nps-btn.nps-green.selected { border-color: #22c55e; background: #22c55e; color: white; }
 
   .nps-labels {
     display: flex;
@@ -915,14 +913,14 @@
   .opinion-buttons {
     display: flex;
     gap: 4px;
-    flex-wrap: wrap;
   }
 
   .opinion-btn {
-    min-width: 40px;
+    flex: 1;
+    min-width: 0;
     height: 40px;
-    padding: 0 8px;
-    border: 1px solid #d9dde3;
+    padding: 0 4px;
+    border: 2px solid #d9dde3;
     border-radius: var(--radius-md);
     background: white;
     font-family: var(--font);
