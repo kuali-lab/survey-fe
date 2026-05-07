@@ -207,6 +207,20 @@
     uploadError = null
     onChange(null)
   }
+
+  // Action: keep a textarea sized to its content. Adjusts on mount (so
+  // restored values from localStorage don't clip) and on every input.
+  function autoExpand(node: HTMLTextAreaElement) {
+    const adjust = () => {
+      node.style.height = 'auto'
+      node.style.height = node.scrollHeight + 'px'
+    }
+    adjust()
+    node.addEventListener('input', adjust)
+    return {
+      destroy() { node.removeEventListener('input', adjust) }
+    }
+  }
 </script>
 
 {#if question.type === 'image_choice'}
@@ -261,6 +275,7 @@
     value={strValue}
     oninput={(e) => onChange((e.currentTarget as HTMLTextAreaElement).value)}
     onblur={() => onBlur?.()}
+    use:autoExpand
   ></textarea>
 
 {:else if question.type === 'email'}
@@ -300,6 +315,7 @@
   <input
     class="text-input"
     type="number"
+    inputmode="decimal"
     min={question.minValue}
     max={question.maxValue}
     value={numValue !== null ? numValue : ''}
@@ -309,6 +325,13 @@
     }}
     onblur={() => onBlur?.()}
   />
+  {#if question.minValue !== undefined && question.minValue !== null && question.maxValue !== undefined && question.maxValue !== null}
+    <p class="number-hint">Antara {question.minValue} dan {question.maxValue}.</p>
+  {:else if question.minValue !== undefined && question.minValue !== null}
+    <p class="number-hint">Minimal {question.minValue}.</p>
+  {:else if question.maxValue !== undefined && question.maxValue !== null}
+    <p class="number-hint">Maksimal {question.maxValue}.</p>
+  {/if}
 
 {:else if question.type === 'date'}
   <input
@@ -724,6 +747,12 @@
     outline: none;
     border-color: #f7bb00;
     box-shadow: 0 0 0 3px #fce18e;
+  }
+
+  .number-hint {
+    margin: 6px 4px 0;
+    font-size: 12.5px;
+    color: var(--tertiary-60);
   }
 
   /* ── URL field ── */
