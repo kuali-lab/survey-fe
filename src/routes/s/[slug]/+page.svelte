@@ -48,6 +48,10 @@
   let startTime = $state(0)
   let prefersReducedMotion = $state(false)
   let autoAdvanceTimer: ReturnType<typeof setTimeout> | null = null
+  let autoAdvancing = $state(false)
+  let lastNavTime = 0
+  let touchStartY = 0
+  let touchStartScrollY = 0
   let resumePrompt = $state<{ answers: Answers; currentIndex: number; startTime: number } | null>(null)
 
   // Persisted respondent state, keyed per survey slug. Selfie image and
@@ -553,8 +557,10 @@
     ) {
       clearAutoAdvance()
       if (shouldAutoAdvance(currentPage.questions[0], value)) {
+        autoAdvancing = true
         autoAdvanceTimer = setTimeout(() => {
           autoAdvanceTimer = null
+          autoAdvancing = false
           handleNext()
         }, 400)
       }
@@ -566,6 +572,7 @@
       clearTimeout(autoAdvanceTimer)
       autoAdvanceTimer = null
     }
+    autoAdvancing = false
   }
 
   // Single-tap question types where the answer is final on selection.
@@ -607,14 +614,66 @@
     }, 250)
   }
 
-  // Keyboard handling for single-question pages: Enter advances, letter keys
-  // pick a choice. Both gated to one_per_page mode with exactly one question
-  // so multi-question groups don't get hijacked.
+  // Wheel-based navigation. At the very top of the page, scrolling up jumps
+  // back; at the very bottom, scrolling down jumps forward. Inside content
+  // taller than the viewport (e.g. mobile matrix), normal scrolling still
+  // works — the browser scrolls until it hits the boundary, then a further
+  // wheel tick triggers navigation.
+  function handleWheel(e: WheelEvent) {
+    if (viewState !== 'question') return
+    if (settings.displayMode === 'scroll') return
+    if (!currentPage) return
+    if (autoAdvancing || submitting) return
+    if (Date.now() - lastNavTime < 700) return
+
+    const sy = window.scrollY
+    const sh = document.documentElement.scrollHeight
+    const vh = window.innerHeight
+
+    if (e.deltaY < -30 && sy <= 0 && currentIndex > 0) {
+      lastNavTime = Date.now()
+      handleBack()
+    } else if (e.deltaY > 30 && sy + vh >= sh - 2 && !isLastQuestion) {
+      lastNavTime = Date.now()
+      handleNext()
+    }
+  }
+
+  function handleTouchStart(e: TouchEvent) {
+    if (viewState !== 'question') return
+    touchStartY = e.touches[0]?.clientY ?? 0
+    touchStartScrollY = window.scrollY
+  }
+
+  // Mobile swipe: at scroll-top a downward swipe goes back; at scroll-bottom
+  // an upward swipe advances. The 80 px threshold filters incidental motion.
+  function handleTouchEnd(e: TouchEvent) {
+    if (viewState !== 'question') return
+    if (settings.displayMode === 'scroll') return
+    if (!currentPage) return
+    if (autoAdvancing || submitting) return
+    if (Date.now() - lastNavTime < 700) return
+
+    const endY = e.changedTouches[0]?.clientY ?? 0
+    const deltaY = endY - touchStartY
+    const sy = window.scrollY
+    const sh = document.documentElement.scrollHeight
+    const vh = window.innerHeight
+
+    if (deltaY > 80 && touchStartScrollY <= 0 && sy <= 0 && currentIndex > 0) {
+      lastNavTime = Date.now()
+      handleBack()
+    } else if (deltaY < -80 && touchStartScrollY + vh >= sh - 2 && sy + vh >= sh - 2 && !isLastQuestion) {
+      lastNavTime = Date.now()
+      handleNext()
+    }
+  }
+
+  // Keyboard handling: ArrowUp/Down (any page) and Enter/letters (single-q
+  // pages only). Multi-question groups don't get hijacked by Enter/letters.
   function handleKeydown(e: KeyboardEvent) {
     if (viewState !== 'question') return
     if (submitting) return
-    if (settings.displayMode === 'scroll') return
-    if (!currentPage || currentPage.questions.length !== 1) return
 
     const target = e.target as HTMLElement | null
     if (!target) return
@@ -623,6 +682,29 @@
     if (tag === 'INPUT') return
     if (tag === 'SELECT') return
     if (target.isContentEditable) return
+
+    // Arrow / PageUp-Down work in any one_per_page configuration so users can
+    // page through groups too. Disabled in scroll mode (browser owns scroll).
+    if (settings.displayMode !== 'scroll') {
+      if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+        if (currentIndex > 0) {
+          e.preventDefault()
+          handleBack()
+        }
+        return
+      }
+      if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+        if (!isLastQuestion) {
+          e.preventDefault()
+          handleNext()
+        }
+        return
+      }
+    }
+
+    // Enter/letter shortcuts gate to one_per_page + single question.
+    if (settings.displayMode === 'scroll') return
+    if (!currentPage || currentPage.questions.length !== 1) return
 
     if (e.key === 'Enter') {
       if (tag === 'BUTTON') return // let native button activation run
@@ -735,7 +817,13 @@
   <meta name="twitter:card" content={welcomeQuestion?.imageUrl ? 'summary_large_image' : 'summary'} />
 </svelte:head>
 
-<svelte:window onkeydown={handleKeydown} onfocusin={handleFocusIn} />
+<svelte:window
+  onkeydown={handleKeydown}
+  onfocusin={handleFocusIn}
+  onwheel={handleWheel}
+  ontouchstart={handleTouchStart}
+  ontouchend={handleTouchEnd}
+/>
 
 <div class="page" class:page-question={viewState === 'question'}>
   {#if viewState === 'error'}
@@ -872,6 +960,13 @@
 
         {#if submitError}
           <div class="submit-error">{submitError}</div>
+        {/if}
+
+        {#if autoAdvancing}
+          <div class="auto-advance-hint" aria-live="polite">
+            <span class="auto-advance-spinner" aria-hidden="true"></span>
+            Lanjut otomatis…
+          </div>
         {/if}
 
         <div class="nav">
@@ -1047,6 +1142,32 @@
     padding: 12px 16px;
     font-size: 14px;
     margin-top: 8px;
+  }
+
+  /* Visible cue while the auto-advance timer is counting down so users
+     understand why the next screen is about to appear. */
+  .auto-advance-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--tertiary-70, #5a5a55);
+    margin: 8px 0 0;
+    align-self: flex-start;
+  }
+
+  .auto-advance-spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid #d9dde3;
+    border-top-color: #f7bb00;
+    border-radius: 50%;
+    animation: auto-spin 0.6s linear infinite;
+  }
+
+  @keyframes auto-spin {
+    to { transform: rotate(360deg); }
   }
 
   /* Resume prompt — shown on welcome state when localStorage has saved answers */
