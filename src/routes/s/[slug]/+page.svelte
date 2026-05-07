@@ -6,7 +6,9 @@
   import { getAnswerableQuestions, getQuestionNumber } from '$lib/utils.js'
   import { evaluateNext } from '$lib/skipLogic.js'
   import { page } from '$app/stores'
-  import { onMount } from 'svelte'
+  import { onMount, tick } from 'svelte'
+  import { fly } from 'svelte/transition'
+  import { cubicOut } from 'svelte/easing'
 
   import ProgressBar from '$lib/components/ProgressBar.svelte'
   import SectionHeader from '$lib/components/SectionHeader.svelte'
@@ -44,9 +46,18 @@
   let selfie = $state<{ imageBase64: string } | null>(null)
   let fingerprintHash = $state<string | null>(null)
   let startTime = $state(0)
+  let prefersReducedMotion = $state(false)
+  let autoAdvanceTimer: ReturnType<typeof setTimeout> | null = null
 
   onMount(() => {
     computeFingerprint().then(fp => { fingerprintHash = fp })
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+      prefersReducedMotion = mq.matches
+      const onChange = (e: MediaQueryListEvent) => { prefersReducedMotion = e.matches }
+      mq.addEventListener('change', onChange)
+      return () => mq.removeEventListener('change', onChange)
+    }
   })
 
   const questions = $derived(survey?.questions ?? [])
@@ -107,7 +118,7 @@
         pages.push({
           id: g.id,
           title: g.title,
-          description: g.description,
+          description: g.description ?? undefined,
           questions: qInGroup
         })
       }
@@ -358,6 +369,7 @@
   const showStepIndicator = $derived(gateSteps.length > 1 && gateCurrentIndex >= 0)
 
   async function handleNext() {
+    clearAutoAdvance()
     validationError = null
     questionErrors = {}
 
@@ -398,6 +410,7 @@
   }
 
   function handleBack() {
+    clearAutoAdvance()
     validationError = null
     questionErrors = {}
     if (currentIndex > 0) {
@@ -406,7 +419,110 @@
     }
   }
 
-  // remove handleAnswer from here as we inline it
+  function handleAnswer(qid: string, value: AnswerValue) {
+    answers = { ...answers, [qid]: value }
+    if (questionErrors[qid]) {
+      const newErrors = { ...questionErrors }
+      delete newErrors[qid]
+      questionErrors = newErrors
+    }
+    validationError = null
+
+    // Auto-advance fires only on single-question pages in one_per_page mode.
+    // Multi-question groups and scroll mode would jump away while the user
+    // might still be answering sibling questions.
+    if (
+      settings.displayMode !== 'scroll' &&
+      currentPage &&
+      currentPage.questions.length === 1 &&
+      currentPage.questions[0].id === qid
+    ) {
+      clearAutoAdvance()
+      if (shouldAutoAdvance(currentPage.questions[0], value)) {
+        autoAdvanceTimer = setTimeout(() => {
+          autoAdvanceTimer = null
+          handleNext()
+        }, 400)
+      }
+    }
+  }
+
+  function clearAutoAdvance() {
+    if (autoAdvanceTimer) {
+      clearTimeout(autoAdvanceTimer)
+      autoAdvanceTimer = null
+    }
+  }
+
+  // Single-tap question types where the answer is final on selection.
+  // Excluded: checkbox (multi), text inputs, matrix, contact_info, file_upload, number (range validation).
+  const AUTO_ADVANCE_TYPES = new Set([
+    'single_choice', 'yes_no', 'image_choice', 'nps', 'rating', 'opinion_scale', 'dropdown'
+  ])
+
+  function shouldAutoAdvance(q: Question, v: AnswerValue): boolean {
+    if (!AUTO_ADVANCE_TYPES.has(q.type)) return false
+    if (v === null || v === undefined) return false
+    if (typeof v === 'string' && v === '') return false
+
+    // For single-select with "Other" option: skip auto-advance when user is in
+    // the free-text branch — they still need to type.
+    if ((q.type === 'single_choice' || q.type === 'dropdown') && q.options) {
+      const otherOpt = q.options.find(o => o.isOther)
+      if (otherOpt && typeof v === 'string') {
+        const standardLabels = q.options.filter(o => !o.isOther).map(o => o.label)
+        if (!standardLabels.includes(v)) return false
+      }
+    }
+    return true
+  }
+
+  // Enter advances. Skipped on multi-question pages (group or scroll mode)
+  // because Enter inside one input shouldn't jump past sibling questions.
+  // Newlines in <textarea> still work via the TEXTAREA bail-out below.
+  function handleKeydown(e: KeyboardEvent) {
+    if (viewState !== 'question') return
+    if (submitting) return
+    if (e.key !== 'Enter') return
+    if (settings.displayMode === 'scroll') return
+    if (!currentPage || currentPage.questions.length !== 1) return
+
+    const target = e.target as HTMLElement | null
+    if (!target) return
+    const tag = target.tagName
+    if (tag === 'TEXTAREA') return
+    if (tag === 'BUTTON') return
+    if (tag === 'SELECT') return
+    if (target.isContentEditable) return
+
+    e.preventDefault()
+    handleNext()
+  }
+
+  // Focus the first input on each new page. For input-less types
+  // (choice / rating / etc), focus the first question heading so screen
+  // readers announce it and Enter-to-advance works without prior tabbing.
+  $effect(() => {
+    const id = currentPage?.id
+    if (viewState !== 'question' || !id) return
+    void id
+    void tick().then(() => {
+      const stage = document.querySelector('.question-stage')
+      if (!stage) return
+      const inputTypes = new Set([
+        'short_text', 'long_text', 'email', 'phone', 'website',
+        'number', 'date', 'contact_info'
+      ])
+      const firstQ = currentPage?.questions[0]
+      if (firstQ && inputTypes.has(firstQ.type)) {
+        const input = stage.querySelector<HTMLInputElement | HTMLTextAreaElement>('input, textarea')
+        input?.focus({ preventScroll: true })
+      } else {
+        const heading = stage.querySelector<HTMLElement>('[data-question-heading]')
+        heading?.focus({ preventScroll: true })
+      }
+    })
+  })
 
   const isLastQuestion = $derived(currentIndex === surveyPages.length - 1)
   const nextButtonLabel = $derived(isLastQuestion ? 'Kirim Jawaban' : 'Selanjutnya')
@@ -453,7 +569,9 @@
   <meta name="twitter:card" content={welcomeQuestion?.imageUrl ? 'summary_large_image' : 'summary'} />
 </svelte:head>
 
-<div class="page">
+<svelte:window onkeydown={handleKeydown} />
+
+<div class="page" class:page-question={viewState === 'question'}>
   {#if viewState === 'error'}
     <div class="centered-wrap">
       <ErrorPage type={errorType} />
@@ -540,33 +658,37 @@
         <ProgressBar progress={progress} />
       {/if}
 
-      <div class="content">
-        {#if currentPage?.title}
-          <SectionHeader
-            title={currentPage.title}
-            description={currentPage.description ?? null}
-          />
-        {/if}
-
-        {#if currentPage}
-          {#each currentPage.questions as q (q.id)}
-            <QuestionCard
-              question={q}
-              questionNumber={settings.showNumbers ? getQuestionNumber(q, questions) : ''}
-              answer={answers[q.id] ?? null}
-              validationError={questionErrors[q.id] ?? null}
-              onAnswer={(val) => {
-                answers = { ...answers, [q.id]: val }
-                if (questionErrors[q.id]) {
-                  const newErrors = { ...questionErrors }
-                  delete newErrors[q.id]
-                  questionErrors = newErrors
-                }
-              }}
-              {slug}
-            />
-          {/each}
-        {/if}
+      <main class="content">
+        <div
+          class="question-stage"
+          class:single-question={currentPage?.questions.length === 1 && settings.displayMode !== 'scroll'}
+        >
+          {#if currentPage}
+            {#key currentPage.id}
+              <div
+                class="stage-slide"
+                in:fly={{ y: prefersReducedMotion ? 0 : 16, duration: prefersReducedMotion ? 0 : 220, easing: cubicOut }}
+              >
+                {#if currentPage.title}
+                  <SectionHeader
+                    title={currentPage.title}
+                    description={currentPage.description ?? null}
+                  />
+                {/if}
+                {#each currentPage.questions as q (q.id)}
+                  <QuestionCard
+                    question={q}
+                    questionNumber={settings.showNumbers ? getQuestionNumber(q, questions) : ''}
+                    answer={answers[q.id] ?? null}
+                    validationError={questionErrors[q.id] ?? null}
+                    onAnswer={(val) => handleAnswer(q.id, val)}
+                    {slug}
+                  />
+                {/each}
+              </div>
+            {/key}
+          {/if}
+        </div>
 
         {#if submitError}
           <div class="submit-error">{submitError}</div>
@@ -591,7 +713,7 @@
             />
           </div>
         </div>
-      </div>
+      </main>
     </div>
 
   {:else if viewState === 'closing'}
@@ -609,10 +731,15 @@
   .page {
     min-height: 100vh;
     background: var(--tertiary-20);
+    transition: background-color 0.2s ease;
+  }
+
+  .page.page-question {
+    background: white;
   }
 
   .centered-wrap {
-    min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -664,7 +791,7 @@
   }
 
   .survey-wrap {
-    min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
   }
@@ -674,10 +801,33 @@
     max-width: 720px;
     width: 100%;
     margin: 0 auto;
-    padding: 24px 16px 48px;
+    padding: 8px 20px 16px;
     display: flex;
     flex-direction: column;
-    gap: 24px;
+  }
+
+  .question-stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 16px 0;
+  }
+
+  /* Vertical-center only when a single question owns the page (one_per_page).
+     Multi-question groups and scroll mode stack from the top so all cards
+     are reachable without compressed centering. */
+  .question-stage.single-question {
+    justify-content: center;
+  }
+
+  .stage-slide {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .question-stage:not(.single-question) .stage-slide {
+    gap: 28px;
   }
 
   .nav {
@@ -685,7 +835,8 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-top: 8px;
+    padding-top: 12px;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
   }
 
   .nav-right {
@@ -699,5 +850,15 @@
     color: var(--error-50);
     padding: 12px 16px;
     font-size: 14px;
+    margin-top: 8px;
+  }
+
+  @media (min-width: 768px) {
+    .content {
+      padding: 16px 24px 24px;
+    }
+    .stage-slide {
+      gap: 20px;
+    }
   }
 </style>

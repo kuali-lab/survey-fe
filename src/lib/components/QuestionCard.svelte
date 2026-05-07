@@ -21,15 +21,20 @@
 
 <div class="card">
   {#if questionNumber}
-    <span class="number">#{questionNumber}</span>
+    <div class="number-row">
+      <span class="number">{questionNumber}</span>
+      <svg class="number-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
   {/if}
 
-  <div class="question-title">
+  <h2 class="question-title" data-question-heading tabindex="-1">
     <span class="title-text">{question.title}</span>
     {#if question.required}
       <span class="required" aria-label="wajib diisi">*</span>
     {/if}
-  </div>
+  </h2>
 
   {#if question.description && question.type !== 'statement'}
     <p class="description">{question.description}</p>
@@ -37,7 +42,6 @@
 
   {#if question.imageUrl}
     {#if question.imageLayout === 'left' || question.imageLayout === 'right'}
-      <!-- Inline layout: image beside content -->
       <div class="card-inline-wrap card-inline-{question.imageLayout}">
         <div class="inline-img-wrap">
           <img src={question.imageUrl} alt={question.title} class="inline-img" />
@@ -52,7 +56,6 @@
         </div>
       </div>
     {:else}
-      <!-- Top layout (default) -->
       <div class="image-wrap">
         <img src={question.imageUrl} alt={question.title} />
       </div>
@@ -89,59 +92,72 @@
 
 <style>
   .card {
-    background: white;
-    border-radius: var(--radius-lg);
-    padding: 28px 24px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+    gap: 14px;
+  }
+
+  .number-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--primary-60, #c89800);
+    font-size: 14px;
+    font-weight: 700;
+    align-self: flex-start;
+    letter-spacing: 0.02em;
   }
 
   .number {
-    display: inline-block;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--tertiary-60);
-    background: var(--tertiary-20);
-    border-radius: var(--radius-xl);
-    padding: 3px 10px;
-    align-self: flex-start;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .number-arrow {
+    flex-shrink: 0;
+    margin-top: 1px;
   }
 
   .question-title {
     display: flex;
     align-items: flex-start;
-    gap: 4px;
+    gap: 6px;
+    margin: 0;
+    outline: none;
+  }
+
+  .question-title:focus-visible {
+    outline: 2px solid #f7bb00;
+    outline-offset: 4px;
+    border-radius: 4px;
   }
 
   .title-text {
-    font-size: 18px;
-    font-weight: 600;
+    font-size: 22px;
+    font-weight: 700;
     color: var(--tertiary-100);
-    line-height: 1.4;
+    line-height: 1.3;
     flex: 1;
   }
 
   .required {
     color: var(--error-50);
-    font-size: 20px;
+    font-size: 22px;
     line-height: 1;
     flex-shrink: 0;
   }
 
   .description {
-    font-size: 14px;
-    color: var(--tertiary-60);
-    line-height: 1.5;
+    font-size: 15px;
+    color: var(--tertiary-70, #5a5a55);
+    line-height: 1.55;
     white-space: pre-wrap;
-    margin-top: -4px;
+    margin: -4px 0 0;
   }
 
   .image-wrap {
     border-radius: var(--radius-md);
     overflow: hidden;
-    max-height: 320px;
+    max-height: 280px;
     background: var(--tertiary-10);
   }
 
@@ -153,7 +169,7 @@
   }
 
   .input-wrap {
-    margin-top: 4px;
+    margin-top: 6px;
   }
 
   /* Inline image layout (left / right) */
@@ -166,21 +182,22 @@
   .card-inline-right { flex-direction: row-reverse; }
 
   .inline-img-wrap {
-    flex: 0 0 160px;
+    flex: 0 0 140px;
     border-radius: var(--radius-md);
     overflow: hidden;
     background: var(--tertiary-10);
   }
 
   .inline-img {
-    width: 160px;
-    height: 160px;
+    width: 140px;
+    height: 140px;
     object-fit: contain;
     display: block;
   }
 
   .inline-input-wrap {
     flex: 1;
+    min-width: 0;
   }
 
   .error {
@@ -190,5 +207,44 @@
     color: var(--error-50);
     font-size: 13px;
     font-weight: 600;
+  }
+
+  /* Stack inline image on small screens */
+  @media (max-width: 480px) {
+    .card-inline-wrap {
+      flex-direction: column;
+    }
+    .inline-img-wrap,
+    .inline-img {
+      width: 100%;
+      flex: 0 0 auto;
+      height: auto;
+      max-height: 200px;
+    }
+    .inline-img {
+      object-fit: contain;
+    }
+  }
+
+  @media (min-width: 768px) {
+    .card {
+      gap: 18px;
+    }
+    .title-text {
+      font-size: 28px;
+      line-height: 1.25;
+    }
+    .required {
+      font-size: 28px;
+    }
+    .description {
+      font-size: 16px;
+    }
+    .number-row {
+      font-size: 15px;
+    }
+    .image-wrap {
+      max-height: 320px;
+    }
   }
 </style>
