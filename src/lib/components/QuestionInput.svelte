@@ -208,6 +208,12 @@
     onChange(null)
   }
 
+  let dragOver = $state(false)
+
+  function isImageUrl(url: string): boolean {
+    return /\.(jpe?g|png|gif|webp|svg|avif|bmp)(\?|#|$)/i.test(url)
+  }
+
   // Action: keep a textarea sized to its content. Adjusts on mount (so
   // restored values from localStorage don't clip) and on every input.
   function autoExpand(node: HTMLTextAreaElement) {
@@ -653,10 +659,14 @@
     {#if uploadUrl}
       <!-- File already uploaded -->
       <div class="file-uploaded">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" class="file-icon">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          <polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
+        {#if isImageUrl(uploadUrl)}
+          <img class="file-preview" src={uploadUrl} alt="Pratinjau berkas" />
+        {:else}
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" class="file-icon">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        {/if}
         <span class="file-name">{uploadFile?.name ?? 'Berkas diunggah'}</span>
         <button class="file-remove" type="button" onclick={removeUpload} aria-label="Hapus berkas">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -665,7 +675,13 @@
         </button>
       </div>
     {:else}
-      <label class="file-drop-zone {uploading ? 'uploading' : ''}">
+      <label
+        class="file-drop-zone {uploading ? 'uploading' : ''} {dragOver ? 'drag-over' : ''}"
+        ondragover={(e) => { e.preventDefault(); dragOver = true }}
+        ondragenter={(e) => { e.preventDefault(); dragOver = true }}
+        ondragleave={() => { dragOver = false }}
+        ondrop={() => { dragOver = false }}
+      >
         {#if uploading}
           <svg class="upload-spinner" width="24" height="24" viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="12" r="10" stroke="#d9dde3" stroke-width="2"/>
@@ -1386,6 +1402,14 @@
     background: #fffdf0;
   }
 
+  /* Active drag-over state — clear visual cue that the drop will land. */
+  .file-drop-zone.drag-over {
+    border-color: #f7bb00;
+    border-style: solid;
+    background: #fef3c7;
+    color: var(--tertiary-80);
+  }
+
   .file-drop-zone.uploading {
     opacity: 0.7;
     cursor: not-allowed;
@@ -1422,6 +1446,16 @@
 
   .file-icon {
     flex-shrink: 0;
+  }
+
+  .file-preview {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #bbf7d0;
+    background: white;
   }
 
   .file-name {
