@@ -48,9 +48,86 @@
   let startTime = $state(0)
   let prefersReducedMotion = $state(false)
   let autoAdvanceTimer: ReturnType<typeof setTimeout> | null = null
+  let resumePrompt = $state<{ answers: Answers; currentIndex: number; startTime: number } | null>(null)
+
+  // Persisted respondent state, keyed per survey slug. Selfie image and
+  // location are intentionally NOT persisted (privacy + size).
+  type SavedState = {
+    answers: Answers
+    currentIndex: number
+    startTime: number
+    savedAt: number
+  }
+  const STORAGE_TTL_MS = 30 * 24 * 3600 * 1000 // 30 days
+  const storageKey = (s: string) => `survey-fe:state:${s}`
+
+  function loadSavedState(s: string): SavedState | null {
+    if (typeof localStorage === 'undefined') return null
+    try {
+      const raw = localStorage.getItem(storageKey(s))
+      if (!raw) return null
+      const parsed = JSON.parse(raw) as Partial<SavedState>
+      if (typeof parsed?.currentIndex !== 'number') return null
+      if (!parsed.answers || typeof parsed.answers !== 'object') return null
+      if (parsed.savedAt && Date.now() - parsed.savedAt > STORAGE_TTL_MS) {
+        localStorage.removeItem(storageKey(s))
+        return null
+      }
+      return parsed as SavedState
+    } catch {
+      return null
+    }
+  }
+
+  function saveCurrentState() {
+    if (typeof localStorage === 'undefined') return
+    if (!data.slug) return
+    if (Object.keys(answers).length === 0) return
+    try {
+      const state: SavedState = {
+        answers,
+        currentIndex,
+        startTime,
+        savedAt: Date.now(),
+      }
+      localStorage.setItem(storageKey(data.slug), JSON.stringify(state))
+    } catch {
+      // localStorage may be disabled (private mode) or full — fail silently.
+    }
+  }
+
+  function clearSavedState() {
+    if (typeof localStorage === 'undefined') return
+    if (!data.slug) return
+    try { localStorage.removeItem(storageKey(data.slug)) } catch {}
+  }
+
+  function resumeSurvey() {
+    if (!resumePrompt) return
+    answers = resumePrompt.answers
+    // Clamp in case the survey was edited (questions removed) since save.
+    const maxIdx = Math.max(0, surveyPages.length - 1)
+    currentIndex = Math.min(resumePrompt.currentIndex, maxIdx)
+    startTime = resumePrompt.startTime || Date.now()
+    resumePrompt = null
+    viewState = 'question'
+  }
+
+  function discardSavedState() {
+    clearSavedState()
+    resumePrompt = null
+  }
 
   onMount(() => {
     computeFingerprint().then(fp => { fingerprintHash = fp })
+
+    if (data.slug && !data.error) {
+      const saved = loadSavedState(data.slug)
+      if (saved && saved.currentIndex >= 0 && Object.keys(saved.answers).length > 0) {
+        resumePrompt = saved
+      }
+    }
+
     if (typeof window !== 'undefined' && window.matchMedia) {
       const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
       prefersReducedMotion = mq.matches
@@ -58,6 +135,14 @@
       mq.addEventListener('change', onChange)
       return () => mq.removeEventListener('change', onChange)
     }
+  })
+
+  // Auto-save on every answer/index change while in the question view.
+  $effect(() => {
+    void answers
+    void currentIndex
+    if (viewState !== 'question') return
+    saveCurrentState()
   })
 
   const questions = $derived(survey?.questions ?? [])
@@ -236,6 +321,10 @@
     startTime = Date.now()
     viewState = 'question'
     currentIndex = 0
+    // Explicit fresh start — discard any stale resume state.
+    answers = {}
+    clearSavedState()
+    resumePrompt = null
   }
 
   // End-of-survey verification gate.
@@ -357,13 +446,16 @@
       const durationSeconds = startTime > 0 ? Math.round((Date.now() - startTime) / 1000) : undefined
       await submitSurveyAnswers(slug, answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie)
       viewState = 'closing'
+      clearSavedState()
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'submit_error'
       if (msg === 'already_submitted') {
         submitError = 'Survei ini sudah pernah Anda isi sebelumnya.'
         viewState = 'question'
+        clearSavedState()
       } else if (msg === 'survey_closed') {
         viewState = 'closed'
+        clearSavedState()
       } else {
         submitError = 'Terjadi kesalahan saat mengirim jawaban. Silakan coba lagi.'
         viewState = 'question'
@@ -610,14 +702,27 @@
 
   {:else if viewState === 'welcome'}
     <div class="centered-wrap">
-      <WelcomePage
-        title={welcomeQuestion?.title || survey?.title || ''}
-        description={welcomeQuestion?.description ?? null}
-        imageUrl={welcomeQuestion?.imageUrl ?? null}
-        ctaText={'Mulai Survei'}
-        onStart={handleStart}
-        error={validationError}
-      />
+      {#if resumePrompt}
+        <div class="resume-card" role="region" aria-label="Lanjutkan survei">
+          <h2 class="resume-title">Lanjutkan survei Anda</h2>
+          <p class="resume-description">
+            Jawaban sebelumnya tersimpan di perangkat ini. Anda dapat melanjutkan dari pertanyaan terakhir, atau memulai ulang dari awal.
+          </p>
+          <div class="resume-actions">
+            <button class="resume-btn primary" type="button" onclick={resumeSurvey}>Lanjutkan</button>
+            <button class="resume-btn secondary" type="button" onclick={discardSavedState}>Mulai dari awal</button>
+          </div>
+        </div>
+      {:else}
+        <WelcomePage
+          title={welcomeQuestion?.title || survey?.title || ''}
+          description={welcomeQuestion?.description ?? null}
+          imageUrl={welcomeQuestion?.imageUrl ?? null}
+          ctaText={'Mulai Survei'}
+          onStart={handleStart}
+          error={validationError}
+        />
+      {/if}
     </div>
 
   {:else if viewState === 'selfie_capture'}
@@ -874,6 +979,91 @@
     padding: 12px 16px;
     font-size: 14px;
     margin-top: 8px;
+  }
+
+  /* Resume prompt — shown on welcome state when localStorage has saved answers */
+  .resume-card {
+    background: white;
+    border-radius: var(--radius-xl);
+    max-width: 480px;
+    width: 100%;
+    padding: 24px 24px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .resume-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--tertiary-100);
+    margin: 0;
+    line-height: 1.3;
+  }
+
+  .resume-description {
+    font-size: 14px;
+    color: var(--tertiary-70, #5a5a55);
+    line-height: 1.55;
+    margin: 0;
+  }
+
+  .resume-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+
+  .resume-btn {
+    flex: 1;
+    min-width: 140px;
+    height: 48px;
+    padding: 0 20px;
+    border-radius: var(--radius-xl);
+    font-family: var(--font);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.1s;
+  }
+
+  .resume-btn:active {
+    transform: scale(0.97);
+  }
+
+  .resume-btn.primary {
+    background: var(--primary-50);
+    color: #221500;
+    border: 2px solid transparent;
+  }
+
+  .resume-btn.primary:hover {
+    background: #e8ae00;
+  }
+
+  .resume-btn.secondary {
+    background: white;
+    color: var(--tertiary-80);
+    border: 2px solid #d9dde3;
+  }
+
+  .resume-btn.secondary:hover {
+    border-color: #f7bb00;
+    background: #fffbed;
+  }
+
+  @media (min-width: 768px) {
+    .resume-card {
+      padding: 32px 32px;
+    }
+    .resume-title {
+      font-size: 22px;
+    }
+    .resume-description {
+      font-size: 15px;
+    }
   }
 
   @media (min-width: 768px) {
