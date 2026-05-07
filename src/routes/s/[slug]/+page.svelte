@@ -607,13 +607,12 @@
     }, 250)
   }
 
-  // Enter advances. Skipped on multi-question pages (group or scroll mode)
-  // because Enter inside one input shouldn't jump past sibling questions.
-  // Newlines in <textarea> still work via the TEXTAREA bail-out below.
+  // Keyboard handling for single-question pages: Enter advances, letter keys
+  // pick a choice. Both gated to one_per_page mode with exactly one question
+  // so multi-question groups don't get hijacked.
   function handleKeydown(e: KeyboardEvent) {
     if (viewState !== 'question') return
     if (submitting) return
-    if (e.key !== 'Enter') return
     if (settings.displayMode === 'scroll') return
     if (!currentPage || currentPage.questions.length !== 1) return
 
@@ -621,12 +620,49 @@
     if (!target) return
     const tag = target.tagName
     if (tag === 'TEXTAREA') return
-    if (tag === 'BUTTON') return
+    if (tag === 'INPUT') return
     if (tag === 'SELECT') return
     if (target.isContentEditable) return
 
-    e.preventDefault()
-    handleNext()
+    if (e.key === 'Enter') {
+      if (tag === 'BUTTON') return // let native button activation run
+      e.preventDefault()
+      handleNext()
+      return
+    }
+
+    // Letter shortcuts. Modifier-aware so Cmd+R, Ctrl+L etc. still work.
+    if (e.altKey || e.ctrlKey || e.metaKey) return
+    if (e.key.length !== 1) return
+    const key = e.key.toUpperCase()
+    const q = currentPage.questions[0]
+
+    if (q.type === 'yes_no') {
+      if (key === 'Y') { e.preventDefault(); handleAnswer(q.id, 'yes'); return }
+      if (key === 'T' || key === 'N') { e.preventDefault(); handleAnswer(q.id, 'no'); return }
+      return
+    }
+
+    if (q.type === 'single_choice' || q.type === 'checkbox' || q.type === 'image_choice') {
+      if (!q.options) return
+      const standard = q.options.filter(o => !o.isOther)
+      const other = q.options.find(o => o.isOther)
+      const opts = other ? [...standard, other] : standard
+      const idx = key.charCodeAt(0) - 65
+      if (idx < 0 || idx >= opts.length) return
+      const opt = opts[idx]
+      e.preventDefault()
+
+      if (q.type === 'checkbox') {
+        const current = Array.isArray(answers[q.id]) ? [...(answers[q.id] as string[])] : []
+        const existingIdx = current.indexOf(opt.label)
+        if (existingIdx >= 0) current.splice(existingIdx, 1)
+        else current.push(opt.label)
+        handleAnswer(q.id, current)
+      } else {
+        handleAnswer(q.id, opt.label)
+      }
+    }
   }
 
   // Focus the first input on each new page. For input-less types

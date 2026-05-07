@@ -234,7 +234,10 @@
           <div class="image-option-footer">
             <span class="radio-indicator {strValue === opt.label ? 'selected' : ''}"></span>
             <span class="image-option-label">{opt.label}</span>
+            <span class="option-letter" aria-hidden="true">{String.fromCharCode(65 + idx)}</span>
           </div>
+        {:else}
+          <span class="image-option-corner-letter" aria-hidden="true">{String.fromCharCode(65 + idx)}</span>
         {/if}
       </button>
     {/each}
@@ -318,7 +321,7 @@
 
 {:else if question.type === 'single_choice'}
   <div class="options-list">
-    {#each options.filter(o => !o.isOther) as opt}
+    {#each options.filter(o => !o.isOther) as opt, i}
       <button
         class="option-card {strValue === opt.label ? 'selected' : ''}"
         type="button"
@@ -326,9 +329,11 @@
       >
         <span class="radio-indicator {strValue === opt.label ? 'selected' : ''}"></span>
         <span class="option-label">{opt.label}</span>
+        <span class="option-letter" aria-hidden="true">{String.fromCharCode(65 + i)}</span>
       </button>
     {/each}
     {#if otherOption}
+      {@const otherIdx = options.filter(o => !o.isOther).length}
       <button
         class="option-card {isOtherSelected ? 'selected' : ''}"
         type="button"
@@ -336,6 +341,7 @@
       >
         <span class="radio-indicator {isOtherSelected ? 'selected' : ''}"></span>
         <span class="option-label">{otherOption.label}</span>
+        <span class="option-letter" aria-hidden="true">{String.fromCharCode(65 + otherIdx)}</span>
       </button>
       {#if isOtherSelected}
         <input
@@ -351,7 +357,7 @@
 
 {:else if question.type === 'checkbox'}
   <div class="options-list">
-    {#each options.filter(o => !o.isOther) as opt}
+    {#each options.filter(o => !o.isOther) as opt, i}
       {@const checked = arrValue.includes(opt.label)}
       <button
         class="option-card {checked ? 'selected' : ''}"
@@ -366,9 +372,11 @@
           {/if}
         </span>
         <span class="option-label">{opt.label}</span>
+        <span class="option-letter" aria-hidden="true">{String.fromCharCode(65 + i)}</span>
       </button>
     {/each}
     {#if otherOption}
+      {@const otherIdx = options.filter(o => !o.isOther).length}
       <button
         class="option-card {isOtherSelected ? 'selected' : ''}"
         type="button"
@@ -382,6 +390,7 @@
           {/if}
         </span>
         <span class="option-label">{otherOption.label}</span>
+        <span class="option-letter" aria-hidden="true">{String.fromCharCode(65 + otherIdx)}</span>
       </button>
       {#if isOtherSelected}
         <input
@@ -435,20 +444,26 @@
       type="button"
       onclick={() => onChange('yes')}
     >
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-        <path d="M5 12.5l5 5 9-10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      Ya
+      <span class="yes-no-content">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M5 12.5l5 5 9-10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Ya
+      </span>
+      <span class="option-letter" aria-hidden="true">Y</span>
     </button>
     <button
       class="yes-no-btn {strValue === 'no' ? 'selected' : ''}"
       type="button"
       onclick={() => onChange('no')}
     >
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-        <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-      </svg>
-      Tidak
+      <span class="yes-no-content">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+        Tidak
+      </span>
+      <span class="option-letter" aria-hidden="true">T</span>
     </button>
   </div>
 
@@ -824,6 +839,33 @@
     flex: 1;
   }
 
+  /* Letter shortcut chip — visual on every viewport, hotkey on desktop. */
+  .option-letter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 1px solid #d9dde3;
+    background: var(--tertiary-10, #f9fafb);
+    color: var(--tertiary-60);
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+    margin-left: auto;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+  }
+
+  .option-card.selected .option-letter,
+  .yes-no-btn.selected .option-letter {
+    border-color: #e8ae00;
+    background: white;
+    color: #221500;
+  }
+
   /* ── Yes/No ── */
   .yes-no-wrap {
     display: flex;
@@ -834,9 +876,9 @@
     flex: 1;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
     gap: 8px;
-    padding: 16px 20px;
+    padding: 16px 18px;
     border: 2px solid #d9dde3;
     border-radius: var(--radius-lg);
     background: white;
@@ -846,6 +888,14 @@
     color: var(--tertiary-70);
     cursor: pointer;
     transition: border-color 0.15s, background 0.15s, color 0.15s;
+  }
+
+  .yes-no-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    justify-content: center;
   }
 
   .yes-no-btn:hover {
@@ -1078,6 +1128,7 @@
   }
 
   .image-option-card {
+    position: relative;
     border: 2px solid #d9dde3;
     border-radius: 12px;
     overflow: hidden;
@@ -1095,6 +1146,31 @@
   .image-option-card.selected {
     border-color: #f7bb00;
     background: #fffbed;
+  }
+
+  /* Letter badge for image_choice when labels are hidden — corner overlay. */
+  .image-option-corner-letter {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    color: var(--tertiary-80);
+    font-size: 11px;
+    font-weight: 700;
+    z-index: 1;
+  }
+
+  .image-option-card.selected .image-option-corner-letter {
+    background: var(--primary-50, #f7bb00);
+    color: #221500;
+    border-color: #e8ae00;
   }
 
   .image-option-img-wrap {
