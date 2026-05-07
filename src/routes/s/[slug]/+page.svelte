@@ -591,6 +591,22 @@
     return true
   }
 
+  // Scroll the focused input toward the viewport center on small screens so
+  // the soft keyboard doesn't cover it. Defer briefly to let the keyboard
+  // animate up first; without the delay the scroll happens before the
+  // visual viewport shrinks and the input ends up hidden again.
+  function handleFocusIn(e: FocusEvent) {
+    if (viewState !== 'question') return
+    if (typeof window === 'undefined' || window.innerWidth >= 768) return
+    const target = e.target as HTMLElement | null
+    if (!target) return
+    if (!['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return
+    if (!target.closest('.question-stage')) return
+    setTimeout(() => {
+      target.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, 250)
+  }
+
   // Enter advances. Skipped on multi-question pages (group or scroll mode)
   // because Enter inside one input shouldn't jump past sibling questions.
   // Newlines in <textarea> still work via the TEXTAREA bail-out below.
@@ -683,7 +699,7 @@
   <meta name="twitter:card" content={welcomeQuestion?.imageUrl ? 'summary_large_image' : 'summary'} />
 </svelte:head>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} onfocusin={handleFocusIn} />
 
 <div class="page" class:page-question={viewState === 'question'}>
   {#if viewState === 'error'}
@@ -969,6 +985,22 @@
 
   .nav-right {
     margin-left: auto;
+  }
+
+  /* Mobile: pin the action bar to the viewport bottom so it stays reachable
+     in scroll mode and on long matrix pages. Falls back to inline behavior
+     when content fits, since position: sticky is a no-op without scroll. */
+  @media (max-width: 767px) {
+    .nav {
+      position: sticky;
+      bottom: 0;
+      background: white;
+      margin: 12px -20px 0;
+      padding: 12px 20px;
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
+      border-top: 1px solid var(--tertiary-20, #ececea);
+      z-index: 5;
+    }
   }
 
   .submit-error {
