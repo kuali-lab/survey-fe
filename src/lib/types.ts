@@ -54,6 +54,9 @@ export interface Question {
   // Flat array of image URLs for image_choice options, parallel to options[].
   // Derived from options[].imageUrl when normalized from the API response.
   optionImages?: string[]
+  // Image choice: when false, hide the text label below each option image.
+  // Defaults to true (labels visible) when undefined or null.
+  showLabel?: boolean | null
   matrixRows?: MatrixRow[]
   matrixCols?: MatrixCol[]
 }
@@ -76,6 +79,7 @@ export interface SurveySettings {
   showNumbers: boolean
   requireLocation?: boolean
   requireSelfie?: boolean
+  displayMode?: 'scroll' | 'one_per_page'
 }
 
 export interface Survey {

@@ -62,93 +62,139 @@
     questions.find(q => q.type === 'closing_page') ?? null
   )
 
-  const currentQuestion = $derived(
-    answerableQuestions[currentIndex] ?? null
-  )
+  let questionErrors = $state<Record<string, string>>({})
 
-  // Find section (question_group) for current question
-  const currentSection = $derived((): Question | null => {
-    if (!currentQuestion || !currentQuestion.groupId) return null
-    return questions.find(q => q.type === 'question_group' && q.id === currentQuestion.groupId) ?? null
+  type SurveyPage = {
+    id: string
+    title?: string
+    description?: string
+    questions: Question[]
+  }
+
+  const surveyPages = $derived.by((): SurveyPage[] => {
+    if (!answerableQuestions.length) return []
+    
+    const mode = settings.displayMode || 'one_per_page'
+    
+    if (mode === 'scroll') {
+      return [{
+        id: 'all',
+        questions: answerableQuestions
+      }]
+    }
+
+    // one_per_page logic
+    const hasGroups = questions.some(q => q.type === 'question_group')
+    if (!hasGroups) {
+      // True one per page if no groups exist
+      return answerableQuestions.map(q => ({
+        id: q.id,
+        questions: [q]
+      }))
+    }
+
+    // Group-based paging
+    const pages: SurveyPage[] = []
+    const nonGroupQs = answerableQuestions.filter(q => !q.groupId)
+    if (nonGroupQs.length > 0) {
+      pages.push({ id: 'non-group', questions: nonGroupQs })
+    }
+
+    const groupQs = questions.filter(q => q.type === 'question_group')
+    for (const g of groupQs) {
+      const qInGroup = answerableQuestions.filter(q => q.groupId === g.id)
+      if (qInGroup.length > 0) {
+        pages.push({
+          id: g.id,
+          title: g.title,
+          description: g.description,
+          questions: qInGroup
+        })
+      }
+    }
+    return pages
   })
 
+  const currentPage = $derived(
+    surveyPages[currentIndex] ?? null
+  )
+
   const progress = $derived(
-    answerableQuestions.length > 0
-      ? Math.round(((currentIndex + 1) / answerableQuestions.length) * 100)
+    surveyPages.length > 0
+      ? Math.round(((currentIndex + 1) / surveyPages.length) * 100)
       : 0
   )
 
-  const questionNumber = $derived(
-    currentQuestion ? getQuestionNumber(currentQuestion, questions) : ''
-  )
-
   function validateAnswer(): boolean {
-    if (!currentQuestion) return true
-
-    const answer = answers[currentQuestion.id]
-
-    // 1. Required Check
-    if (currentQuestion.required) {
-      if (answer === null || answer === undefined) {
-        validationError = 'Pertanyaan ini wajib diisi.'
-        return false
-      }
-      if (typeof answer === 'string' && answer.trim() === '') {
-        validationError = 'Pertanyaan ini wajib diisi.'
-        return false
-      }
-      if (Array.isArray(answer) && answer.length === 0) {
-        validationError = 'Pilih minimal satu jawaban.'
-        return false
-      }
-      if (currentQuestion.type === 'contact_info') {
-        const c = answer as { firstName?: string; lastName?: string; phone?: string; email?: string }
-        const filled = [c.firstName, c.lastName, c.phone, c.email].some(v => v && v.trim() !== '')
-        if (!filled) {
-          validationError = 'Isi minimal satu data kontak.'
-          return false
+    if (!currentPage) return true
+    
+    let isValid = true
+    questionErrors = {}
+    
+    for (const q of currentPage.questions) {
+      const answer = answers[q.id]
+      let error = null
+      
+      // 1. Required Check
+      if (q.required) {
+        if (answer === null || answer === undefined) {
+          error = 'Pertanyaan ini wajib diisi.'
+        } else if (typeof answer === 'string' && answer.trim() === '') {
+          error = 'Pertanyaan ini wajib diisi.'
+        } else if (Array.isArray(answer) && answer.length === 0) {
+          error = 'Pilih minimal satu jawaban.'
+        } else if (q.type === 'contact_info') {
+          const c = answer as { firstName?: string; lastName?: string; phone?: string; email?: string }
+          const filled = [c.firstName, c.lastName, c.phone, c.email].some(v => v && v.trim() !== '')
+          if (!filled) error = 'Isi minimal satu data kontak.'
         }
       }
-    }
 
-    // If not required and answer is empty, fast-track success.
-    const isEmpty = answer === null || answer === undefined || (typeof answer === 'string' && answer.trim() === '') || (Array.isArray(answer) && answer.length === 0)
-    if (!currentQuestion.required && isEmpty && currentQuestion.type !== 'file_upload') {
-      return true
-    }
-
-    // 2. Range & Format Validation (Applies if required OR if optionally answered)
-    // Number: validate min/max range
-    if (currentQuestion.type === 'number') {
-      let answerNum = answer;
-      if (typeof answer === 'string' && answer.trim() !== '') {
-        answerNum = Number(answer);
+      // If not required and answer is empty, fast-track success.
+      const isEmpty = answer === null || answer === undefined || (typeof answer === 'string' && answer.trim() === '') || (Array.isArray(answer) && answer.length === 0)
+      if (!error && !q.required && isEmpty && q.type !== 'file_upload') {
+        continue
       }
-      if (typeof answerNum === 'number' && !isNaN(answerNum)) {
-        const minVal = currentQuestion.minValue !== undefined && currentQuestion.minValue !== null ? Number(currentQuestion.minValue) : null;
-        const maxVal = currentQuestion.maxValue !== undefined && currentQuestion.maxValue !== null ? Number(currentQuestion.maxValue) : null;
-        
-        if (minVal !== null && answerNum < minVal) {
-          validationError = `Nilai minimal adalah ${minVal}.`;
-          return false;
+
+      // 2. Range & Format Validation
+      if (!error && q.type === 'number') {
+        let answerNum = answer;
+        if (typeof answer === 'string' && answer.trim() !== '') {
+          answerNum = Number(answer);
         }
-        if (maxVal !== null && answerNum > maxVal) {
-          validationError = `Nilai maksimal adalah ${maxVal}.`;
-          return false;
+        if (typeof answerNum === 'number' && !isNaN(answerNum)) {
+          const minVal = q.minValue !== undefined && q.minValue !== null ? Number(q.minValue) : null;
+          const maxVal = q.maxValue !== undefined && q.maxValue !== null ? Number(q.maxValue) : null;
+          
+          if (minVal !== null && answerNum < minVal) {
+            error = `Nilai minimal adalah ${minVal}.`;
+          } else if (maxVal !== null && answerNum > maxVal) {
+            error = `Nilai maksimal adalah ${maxVal}.`;
+          }
         }
       }
-    }
 
-    // File upload: block next while upload is in progress
-    if (currentQuestion.type === 'file_upload') {
-      const val = answers[currentQuestion.id]
-      if (typeof val === 'string' && val === '__uploading__') {
-        validationError = 'Tunggu hingga file selesai diunggah.'
-        return false
+      if (!error && q.type === 'file_upload') {
+        const val = answers[q.id]
+        if (typeof val === 'string' && val === '__uploading__') {
+          error = 'Tunggu hingga file selesai diunggah.'
+        }
+      }
+
+      if (error) {
+        questionErrors[q.id] = error
+        isValid = false
       }
     }
 
-    return true
+    if (!isValid) {
+      setTimeout(() => {
+        const firstErrorEl = document.querySelector('.error')
+        if (firstErrorEl) firstErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 50)
+    }
+
+    return isValid
   }
 
 
@@ -313,13 +359,19 @@
 
   async function handleNext() {
     validationError = null
+    questionErrors = {}
 
     if (!validateAnswer()) return
+    if (!currentPage) return
 
-    if (!currentQuestion) return
-
-    // Evaluate skip logic
-    const next = evaluateNext(currentQuestion.id, answers, questions, skipRules)
+    let next: string | null | 'END' = null
+    for (const q of currentPage.questions) {
+      const skipDest = evaluateNext(q.id, answers, questions, skipRules)
+      if (skipDest) {
+        next = skipDest
+        break
+      }
+    }
 
     if (next === 'END') {
       await handleFinish()
@@ -327,17 +379,19 @@
     }
 
     if (next !== null) {
-      // Skip to specific question
-      const targetIdx = answerableQuestions.findIndex(q => q.id === next)
-      if (targetIdx >= 0) {
-        currentIndex = targetIdx
+      // Skip to specific question's page
+      const targetPageIdx = surveyPages.findIndex(p => p.questions.some(q => q.id === next))
+      if (targetPageIdx >= 0) {
+        currentIndex = targetPageIdx
+        window.scrollTo({ top: 0, behavior: 'smooth' })
         return
       }
     }
 
     // Normal advance
-    if (currentIndex < answerableQuestions.length - 1) {
+    if (currentIndex < surveyPages.length - 1) {
       currentIndex += 1
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     } else {
       await handleFinish()
     }
@@ -345,19 +399,16 @@
 
   function handleBack() {
     validationError = null
+    questionErrors = {}
     if (currentIndex > 0) {
       currentIndex -= 1
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     }
   }
 
-  function handleAnswer(value: AnswerValue) {
-    if (currentQuestion) {
-      answers = { ...answers, [currentQuestion.id]: value }
-      validationError = null
-    }
-  }
+  // remove handleAnswer from here as we inline it
 
-  const isLastQuestion = $derived(currentIndex === answerableQuestions.length - 1)
+  const isLastQuestion = $derived(currentIndex === surveyPages.length - 1)
   const nextButtonLabel = $derived(isLastQuestion ? 'Kirim Jawaban' : 'Selanjutnya')
   const errorType = $derived(
     data.error === 'not_found' ? 'not_found' as const
@@ -490,24 +541,31 @@
       {/if}
 
       <div class="content">
-        {#if currentSection()}
+        {#if currentPage?.title}
           <SectionHeader
-            title={currentSection()!.title}
-            description={currentSection()!.description ?? null}
+            title={currentPage.title}
+            description={currentPage.description ?? null}
           />
         {/if}
 
-        {#if currentQuestion}
-          {#key currentQuestion.id}
+        {#if currentPage}
+          {#each currentPage.questions as q (q.id)}
             <QuestionCard
-              question={currentQuestion}
-              questionNumber={settings.showNumbers ? questionNumber : ''}
-              answer={answers[currentQuestion.id] ?? null}
-              validationError={validationError}
-              onAnswer={handleAnswer}
+              question={q}
+              questionNumber={settings.showNumbers ? getQuestionNumber(q, questions) : ''}
+              answer={answers[q.id] ?? null}
+              validationError={questionErrors[q.id] ?? null}
+              onAnswer={(val) => {
+                answers = { ...answers, [q.id]: val }
+                if (questionErrors[q.id]) {
+                  const newErrors = { ...questionErrors }
+                  delete newErrors[q.id]
+                  questionErrors = newErrors
+                }
+              }}
               {slug}
             />
-          {/key}
+          {/each}
         {/if}
 
         {#if submitError}
