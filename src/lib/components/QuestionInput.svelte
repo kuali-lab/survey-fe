@@ -529,6 +529,7 @@
 
 {:else if question.type === 'matrix'}
   <div class="matrix-wrap">
+    <!-- Tablet+ table layout (>= 640px). Hidden on small screens via CSS. -->
     <table class="matrix-table">
       <thead>
         <tr>
@@ -559,6 +560,30 @@
         {/each}
       </tbody>
     </table>
+
+    <!-- Mobile fallback (< 640px). Each row becomes a card with a label
+         heading and a vertical button list — no horizontal scrolling. -->
+    <div class="matrix-mobile">
+      {#each matrixRows as row}
+        <div class="matrix-mobile-row">
+          <div class="matrix-mobile-label">{row.label}</div>
+          <div class="matrix-mobile-options">
+            {#each matrixCols as col}
+              {@const selected = matrixValue[row.label] === col.label}
+              <button
+                class="option-card {selected ? 'selected' : ''}"
+                type="button"
+                aria-label="{row.label}: {col.label}"
+                onclick={() => setMatrixCell(row.label, col.label)}
+              >
+                <span class="radio-indicator {selected ? 'selected' : ''}"></span>
+                <span class="option-label">{col.label}</span>
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/each}
+    </div>
   </div>
 
 {:else if question.type === 'contact_info'}
@@ -1031,10 +1056,46 @@
     overflow-x: auto;
   }
 
+  /* Default to mobile-card layout; table swaps in at >= 640px below. */
   .matrix-table {
-    width: 100%;
-    border-collapse: collapse;
+    display: none;
+  }
+
+  .matrix-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .matrix-mobile-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .matrix-mobile-label {
     font-size: 14px;
+    font-weight: 600;
+    color: var(--tertiary-90, #2a2a25);
+    line-height: 1.4;
+  }
+
+  .matrix-mobile-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  @media (min-width: 640px) {
+    .matrix-table {
+      display: table;
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    .matrix-mobile {
+      display: none;
+    }
   }
 
   .matrix-col-header {
