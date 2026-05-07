@@ -136,76 +136,98 @@
       : 0
   )
 
-  function validateAnswer(): boolean {
-    if (!currentPage) return true
-    
-    let isValid = true
-    questionErrors = {}
-    
-    for (const q of currentPage.questions) {
-      const answer = answers[q.id]
-      let error = null
-      
-      // 1. Required Check
-      if (q.required) {
-        if (answer === null || answer === undefined) {
-          error = 'Pertanyaan ini wajib diisi.'
-        } else if (typeof answer === 'string' && answer.trim() === '') {
-          error = 'Pertanyaan ini wajib diisi.'
-        } else if (Array.isArray(answer) && answer.length === 0) {
-          error = 'Pilih minimal satu jawaban.'
-        } else if (q.type === 'contact_info') {
-          const c = answer as { firstName?: string; lastName?: string; phone?: string; email?: string }
-          const filled = [c.firstName, c.lastName, c.phone, c.email].some(v => v && v.trim() !== '')
-          if (!filled) error = 'Isi minimal satu data kontak.'
-        }
-      }
+  // Loose RFC-5321-style email check. Strict enough to catch typos like
+  // "foo@" or "foo.com" but doesn't try to validate every edge case the spec
+  // technically permits — server is the source of truth for delivery.
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-      // If not required and answer is empty, fast-track success.
-      const isEmpty = answer === null || answer === undefined || (typeof answer === 'string' && answer.trim() === '') || (Array.isArray(answer) && answer.length === 0)
-      if (!error && !q.required && isEmpty && q.type !== 'file_upload') {
-        continue
-      }
-
-      // 2. Range & Format Validation
-      if (!error && q.type === 'number') {
-        let answerNum = answer;
-        if (typeof answer === 'string' && answer.trim() !== '') {
-          answerNum = Number(answer);
-        }
-        if (typeof answerNum === 'number' && !isNaN(answerNum)) {
-          const minVal = q.minValue !== undefined && q.minValue !== null ? Number(q.minValue) : null;
-          const maxVal = q.maxValue !== undefined && q.maxValue !== null ? Number(q.maxValue) : null;
-          
-          if (minVal !== null && answerNum < minVal) {
-            error = `Nilai minimal adalah ${minVal}.`;
-          } else if (maxVal !== null && answerNum > maxVal) {
-            error = `Nilai maksimal adalah ${maxVal}.`;
-          }
-        }
-      }
-
-      if (!error && q.type === 'file_upload') {
-        const val = answers[q.id]
-        if (typeof val === 'string' && val === '__uploading__') {
-          error = 'Tunggu hingga file selesai diunggah.'
-        }
-      }
-
-      if (error) {
-        questionErrors[q.id] = error
-        isValid = false
+  function validateOne(q: Question, answer: AnswerValue): string | null {
+    // 1. Required check
+    if (q.required) {
+      if (answer === null || answer === undefined) return 'Pertanyaan ini wajib diisi.'
+      if (typeof answer === 'string' && answer.trim() === '') return 'Pertanyaan ini wajib diisi.'
+      if (Array.isArray(answer) && answer.length === 0) return 'Pilih minimal satu jawaban.'
+      if (q.type === 'contact_info') {
+        const c = answer as { firstName?: string; lastName?: string; phone?: string; email?: string }
+        const filled = [c.firstName, c.lastName, c.phone, c.email].some(v => v && v.trim() !== '')
+        if (!filled) return 'Isi minimal satu data kontak.'
       }
     }
 
+    // 2. Empty + optional → ok (file_upload still needs to check upload state below)
+    const isEmpty = answer === null || answer === undefined ||
+      (typeof answer === 'string' && answer.trim() === '') ||
+      (Array.isArray(answer) && answer.length === 0)
+    if (!q.required && isEmpty && q.type !== 'file_upload') return null
+
+    // 3. Number range
+    if (q.type === 'number') {
+      let answerNum: unknown = answer
+      if (typeof answer === 'string' && answer.trim() !== '') answerNum = Number(answer)
+      if (typeof answerNum === 'number' && !isNaN(answerNum)) {
+        const minVal = q.minValue !== undefined && q.minValue !== null ? Number(q.minValue) : null
+        const maxVal = q.maxValue !== undefined && q.maxValue !== null ? Number(q.maxValue) : null
+        if (minVal !== null && answerNum < minVal) return `Nilai minimal adalah ${minVal}.`
+        if (maxVal !== null && answerNum > maxVal) return `Nilai maksimal adalah ${maxVal}.`
+      }
+    }
+
+    // 4. Email format
+    if (q.type === 'email' && typeof answer === 'string' && answer.trim() !== '') {
+      if (!EMAIL_RE.test(answer.trim())) return 'Format email belum sesuai.'
+    }
+
+    // 5. Phone format — accept digits, +, spaces, dashes, parens; require 7-15 digits
+    if (q.type === 'phone' && typeof answer === 'string' && answer.trim() !== '') {
+      const digits = answer.replace(/\D/g, '')
+      if (digits.length < 7 || digits.length > 15) return 'Format nomor telepon belum sesuai.'
+    }
+
+    // 6. File upload still in progress
+    if (q.type === 'file_upload' && typeof answer === 'string' && answer === '__uploading__') {
+      return 'Tunggu hingga berkas selesai diunggah.'
+    }
+
+    return null
+  }
+
+  function validateAnswer(): boolean {
+    if (!currentPage) return true
+
+    const errors: Record<string, string> = {}
+    for (const q of currentPage.questions) {
+      const err = validateOne(q, answers[q.id])
+      if (err) errors[q.id] = err
+    }
+    questionErrors = errors
+
+    const isValid = Object.keys(errors).length === 0
     if (!isValid) {
       setTimeout(() => {
         const firstErrorEl = document.querySelector('.error')
         if (firstErrorEl) firstErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }, 50)
     }
-
     return isValid
+  }
+
+  // Inline blur validation. Skipped when the answer is empty so that a
+  // first tab-out of an untouched required field does not immediately
+  // shout "wajib diisi" — that error still surfaces on Selanjutnya click.
+  // Format errors (email, phone, number range) DO surface on blur.
+  function handleBlur(qid: string) {
+    const q = currentPage?.questions.find(x => x.id === qid)
+    if (!q) return
+    const answer = answers[qid]
+    const isEmpty = answer === null || answer === undefined ||
+      (typeof answer === 'string' && answer.trim() === '') ||
+      (Array.isArray(answer) && answer.length === 0)
+    if (isEmpty) return
+
+    const err = validateOne(q, answer)
+    if (err) {
+      questionErrors = { ...questionErrors, [qid]: err }
+    }
   }
 
 
@@ -311,10 +333,10 @@
         viewState = 'location_denied'
         return
       }
-      let errMsg = 'Tidak dapat mengambil lokasi. Coba lagi.'
+      let errMsg = 'Tidak dapat mengambil lokasi. Periksa izin lokasi pada perangkat Anda.'
       if (err instanceof GeolocationPositionError) {
-        if (err.code === err.POSITION_UNAVAILABLE) errMsg = 'Informasi lokasi tidak tersedia. Pastikan GPS / Layanan Lokasi aktif di perangkat Anda.'
-        else if (err.code === err.TIMEOUT) errMsg = 'Waktu permintaan lokasi habis. Coba lagi.'
+        if (err.code === err.POSITION_UNAVAILABLE) errMsg = 'Informasi lokasi tidak tersedia. Pastikan GPS atau Layanan Lokasi aktif pada perangkat Anda.'
+        else if (err.code === err.TIMEOUT) errMsg = 'Permintaan lokasi melebihi batas waktu. Coba lagi.'
       }
       validationError = errMsg
       viewState = 'location_prompt'
@@ -682,6 +704,7 @@
                     answer={answers[q.id] ?? null}
                     validationError={questionErrors[q.id] ?? null}
                     onAnswer={(val) => handleAnswer(q.id, val)}
+                    onBlur={() => handleBlur(q.id)}
                     {slug}
                   />
                 {/each}

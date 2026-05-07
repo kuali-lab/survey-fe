@@ -7,11 +7,13 @@
     question,
     value,
     onChange,
+    onBlur,
     slug = ''
   }: {
     question: Question
     value: AnswerValue
     onChange: (v: AnswerValue) => void
+    onBlur?: () => void
     slug?: string
   } = $props()
 
@@ -155,10 +157,21 @@
   let uploading = $state(false)
   let uploadError = $state<string | null>(null)
 
+  const MAX_UPLOAD_BYTES = 10 * 1024 * 1024 // 10 MB — matches the UI hint
+
   async function handleFileChange(e: Event) {
     const input = e.currentTarget as HTMLInputElement
     const file = input.files?.[0] ?? null
     if (!file) return
+
+    // Client-side size guard so users see a clear message instead of
+    // waiting for the upload to fail at the server.
+    if (file.size > MAX_UPLOAD_BYTES) {
+      uploadError = 'Ukuran berkas melebihi batas 10 MB.'
+      input.value = ''
+      onChange(null)
+      return
+    }
 
     uploadFile = file
     uploadError = null
@@ -174,13 +187,13 @@
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        throw new Error(err?.message ?? 'Upload gagal')
+        throw new Error(err?.message ?? 'upload_failed')
       }
       const json = await res.json() as { url: string; name: string }
       uploadUrl = json.url
       onChange(json.url)
-    } catch (err) {
-      uploadError = err instanceof Error ? err.message : 'Upload gagal'
+    } catch {
+      uploadError = 'Tidak dapat mengunggah berkas. Coba lagi.'
       uploadUrl = null
       onChange(null)
     } finally {
@@ -234,6 +247,7 @@
     placeholder={question.placeholder ?? ''}
     value={strValue}
     oninput={(e) => onChange((e.currentTarget as HTMLInputElement).value)}
+    onblur={() => onBlur?.()}
   />
 
 {:else if question.type === 'long_text'}
@@ -243,6 +257,7 @@
     placeholder={question.placeholder ?? ''}
     value={strValue}
     oninput={(e) => onChange((e.currentTarget as HTMLTextAreaElement).value)}
+    onblur={() => onBlur?.()}
   ></textarea>
 
 {:else if question.type === 'email'}
@@ -252,6 +267,7 @@
     placeholder="nama@email.com"
     value={strValue}
     oninput={(e) => onChange((e.currentTarget as HTMLInputElement).value)}
+    onblur={() => onBlur?.()}
   />
 
 {:else if question.type === 'phone'}
@@ -261,6 +277,7 @@
     placeholder="+62 812 3456 7890"
     value={strValue}
     oninput={(e) => onChange((e.currentTarget as HTMLInputElement).value)}
+    onblur={() => onBlur?.()}
   />
 
 {:else if question.type === 'website'}
@@ -272,6 +289,7 @@
       placeholder={question.placeholder ?? 'contoh.com'}
       value={websiteDisplay}
       oninput={(e) => onChange('https://' + (e.currentTarget as HTMLInputElement).value)}
+      onblur={() => onBlur?.()}
     />
   </div>
 
@@ -286,6 +304,7 @@
       const v = (e.currentTarget as HTMLInputElement).value
       onChange(v === '' ? null : Number(v))
     }}
+    onblur={() => onBlur?.()}
   />
 
 {:else if question.type === 'date'}
@@ -294,6 +313,7 @@
     type="date"
     value={strValue}
     oninput={(e) => onChange((e.currentTarget as HTMLInputElement).value)}
+    onblur={() => onBlur?.()}
   />
 
 {:else if question.type === 'single_choice'}
@@ -567,8 +587,8 @@
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
           <polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
-        <span class="file-name">{uploadFile?.name ?? 'File diunggah'}</span>
-        <button class="file-remove" type="button" onclick={removeUpload} aria-label="Hapus file">
+        <span class="file-name">{uploadFile?.name ?? 'Berkas diunggah'}</span>
+        <button class="file-remove" type="button" onclick={removeUpload} aria-label="Hapus berkas">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           </svg>
@@ -581,14 +601,14 @@
             <circle cx="12" cy="12" r="10" stroke="#d9dde3" stroke-width="2"/>
             <path d="M12 2a10 10 0 0 1 10 10" stroke="#f7bb00" stroke-width="2" stroke-linecap="round"/>
           </svg>
-          <span>Mengunggah...</span>
+          <span>Mengunggah berkas...</span>
         {:else}
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>
             <polyline points="17 8 12 3 7 8" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>
             <line x1="12" y1="3" x2="12" y2="15" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
-          <span>Klik atau seret file ke sini</span>
+          <span>Klik atau seret berkas ke sini</span>
           <span class="file-hint">Gambar, PDF, atau Word — Maks. 10 MB</span>
         {/if}
         <input

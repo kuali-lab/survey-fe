@@ -8,6 +8,7 @@
     answer,
     validationError,
     onAnswer,
+    onBlur,
     slug = ''
   }: {
     question: Question
@@ -15,6 +16,7 @@
     answer: AnswerValue
     validationError: string | null
     onAnswer: (value: AnswerValue) => void
+    onBlur?: () => void
     slug?: string
   } = $props()
 </script>
@@ -51,6 +53,7 @@
             {question}
             value={answer}
             onChange={onAnswer}
+            {onBlur}
             {slug}
           />
         </div>
