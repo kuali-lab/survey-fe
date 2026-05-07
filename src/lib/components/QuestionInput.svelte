@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Question, AnswerValue, ContactInfo } from '$lib/types.js'
   import { PUBLIC_API_BASE_URL } from '$env/static/public'
+  import { untrack } from 'svelte'
 
   let {
     question,
@@ -150,7 +151,7 @@
 
   // ── file_upload state ──
   let uploadFile = $state<File | null>(null)
-  let uploadUrl = $state<string | null>(strValue || null)
+  let uploadUrl = $state<string | null>(untrack(() => strValue || null))
   let uploading = $state(false)
   let uploadError = $state<string | null>(null)
 
