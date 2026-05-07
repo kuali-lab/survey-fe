@@ -216,10 +216,12 @@
             </div>
           {/if}
         </div>
-        <div class="image-option-footer">
-          <span class="radio-indicator {strValue === opt.label ? 'selected' : ''}"></span>
-          <span class="image-option-label">{opt.label}</span>
-        </div>
+        {#if question.showLabel !== false}
+          <div class="image-option-footer">
+            <span class="radio-indicator {strValue === opt.label ? 'selected' : ''}"></span>
+            <span class="image-option-label">{opt.label}</span>
+          </div>
+        {/if}
       </button>
     {/each}
   </div>
