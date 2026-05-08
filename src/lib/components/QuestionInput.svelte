@@ -7,11 +7,13 @@
     question,
     value,
     onChange,
+    onBlur,
     slug = ''
   }: {
     question: Question
     value: AnswerValue
     onChange: (v: AnswerValue) => void
+    onBlur?: () => void
     slug?: string
   } = $props()
 
@@ -155,10 +157,21 @@
   let uploading = $state(false)
   let uploadError = $state<string | null>(null)
 
+  const MAX_UPLOAD_BYTES = 10 * 1024 * 1024 // 10 MB — matches the UI hint
+
   async function handleFileChange(e: Event) {
     const input = e.currentTarget as HTMLInputElement
     const file = input.files?.[0] ?? null
     if (!file) return
+
+    // Client-side size guard so users see a clear message instead of
+    // waiting for the upload to fail at the server.
+    if (file.size > MAX_UPLOAD_BYTES) {
+      uploadError = 'Ukuran berkas melebihi batas 10 MB.'
+      input.value = ''
+      onChange(null)
+      return
+    }
 
     uploadFile = file
     uploadError = null
@@ -174,13 +187,13 @@
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        throw new Error(err?.message ?? 'Upload gagal')
+        throw new Error(err?.message ?? 'upload_failed')
       }
       const json = await res.json() as { url: string; name: string }
       uploadUrl = json.url
       onChange(json.url)
-    } catch (err) {
-      uploadError = err instanceof Error ? err.message : 'Upload gagal'
+    } catch {
+      uploadError = 'Tidak dapat mengunggah berkas. Coba lagi.'
       uploadUrl = null
       onChange(null)
     } finally {
@@ -193,6 +206,26 @@
     uploadUrl = null
     uploadError = null
     onChange(null)
+  }
+
+  let dragOver = $state(false)
+
+  function isImageUrl(url: string): boolean {
+    return /\.(jpe?g|png|gif|webp|svg|avif|bmp)(\?|#|$)/i.test(url)
+  }
+
+  // Action: keep a textarea sized to its content. Adjusts on mount (so
+  // restored values from localStorage don't clip) and on every input.
+  function autoExpand(node: HTMLTextAreaElement) {
+    const adjust = () => {
+      node.style.height = 'auto'
+      node.style.height = node.scrollHeight + 'px'
+    }
+    adjust()
+    node.addEventListener('input', adjust)
+    return {
+      destroy() { node.removeEventListener('input', adjust) }
+    }
   }
 </script>
 
@@ -221,7 +254,10 @@
           <div class="image-option-footer">
             <span class="radio-indicator {strValue === opt.label ? 'selected' : ''}"></span>
             <span class="image-option-label">{opt.label}</span>
+            <span class="option-letter" aria-hidden="true">{String.fromCharCode(65 + idx)}</span>
           </div>
+        {:else}
+          <span class="image-option-corner-letter" aria-hidden="true">{String.fromCharCode(65 + idx)}</span>
         {/if}
       </button>
     {/each}
@@ -234,6 +270,7 @@
     placeholder={question.placeholder ?? ''}
     value={strValue}
     oninput={(e) => onChange((e.currentTarget as HTMLInputElement).value)}
+    onblur={() => onBlur?.()}
   />
 
 {:else if question.type === 'long_text'}
@@ -243,6 +280,8 @@
     placeholder={question.placeholder ?? ''}
     value={strValue}
     oninput={(e) => onChange((e.currentTarget as HTMLTextAreaElement).value)}
+    onblur={() => onBlur?.()}
+    use:autoExpand
   ></textarea>
 
 {:else if question.type === 'email'}
@@ -252,6 +291,7 @@
     placeholder="nama@email.com"
     value={strValue}
     oninput={(e) => onChange((e.currentTarget as HTMLInputElement).value)}
+    onblur={() => onBlur?.()}
   />
 
 {:else if question.type === 'phone'}
@@ -261,6 +301,7 @@
     placeholder="+62 812 3456 7890"
     value={strValue}
     oninput={(e) => onChange((e.currentTarget as HTMLInputElement).value)}
+    onblur={() => onBlur?.()}
   />
 
 {:else if question.type === 'website'}
@@ -272,6 +313,7 @@
       placeholder={question.placeholder ?? 'contoh.com'}
       value={websiteDisplay}
       oninput={(e) => onChange('https://' + (e.currentTarget as HTMLInputElement).value)}
+      onblur={() => onBlur?.()}
     />
   </div>
 
@@ -279,6 +321,7 @@
   <input
     class="text-input"
     type="number"
+    inputmode="decimal"
     min={question.minValue}
     max={question.maxValue}
     value={numValue !== null ? numValue : ''}
@@ -286,7 +329,15 @@
       const v = (e.currentTarget as HTMLInputElement).value
       onChange(v === '' ? null : Number(v))
     }}
+    onblur={() => onBlur?.()}
   />
+  {#if question.minValue !== undefined && question.minValue !== null && question.maxValue !== undefined && question.maxValue !== null}
+    <p class="number-hint">Antara {question.minValue} dan {question.maxValue}.</p>
+  {:else if question.minValue !== undefined && question.minValue !== null}
+    <p class="number-hint">Minimal {question.minValue}.</p>
+  {:else if question.maxValue !== undefined && question.maxValue !== null}
+    <p class="number-hint">Maksimal {question.maxValue}.</p>
+  {/if}
 
 {:else if question.type === 'date'}
   <input
@@ -294,11 +345,12 @@
     type="date"
     value={strValue}
     oninput={(e) => onChange((e.currentTarget as HTMLInputElement).value)}
+    onblur={() => onBlur?.()}
   />
 
 {:else if question.type === 'single_choice'}
   <div class="options-list">
-    {#each options.filter(o => !o.isOther) as opt}
+    {#each options.filter(o => !o.isOther) as opt, i}
       <button
         class="option-card {strValue === opt.label ? 'selected' : ''}"
         type="button"
@@ -306,9 +358,11 @@
       >
         <span class="radio-indicator {strValue === opt.label ? 'selected' : ''}"></span>
         <span class="option-label">{opt.label}</span>
+        <span class="option-letter" aria-hidden="true">{String.fromCharCode(65 + i)}</span>
       </button>
     {/each}
     {#if otherOption}
+      {@const otherIdx = options.filter(o => !o.isOther).length}
       <button
         class="option-card {isOtherSelected ? 'selected' : ''}"
         type="button"
@@ -316,6 +370,7 @@
       >
         <span class="radio-indicator {isOtherSelected ? 'selected' : ''}"></span>
         <span class="option-label">{otherOption.label}</span>
+        <span class="option-letter" aria-hidden="true">{String.fromCharCode(65 + otherIdx)}</span>
       </button>
       {#if isOtherSelected}
         <input
@@ -331,7 +386,7 @@
 
 {:else if question.type === 'checkbox'}
   <div class="options-list">
-    {#each options.filter(o => !o.isOther) as opt}
+    {#each options.filter(o => !o.isOther) as opt, i}
       {@const checked = arrValue.includes(opt.label)}
       <button
         class="option-card {checked ? 'selected' : ''}"
@@ -346,9 +401,11 @@
           {/if}
         </span>
         <span class="option-label">{opt.label}</span>
+        <span class="option-letter" aria-hidden="true">{String.fromCharCode(65 + i)}</span>
       </button>
     {/each}
     {#if otherOption}
+      {@const otherIdx = options.filter(o => !o.isOther).length}
       <button
         class="option-card {isOtherSelected ? 'selected' : ''}"
         type="button"
@@ -362,6 +419,7 @@
           {/if}
         </span>
         <span class="option-label">{otherOption.label}</span>
+        <span class="option-letter" aria-hidden="true">{String.fromCharCode(65 + otherIdx)}</span>
       </button>
       {#if isOtherSelected}
         <input
@@ -415,44 +473,56 @@
       type="button"
       onclick={() => onChange('yes')}
     >
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-        <path d="M5 12.5l5 5 9-10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      Ya
+      <span class="yes-no-content">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M5 12.5l5 5 9-10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Ya
+      </span>
+      <span class="option-letter" aria-hidden="true">Y</span>
     </button>
     <button
       class="yes-no-btn {strValue === 'no' ? 'selected' : ''}"
       type="button"
       onclick={() => onChange('no')}
     >
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-        <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-      </svg>
-      Tidak
+      <span class="yes-no-content">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+        Tidak
+      </span>
+      <span class="option-letter" aria-hidden="true">T</span>
     </button>
   </div>
 
 {:else if question.type === 'rating'}
-  <div class="stars-wrap">
-    {#each ratingStars as star}
-      <button
-        class="star-btn"
-        type="button"
-        aria-label="Beri nilai {star}"
-        onmouseenter={() => hoverRating = star}
-        onmouseleave={() => hoverRating = 0}
-        onclick={() => { onChange(star); hoverRating = 0 }}
-      >
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M12 2l2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77 5.82 21.02 7 14.14 2 9.27l7.1-1.01L12 2z"
-            fill={star <= (hoverRating || ratingValue) ? '#f7bb00' : '#d9dde3'}
-            stroke={star <= (hoverRating || ratingValue) ? '#e8ae00' : '#c8ccd2'}
-            stroke-width="1"
-          />
-        </svg>
-      </button>
-    {/each}
+  <div class="rating-wrap">
+    <div class="stars-wrap">
+      {#each ratingStars as star}
+        <button
+          class="star-btn"
+          type="button"
+          aria-label="Beri nilai {star}"
+          onmouseenter={() => hoverRating = star}
+          onmouseleave={() => hoverRating = 0}
+          onclick={() => { onChange(star); hoverRating = 0 }}
+        >
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              class="star-path"
+              d="M12 2l2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77 5.82 21.02 7 14.14 2 9.27l7.1-1.01L12 2z"
+              fill={star <= (hoverRating || ratingValue) ? '#f7bb00' : '#d9dde3'}
+              stroke={star <= (hoverRating || ratingValue) ? '#e8ae00' : '#c8ccd2'}
+              stroke-width="1"
+            />
+          </svg>
+        </button>
+      {/each}
+    </div>
+    {#if ratingValue > 0}
+      <p class="rating-label" aria-live="polite">{ratingValue} dari {ratingScale}</p>
+    {/if}
   </div>
 
 {:else if question.type === 'nps'}
@@ -478,6 +548,7 @@
       {#each opButtons as n}
         <button
           class="opinion-btn {opValue === n ? 'selected' : ''}"
+          style="--scale-position: {opMax === opMin ? 0.5 : (n - opMin) / (opMax - opMin)};"
           type="button"
           onclick={() => onChange(n)}
         >{n}</button>
@@ -494,6 +565,7 @@
 
 {:else if question.type === 'matrix'}
   <div class="matrix-wrap">
+    <!-- Tablet+ table layout (>= 640px). Hidden on small screens via CSS. -->
     <table class="matrix-table">
       <thead>
         <tr>
@@ -524,6 +596,30 @@
         {/each}
       </tbody>
     </table>
+
+    <!-- Mobile fallback (< 640px). Each row becomes a card with a label
+         heading and a vertical button list — no horizontal scrolling. -->
+    <div class="matrix-mobile">
+      {#each matrixRows as row}
+        <div class="matrix-mobile-row">
+          <div class="matrix-mobile-label">{row.label}</div>
+          <div class="matrix-mobile-options">
+            {#each matrixCols as col}
+              {@const selected = matrixValue[row.label] === col.label}
+              <button
+                class="option-card {selected ? 'selected' : ''}"
+                type="button"
+                aria-label="{row.label}: {col.label}"
+                onclick={() => setMatrixCell(row.label, col.label)}
+              >
+                <span class="radio-indicator {selected ? 'selected' : ''}"></span>
+                <span class="option-label">{col.label}</span>
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/each}
+    </div>
   </div>
 
 {:else if question.type === 'contact_info'}
@@ -563,32 +659,42 @@
     {#if uploadUrl}
       <!-- File already uploaded -->
       <div class="file-uploaded">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" class="file-icon">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          <polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        <span class="file-name">{uploadFile?.name ?? 'File diunggah'}</span>
-        <button class="file-remove" type="button" onclick={removeUpload} aria-label="Hapus file">
+        {#if isImageUrl(uploadUrl)}
+          <img class="file-preview" src={uploadUrl} alt="Pratinjau berkas" />
+        {:else}
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" class="file-icon">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        {/if}
+        <span class="file-name">{uploadFile?.name ?? 'Berkas diunggah'}</span>
+        <button class="file-remove" type="button" onclick={removeUpload} aria-label="Hapus berkas">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           </svg>
         </button>
       </div>
     {:else}
-      <label class="file-drop-zone {uploading ? 'uploading' : ''}">
+      <label
+        class="file-drop-zone {uploading ? 'uploading' : ''} {dragOver ? 'drag-over' : ''}"
+        ondragover={(e) => { e.preventDefault(); dragOver = true }}
+        ondragenter={(e) => { e.preventDefault(); dragOver = true }}
+        ondragleave={() => { dragOver = false }}
+        ondrop={() => { dragOver = false }}
+      >
         {#if uploading}
           <svg class="upload-spinner" width="24" height="24" viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="12" r="10" stroke="#d9dde3" stroke-width="2"/>
             <path d="M12 2a10 10 0 0 1 10 10" stroke="#f7bb00" stroke-width="2" stroke-linecap="round"/>
           </svg>
-          <span>Mengunggah...</span>
+          <span>Mengunggah berkas...</span>
         {:else}
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>
             <polyline points="17 8 12 3 7 8" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>
             <line x1="12" y1="3" x2="12" y2="15" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
-          <span>Klik atau seret file ke sini</span>
+          <span>Klik atau seret berkas ke sini</span>
           <span class="file-hint">Gambar, PDF, atau Word — Maks. 10 MB</span>
         {/if}
         <input
@@ -664,6 +770,12 @@
     outline: none;
     border-color: #f7bb00;
     box-shadow: 0 0 0 3px #fce18e;
+  }
+
+  .number-hint {
+    margin: 6px 4px 0;
+    font-size: 12.5px;
+    color: var(--tertiary-60);
   }
 
   /* ── URL field ── */
@@ -804,6 +916,33 @@
     flex: 1;
   }
 
+  /* Letter shortcut chip — visual on every viewport, hotkey on desktop. */
+  .option-letter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 1px solid #d9dde3;
+    background: var(--tertiary-10, #f9fafb);
+    color: var(--tertiary-60);
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+    margin-left: auto;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+  }
+
+  .option-card.selected .option-letter,
+  .yes-no-btn.selected .option-letter {
+    border-color: #e8ae00;
+    background: white;
+    color: #221500;
+  }
+
   /* ── Yes/No ── */
   .yes-no-wrap {
     display: flex;
@@ -814,9 +953,9 @@
     flex: 1;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
     gap: 8px;
-    padding: 16px 20px;
+    padding: 16px 18px;
     border: 2px solid #d9dde3;
     border-radius: var(--radius-lg);
     background: white;
@@ -826,6 +965,14 @@
     color: var(--tertiary-70);
     cursor: pointer;
     transition: border-color 0.15s, background 0.15s, color 0.15s;
+  }
+
+  .yes-no-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    justify-content: center;
   }
 
   .yes-no-btn:hover {
@@ -841,6 +988,12 @@
   }
 
   /* ── Rating stars ── */
+  .rating-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
   .stars-wrap {
     display: flex;
     gap: 4px;
@@ -857,6 +1010,18 @@
 
   .star-btn:hover {
     transform: scale(1.15);
+  }
+
+  .star-path {
+    transition: fill 0.18s ease, stroke 0.18s ease;
+  }
+
+  .rating-label {
+    margin: 4px 0 0 4px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--tertiary-70);
+    font-variant-numeric: tabular-nums;
   }
 
   /* ── NPS ── */
@@ -918,34 +1083,38 @@
     gap: 4px;
   }
 
+  /* Opinion scale buttons fill on a red→yellow→green gradient by position
+     so the scale reads at a glance. --scale-position is set inline per
+     button (0..1) and drives the HSL hue. */
   .opinion-btn {
     flex: 1;
     min-width: 0;
     height: 40px;
     padding: 0 4px;
-    border: 2px solid #d9dde3;
+    border: 2px solid hsl(calc(120 * var(--scale-position, 0.5)), 35%, 82%);
     border-radius: var(--radius-md);
-    background: white;
+    background: hsl(calc(120 * var(--scale-position, 0.5)), 65%, 96%);
     font-family: var(--font);
     font-size: 14px;
     font-weight: 600;
-    color: var(--tertiary-70);
+    color: hsl(calc(120 * var(--scale-position, 0.5)), 50%, 28%);
     cursor: pointer;
-    transition: border-color 0.15s, background 0.15s, color 0.15s;
+    transition: border-color 0.15s, background 0.15s, color 0.15s, transform 0.1s;
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
   .opinion-btn:hover {
-    border-color: #f7bb00;
-    background: #fffbed;
+    background: hsl(calc(120 * var(--scale-position, 0.5)), 70%, 90%);
+    border-color: hsl(calc(120 * var(--scale-position, 0.5)), 55%, 65%);
   }
 
   .opinion-btn.selected {
-    border-color: #f7bb00;
-    background: #f7bb00;
-    color: #221500;
+    background: hsl(calc(120 * var(--scale-position, 0.5)), 65%, 50%);
+    border-color: hsl(calc(120 * var(--scale-position, 0.5)), 60%, 38%);
+    color: white;
+    transform: scale(1.05);
   }
 
   .opinion-labels {
@@ -961,10 +1130,46 @@
     overflow-x: auto;
   }
 
+  /* Default to mobile-card layout; table swaps in at >= 640px below. */
   .matrix-table {
-    width: 100%;
-    border-collapse: collapse;
+    display: none;
+  }
+
+  .matrix-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .matrix-mobile-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .matrix-mobile-label {
     font-size: 14px;
+    font-weight: 600;
+    color: var(--tertiary-90, #2a2a25);
+    line-height: 1.4;
+  }
+
+  .matrix-mobile-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  @media (min-width: 640px) {
+    .matrix-table {
+      display: table;
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    .matrix-mobile {
+      display: none;
+    }
   }
 
   .matrix-col-header {
@@ -1058,6 +1263,7 @@
   }
 
   .image-option-card {
+    position: relative;
     border: 2px solid #d9dde3;
     border-radius: 12px;
     overflow: hidden;
@@ -1075,6 +1281,31 @@
   .image-option-card.selected {
     border-color: #f7bb00;
     background: #fffbed;
+  }
+
+  /* Letter badge for image_choice when labels are hidden — corner overlay. */
+  .image-option-corner-letter {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    color: var(--tertiary-80);
+    font-size: 11px;
+    font-weight: 700;
+    z-index: 1;
+  }
+
+  .image-option-card.selected .image-option-corner-letter {
+    background: var(--primary-50, #f7bb00);
+    color: #221500;
+    border-color: #e8ae00;
   }
 
   .image-option-img-wrap {
@@ -1171,6 +1402,14 @@
     background: #fffdf0;
   }
 
+  /* Active drag-over state — clear visual cue that the drop will land. */
+  .file-drop-zone.drag-over {
+    border-color: #f7bb00;
+    border-style: solid;
+    background: #fef3c7;
+    color: var(--tertiary-80);
+  }
+
   .file-drop-zone.uploading {
     opacity: 0.7;
     cursor: not-allowed;
@@ -1207,6 +1446,16 @@
 
   .file-icon {
     flex-shrink: 0;
+  }
+
+  .file-preview {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #bbf7d0;
+    background: white;
   }
 
   .file-name {
