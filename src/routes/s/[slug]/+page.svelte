@@ -93,25 +93,37 @@
       }))
     }
 
-    // Group-based paging
+    // Group-based paging — preserve original sortOrder
     const pages: SurveyPage[] = []
-    const nonGroupQs = answerableQuestions.filter(q => !q.groupId)
-    if (nonGroupQs.length > 0) {
-      pages.push({ id: 'non-group', questions: nonGroupQs })
-    }
 
-    const groupQs = questions.filter(q => q.type === 'question_group')
-    for (const g of groupQs) {
-      const qInGroup = answerableQuestions.filter(q => q.groupId === g.id)
-      if (qInGroup.length > 0) {
-        pages.push({
-          id: g.id,
-          title: g.title,
-          description: g.description,
-          questions: qInGroup
-        })
+    // Build group-id → answerable-members map (members already sorted by sortOrder)
+    const groupMembers = new Map<string, Question[]>()
+    for (const q of answerableQuestions) {
+      if (q.groupId) {
+        if (!groupMembers.has(q.groupId)) groupMembers.set(q.groupId, [])
+        groupMembers.get(q.groupId)!.push(q)
       }
     }
+
+    // Walk all questions in sortOrder; emit pages in creator-intended order
+    const answerableSet = new Set(answerableQuestions.map(q => q.id))
+    const sortedAll = [...questions].sort((a, b) => a.sortOrder - b.sortOrder)
+    const addedGroups = new Set<string>()
+
+    for (const q of sortedAll) {
+      if (q.type === 'question_group') {
+        const members = groupMembers.get(q.id)
+        if (members && members.length > 0 && !addedGroups.has(q.id)) {
+          pages.push({ id: q.id, title: q.title, description: q.description ?? undefined, questions: members })
+          addedGroups.add(q.id)
+        }
+      } else if (!q.groupId && answerableSet.has(q.id)) {
+        // Non-group answerable question: own page
+        pages.push({ id: q.id, questions: [q] })
+      }
+      // Questions with groupId are emitted above when their group header is encountered
+    }
+
     return pages
   })
 
