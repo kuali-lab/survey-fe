@@ -69,7 +69,7 @@ export interface SkipRule {
   value: string
   action: 'skip_to' | 'end_survey'
   targetQuestionId: string
-  logicGroup: 'AND' | 'OR'
+  logicGroup: string
 }
 
 export interface SurveySettings {

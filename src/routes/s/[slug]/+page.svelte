@@ -193,7 +193,7 @@
       }))
     }
 
-    // Group-based paging
+    // Group-based paging — preserve original sortOrder
     const pages: SurveyPage[] = []
     const nonGroupQs = answerableQuestions.filter(q => !q.groupId)
     if (nonGroupQs.length > 0) {
@@ -207,11 +207,13 @@
         pages.push({
           id: g.id,
           title: g.title,
-          description: g.description ?? undefined,
+          description: g.description,
           questions: qInGroup
         })
       }
+      // Questions with groupId are emitted above when their group header is encountered
     }
+
     return pages
   })
 
