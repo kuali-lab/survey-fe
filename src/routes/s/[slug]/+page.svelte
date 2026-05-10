@@ -22,6 +22,9 @@
   import ErrorPage from '$lib/components/ErrorPage.svelte'
   import QuestionCard from '$lib/components/QuestionCard.svelte'
   import NavButton from '$lib/components/NavButton.svelte'
+  import SurveyorBanner from '$lib/components/SurveyorBanner.svelte'
+  import NextRespondentPage from '$lib/components/NextRespondentPage.svelte'
+  import { loadSurveyorSession, clearSurveyorSession, type SurveyorSession } from '$lib/surveyorAuth.js'
 
   let { data }: { data: PageData } = $props()
 
@@ -36,6 +39,7 @@
   }
 
   let viewState = $state<ViewState>(getInitialViewState())
+  let surveyorSession = $state<SurveyorSession | null>(null)
   let answers = $state<Answers>({})
   let currentIndex = $state(0)
   let validationError = $state<string | null>(null)
@@ -125,7 +129,17 @@
   onMount(() => {
     computeFingerprint().then(fp => { fingerprintHash = fp })
 
+    // Surveyor mode: if a valid session exists for this slug, skip welcome.
     if (data.slug && !data.error) {
+      const session = loadSurveyorSession()
+      if (session && session.slug === data.slug) {
+        surveyorSession = session
+        viewState = 'question'
+        startTime = Date.now()
+      }
+    }
+
+    if (!surveyorSession && data.slug && !data.error) {
       const saved = loadSavedState(data.slug)
       if (saved && saved.currentIndex >= 0 && Object.keys(saved.answers).length > 0) {
         resumePrompt = saved
@@ -335,14 +349,17 @@
 
   // End-of-survey verification gate.
   // Order: selfie first (higher friction, capture while sunk-cost fresh), then location.
+  // Surveyor mode skips respondent verification gates entirely.
   async function handleFinish() {
-    if (settings.requireSelfie && !selfie) {
-      await runSelfieGate()
-      return
-    }
-    if (settings.requireLocation && !location) {
-      await requestLocationAndSubmit()
-      return
+    if (!surveyorSession) {
+      if (settings.requireSelfie && !selfie) {
+        await runSelfieGate()
+        return
+      }
+      if (settings.requireLocation && !location) {
+        await requestLocationAndSubmit()
+        return
+      }
     }
     await handleSubmit()
   }
@@ -445,17 +462,27 @@
     viewState = 'submitting'
 
     try {
-      // Collect respondent email if there's an email question
       const emailQuestion = answerableQuestions.find(q => q.type === 'email')
       const respondentEmail = emailQuestion ? (answers[emailQuestion.id] as string | undefined) : undefined
-
       const durationSeconds = startTime > 0 ? Math.round((Date.now() - startTime) / 1000) : undefined
-      await submitSurveyAnswers(slug, answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie)
-      viewState = 'closing'
+
+      await submitSurveyAnswers(slug, answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie, surveyorSession?.code)
+
       clearSavedState()
+      if (surveyorSession) {
+        viewState = 'next_respondent'
+      } else {
+        viewState = 'closing'
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'submit_error'
-      if (msg === 'already_submitted') {
+      if (msg === 'unauthorized') {
+        // Surveyor code has been invalidated — clear session and restart.
+        clearSurveyorSession()
+        surveyorSession = null
+        submitError = 'Sesi petugas tidak valid atau sudah berakhir. Silakan masuk kembali.'
+        viewState = 'welcome'
+      } else if (msg === 'already_submitted') {
         submitError = 'Survei ini sudah pernah Anda isi sebelumnya.'
         viewState = 'question'
         clearSavedState()
@@ -469,6 +496,22 @@
     } finally {
       submitting = false
     }
+  }
+
+  function handleNextRespondent() {
+    answers = {}
+    currentIndex = 0
+    selfie = null
+    location = null
+    submitError = null
+    startTime = Date.now()
+    viewState = 'question'
+  }
+
+  function handleFinishSurveying() {
+    clearSurveyorSession()
+    surveyorSession = null
+    viewState = 'closing'
   }
 
   // Step indicator for the verification gate.
@@ -828,6 +871,13 @@
 />
 
 <div class="page" class:page-question={viewState === 'question'}>
+  {#if surveyorSession}
+    <SurveyorBanner
+      displayName={surveyorSession.displayName}
+      onlogout={() => { clearSurveyorSession(); surveyorSession = null; viewState = 'welcome' }}
+    />
+  {/if}
+
   {#if viewState === 'error'}
     <div class="centered-wrap">
       <ErrorPage type={errorType} />
@@ -991,6 +1041,14 @@
           </div>
         </div>
       </main>
+    </div>
+
+  {:else if viewState === 'next_respondent'}
+    <div class="centered-wrap">
+      <NextRespondentPage
+        onnext={handleNextRespondent}
+        onfinish={handleFinishSurveying}
+      />
     </div>
 
   {:else if viewState === 'closing'}

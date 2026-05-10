@@ -105,4 +105,4 @@ export type AnswerValue = string | number | string[] | Record<string, string> | 
 
 export type Answers = Record<string, AnswerValue>
 
-export type ViewState = 'welcome' | 'selfie_capture' | 'selfie_denied' | 'location_prompt' | 'location_denied' | 'question' | 'submitting' | 'closing' | 'closed' | 'error'
+export type ViewState = 'welcome' | 'selfie_capture' | 'selfie_denied' | 'location_prompt' | 'location_denied' | 'question' | 'submitting' | 'closing' | 'closed' | 'error' | 'next_respondent'

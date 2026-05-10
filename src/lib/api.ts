@@ -59,13 +59,18 @@ export async function submitSurveyAnswers(
   location?: { latitude: number, longitude: number, accuracy?: number } | null,
   durationSeconds?: number,
   fingerprintHash?: string | null,
-  selfie?: { imageBase64: string } | null
+  selfie?: { imageBase64: string } | null,
+  surveyorCode?: string
 ): Promise<void> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (surveyorCode) headers['Authorization'] = `Bearer ${surveyorCode}`
+
   const res = await fetch(`${PUBLIC_API_BASE_URL}/s/${slug}/submit`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie })
   })
+  if (res.status === 401) throw new Error('unauthorized')
   if (res.status === 409) throw new Error('already_submitted')
   if (res.status === 410) throw new Error('survey_closed')
   if (!res.ok) throw new Error('submit_error')
