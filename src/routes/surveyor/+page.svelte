@@ -34,26 +34,111 @@
   }
 </script>
 
-<div class="min-h-dvh bg-[var(--tertiary-20,#f5f5f2)] flex items-center justify-center p-4">
-  <div class="bg-white rounded-2xl shadow-lg max-w-sm w-full p-8 flex flex-col gap-6">
-    <div class="text-center">
-      <p class="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-2">Mode Petugas Survei</p>
-      <h1 class="text-lg font-bold text-gray-900">Masukkan Kode Akses</h1>
-      <p class="text-sm text-gray-500 mt-1">Gunakan kode akses dari email undangan Anda</p>
+<div class="page">
+  <div class="card">
+    <div class="header">
+      <p class="badge">Mode Petugas Survei</p>
+      <h1 class="title">Masukkan Kode Akses</h1>
+      <p class="subtitle">Gunakan kode akses dari email undangan Anda</p>
     </div>
 
     <CodeInput value={code} onchange={(v) => { code = v; error = null }} disabled={loading} autofocus />
 
     {#if error}
-      <p class="text-sm text-red-600 text-center -mt-2">{error}</p>
+      <p class="error-msg">{error}</p>
     {/if}
 
     <button
       onclick={handleSubmit}
       disabled={loading || code.length !== 6}
-      class="w-full py-3 px-6 rounded-xl bg-amber-400 text-gray-900 font-bold text-sm hover:bg-amber-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+      class="cta"
     >
       {loading ? 'Memverifikasi…' : 'Masuk'}
     </button>
   </div>
 </div>
+
+<style>
+  .page {
+    min-height: 100dvh;
+    background: var(--tertiary-20);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .card {
+    background: white;
+    border-radius: var(--radius-xl);
+    max-width: 400px;
+    width: 100%;
+    padding: 32px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .header {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .badge {
+    font-size: 11px;
+    font-weight: 700;
+    color: #b45309;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--tertiary-100);
+    line-height: 1.3;
+  }
+
+  .subtitle {
+    font-size: 14px;
+    color: var(--tertiary-70);
+    line-height: 1.5;
+  }
+
+  .error-msg {
+    font-size: 14px;
+    color: var(--error-50);
+    text-align: center;
+    margin-top: -8px;
+  }
+
+  .cta {
+    width: 100%;
+    height: 48px;
+    background: var(--primary-50);
+    color: #221500;
+    font-family: var(--font);
+    font-size: 15px;
+    font-weight: 700;
+    border: none;
+    border-radius: var(--radius-xl);
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+
+  .cta:hover:not(:disabled) {
+    background: #e8ae00;
+  }
+
+  .cta:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  .cta:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+</style>
