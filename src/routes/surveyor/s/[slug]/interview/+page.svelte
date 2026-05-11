@@ -18,13 +18,14 @@
   } from '$lib/runner/surveyorRunnerStore.svelte.js'
   import type { SurveyRunner } from '$lib/runner/SurveyRunner.svelte.js'
   import { getQuestionNumber } from '$lib/utils.js'
+  import { captureGps, GpsCaptureError, type GpsFix } from '$lib/gps.js'
 
   let { data }: { data: PageData } = $props()
 
   let session = $state<SurveyorSession | null>(null)
   let runner = $state<SurveyRunner | null>(null)
   let gpsStatus = $state<'idle' | 'pending' | 'ok' | 'error'>('idle')
-  let location = $state<{ latitude: number; longitude: number; accuracy?: number } | null>(null)
+  let location = $state<GpsFix | null>(null)
   let prefersReducedMotion = $state(false)
 
   onMount(() => {
@@ -57,7 +58,7 @@
     // Apply a default startTime if not set yet.
     if (runner.startTime === 0) runner.startTime = Date.now()
 
-    captureGps()
+    startGpsCapture()
 
     if (typeof window !== 'undefined' && window.matchMedia) {
       const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -68,32 +69,34 @@
     }
   })
 
-  function captureGps() {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      gpsStatus = 'idle'
-      return
-    }
+  function stashLocation(fix: GpsFix) {
+    if (typeof localStorage === 'undefined') return
+    try { localStorage.setItem(`surveyor:location:${data.slug}`, JSON.stringify(fix)) } catch { /* ignore */ }
+  }
+
+  function startGpsCapture() {
     gpsStatus = 'pending'
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        location = {
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          accuracy: pos.coords.accuracy,
-        }
-        gpsStatus = 'ok'
-        // Stash for the recap page to pick up.
-        if (typeof localStorage !== 'undefined') {
-          try {
-            localStorage.setItem(`surveyor:location:${data.slug}`, JSON.stringify(location))
-          } catch {
-            // ignore
-          }
-        }
+    captureGps({
+      onProgress: (fix) => {
+        // Keep the best-so-far in localStorage so the recap page can still
+        // use a useful fix even if the surveyor advances before the chip
+        // converges below the accuracy threshold.
+        location = fix
+        stashLocation(fix)
       },
-      () => { gpsStatus = 'error' },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
-    )
+    })
+      .then((fix) => {
+        location = fix
+        stashLocation(fix)
+        gpsStatus = 'ok'
+      })
+      .catch((err) => {
+        if (err instanceof GpsCaptureError && err.code === 'unsupported') {
+          gpsStatus = 'idle'
+        } else {
+          gpsStatus = 'error'
+        }
+      })
   }
 
   // Auto-save answers for fallback recap on reload.

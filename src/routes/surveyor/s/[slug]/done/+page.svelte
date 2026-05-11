@@ -4,11 +4,16 @@
   import { goto } from '$app/navigation'
   import { loadSurveyorSession, refreshSurveyorStats, clearSurveyorSession, type SurveyorSession } from '$lib/surveyorAuth.js'
   import SurveyorAppShell from '$lib/components/surveyor/SurveyorAppShell.svelte'
+  import SubmissionStatusCard from '$lib/components/surveyor/SubmissionStatusCard.svelte'
+  import { outboxStore } from '$lib/outboxStore.svelte.js'
+  import { drain } from '$lib/outboxDrain.js'
 
   let { data }: { data: PageData } = $props()
 
   let session = $state<SurveyorSession | null>(null)
   let lastDurationSeconds = $state<number | null>(null)
+  let submissionId = $state<string | null>(null)
+  let statsRefreshed = $state(false)
 
   onMount(() => {
     const s = loadSurveyorSession()
@@ -25,10 +30,20 @@
       // ignore
     }
 
-    // Refresh stats so the badge reflects the just-recorded response.
-    refreshSurveyorStats().then((stats) => {
-      if (stats) session = { ...session!, stats }
-    })
+    submissionId = new URL(window.location.href).searchParams.get('sid')
+  })
+
+  const item = $derived(submissionId ? outboxStore.getBySubmissionId(submissionId) ?? null : null)
+
+  // When a submission finally lands, refresh the server-authoritative
+  // counters once. The badge in the shell updates as a side effect.
+  $effect(() => {
+    if (item?.status === 'sent' && !statsRefreshed) {
+      statsRefreshed = true
+      void refreshSurveyorStats().then((stats) => {
+        if (stats && session) session = { ...session, stats }
+      })
+    }
   })
 
   function formatDuration(s: number | null): string | null {
@@ -48,6 +63,10 @@
     clearSurveyorSession()
     goto(`/surveyor/s/${data.slug}`, { replaceState: true })
   }
+
+  function retryNow() {
+    void drain()
+  }
 </script>
 
 <svelte:head>
@@ -65,30 +84,43 @@
   />
 
   <main class="wrap">
-    <div class="card">
-      <div class="check">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <polyline points="5 12 10 17 19 7" />
-        </svg>
-      </div>
-      <h1 class="title">Tersimpan</h1>
-      <p class="sub">
-        Responden #{session.stats.todayCount} berhasil direkam.
-        {#if duration}
-          <br />Durasi: <strong>{duration}</strong>
-        {/if}
-      </p>
-
-      <div class="actions">
-        <button class="btn primary" type="button" onclick={nextRespondent}>
-          Mulai Responden Berikutnya
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <line x1="5" y1="12" x2="19" y2="12" />
-            <polyline points="12 5 19 12 12 19" />
+    {#if submissionId}
+      <SubmissionStatusCard
+        item={item}
+        onRetry={item?.status === 'permanent_fail' ? retryNow : null}
+      />
+    {:else}
+      <!-- Fallback for direct navigation without ?sid -->
+      <div class="legacy-card">
+        <div class="check">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="5 12 10 17 19 7" />
           </svg>
-        </button>
-        <button class="btn secondary" type="button" onclick={finishShift}>Selesai Bertugas</button>
+        </div>
+        <h1 class="title">Tersimpan</h1>
       </div>
+    {/if}
+
+    <div class="info-row">
+      {#if duration}
+        <span class="info-pill">Durasi: <strong>{duration}</strong></span>
+      {/if}
+      {#if item?.status === 'sent'}
+        <span class="info-pill success">Responden #{session.stats.todayCount} tercatat</span>
+      {:else if item?.status === 'pending' || item?.status === 'sending'}
+        <span class="info-pill muted">Akan masuk hitungan saat terkirim</span>
+      {/if}
+    </div>
+
+    <div class="actions">
+      <button class="btn primary" type="button" onclick={nextRespondent}>
+        Mulai Responden Berikutnya
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="5" y1="12" x2="19" y2="12" />
+          <polyline points="12 5 19 12 12 19" />
+        </svg>
+      </button>
+      <button class="btn secondary" type="button" onclick={finishShift}>Selesai Bertugas</button>
     </div>
   </main>
 {/if}
@@ -97,23 +129,27 @@
   .wrap {
     min-height: calc(100dvh - 56px);
     background: var(--tertiary-20);
+    padding: 24px 16px;
     display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 32px 16px;
+    flex-direction: column;
+    gap: 16px;
+    align-items: center;
   }
 
-  .card {
+  .wrap > :global(*) {
+    width: 100%;
+    max-width: 520px;
+  }
+
+  .legacy-card {
     background: white;
     border-radius: var(--radius-xl);
-    max-width: 460px;
-    width: 100%;
-    padding: 36px 28px 28px;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
+    padding: 32px 24px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.10);
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
     text-align: center;
   }
 
@@ -136,19 +172,35 @@
     line-height: 1.2;
   }
 
-  .sub {
-    font-size: 14.5px;
-    color: var(--tertiary-70);
-    line-height: 1.5;
-    margin: 0;
+  .info-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  .info-pill {
+    background: white;
+    border: 1px solid var(--tertiary-30);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 12.5px;
+    color: var(--tertiary-80);
+  }
+  .info-pill.success {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+    color: #15803d;
+  }
+  .info-pill.muted {
+    color: var(--tertiary-60);
   }
 
   .actions {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    width: 100%;
-    margin-top: 8px;
+    margin-top: 4px;
   }
 
   .btn {

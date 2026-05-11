@@ -2,7 +2,7 @@
   import type { PageData } from './$types.js'
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
-  import { loadSurveyorSession, refreshSurveyorStats, type SurveyorSession } from '$lib/surveyorAuth.js'
+  import { loadSurveyorSession, type SurveyorSession } from '$lib/surveyorAuth.js'
   import {
     peekSurveyorRunner,
     loadSurveyorAnswers,
@@ -12,7 +12,8 @@
   import SurveyorAppShell from '$lib/components/surveyor/SurveyorAppShell.svelte'
   import RecapList from '$lib/components/surveyor/RecapList.svelte'
   import type { Answers } from '$lib/types.js'
-  import { submitSurveyAnswers } from '$lib/api.js'
+  import { outbox, type GpsFix } from '$lib/outbox.js'
+  import { drain } from '$lib/outboxDrain.js'
 
   let { data }: { data: PageData } = $props()
 
@@ -68,7 +69,7 @@
     submitting = true
     submitError = null
 
-    let location: { latitude: number; longitude: number; accuracy?: number } | null = null
+    let location: GpsFix | null = null
     try {
       const raw = localStorage.getItem(`surveyor:location:${data.slug}`)
       if (raw) location = JSON.parse(raw)
@@ -76,49 +77,42 @@
       // ignore
     }
 
-    const answerable = data.survey.questions.filter((q) => q.type === 'email')
-    const emailQ = answerable[0]
+    const emailQ = data.survey.questions.find((q) => q.type === 'email')
     const respondentEmail = emailQ ? (answers[emailQ.id] as string | undefined) : undefined
     const durationSeconds = startTime > 0 ? Math.round((Date.now() - startTime) / 1000) : undefined
 
+    const submissionId = crypto.randomUUID()
     try {
-      await submitSurveyAnswers(
-        data.slug,
-        answers,
-        respondentEmail,
-        location,
-        durationSeconds,
-        null,
-        null,
-        session.code,
-      )
+      await outbox.enqueue({
+        submissionId,
+        slug: data.slug,
+        payload: {
+          answers,
+          respondentEmail: respondentEmail ?? null,
+          location,
+          durationSeconds: durationSeconds ?? null,
+          fingerprintHash: null,
+          selfie: null,
+          surveyorCode: session.code,
+        },
+      })
 
-      // Record duration for the ready dashboard rolling average.
+      // Local-only bookkeeping fires on enqueue: from the surveyor's
+      // perspective the interview is complete, regardless of upload state.
       if (durationSeconds && durationSeconds > 0) pushDuration(data.slug, durationSeconds)
-
-      // Clear in-memory + localStorage answers.
       clearSurveyorAnswers(data.slug)
       const r = peekSurveyorRunner()
       if (r) r.reset()
-
-      // Stash submit timestamp for the ready dashboard.
       try { localStorage.setItem(`surveyor:lastSubmit:${data.slug}`, String(Date.now())) } catch {}
       try { localStorage.setItem(`surveyor:lastDuration:${data.slug}`, String(durationSeconds ?? 0)) } catch {}
 
-      // Refresh stats in the background — the /done page will show the
-      // refreshed count once it lands.
-      refreshSurveyorStats()
+      // Kick the drain immediately so we don't wait for the 30s poll
+      // when the surveyor is online.
+      void drain()
 
-      goto(`/surveyor/s/${data.slug}/done`, { replaceState: true })
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'submit_error'
-      if (msg === 'unauthorized') {
-        submitError = 'Sesi petugas tidak valid atau sudah berakhir. Silakan masuk kembali.'
-      } else if (msg === 'survey_closed') {
-        submitError = 'Survei ini sudah ditutup.'
-      } else {
-        submitError = 'Terjadi kesalahan saat mengirim jawaban. Silakan coba lagi.'
-      }
+      goto(`/surveyor/s/${data.slug}/done?sid=${submissionId}`, { replaceState: true })
+    } catch {
+      submitError = 'Tidak bisa menyimpan jawaban di perangkat. Coba muat ulang halaman dan kirim lagi.'
       submitting = false
     }
   }
@@ -162,7 +156,7 @@
         ← Kembali
       </button>
       <button class="btn primary" type="button" onclick={submit} disabled={submitting}>
-        {submitting ? 'Mengirim…' : 'Kirim Jawaban'}
+        {submitting ? 'Menyimpan…' : 'Kirim Jawaban'}
         {#if !submitting}
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <polyline points="5 12 10 17 19 7" />

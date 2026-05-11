@@ -1,10 +1,18 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
   import Logo from '$lib/components/Logo.svelte'
   import SurveyorStats from './SurveyorStats.svelte'
   import InterviewTimer from './InterviewTimer.svelte'
   import GpsStatusBadge from './GpsStatusBadge.svelte'
+  import OutboxBadge from './OutboxBadge.svelte'
+  import OutboxToast from './OutboxToast.svelte'
   import { goto } from '$app/navigation'
   import { clearSurveyorSession } from '$lib/surveyorAuth.js'
+  import { startOutboxDrain } from '$lib/outboxDrain.js'
+
+  // Idempotent — safe to call from every surveyor page; only the first
+  // invocation wires the online listener and the poll interval.
+  onMount(() => { startOutboxDrain() })
 
   type Props = {
     surveyTitle: string
@@ -70,6 +78,7 @@
     {#if gpsStatus !== 'idle'}
       <GpsStatusBadge status={gpsStatus} />
     {/if}
+    <OutboxBadge />
     <SurveyorStats {todayCount} {totalCount} variant="pill" />
 
     <div class="menu-wrap">
@@ -97,6 +106,8 @@
 {#if menuOpen}
   <button class="menu-scrim" aria-label="Tutup menu" onclick={closeMenu}></button>
 {/if}
+
+<OutboxToast />
 
 <style>
   .shell {
