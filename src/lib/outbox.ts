@@ -116,10 +116,15 @@ export const outbox = {
     payload: SubmissionPayload
   }): Promise<OutboxItem> {
     const db = await openDb()
+    // IDB uses the structured-clone algorithm, which can choke on Svelte 5
+    // $state Proxies and other non-plain wrappers. JSON-roundtripping the
+    // payload guarantees a clean plain-JS value goes into storage. Cheap
+    // for our payload sizes (answers + optional selfie base64).
+    const plainPayload: SubmissionPayload = JSON.parse(JSON.stringify(args.payload))
     const candidate: Omit<OutboxItem, 'id'> = {
       submissionId: args.submissionId,
       slug: args.slug,
-      payload: args.payload,
+      payload: plainPayload,
       enqueuedAt: Date.now(),
       attempts: 0,
       lastAttemptAt: null,

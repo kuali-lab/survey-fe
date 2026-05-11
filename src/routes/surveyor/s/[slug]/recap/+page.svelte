@@ -111,8 +111,10 @@
       void drain()
 
       goto(`/surveyor/s/${data.slug}/done?sid=${submissionId}`, { replaceState: true })
-    } catch {
-      submitError = 'Tidak bisa menyimpan jawaban di perangkat. Coba muat ulang halaman dan kirim lagi.'
+    } catch (err) {
+      console.error('[recap] enqueue failed', err)
+      const msg = err instanceof Error ? err.message : String(err)
+      submitError = `Belum bisa menyimpan jawaban di perangkat (${msg}). Coba tekan Kirim Jawaban sekali lagi.`
       submitting = false
     }
   }
