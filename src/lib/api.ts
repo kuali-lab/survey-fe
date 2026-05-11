@@ -17,7 +17,6 @@ function normalizeQuestion(q: Record<string, unknown>): Question {
 
   return {
     ...(q as unknown as Question),
-    // Ensure options carry proper types
     options: options.map((o) => ({
       id: (o.id as string) ?? '',
       label: (o.label as string) ?? '',
@@ -26,7 +25,6 @@ function normalizeQuestion(q: Record<string, unknown>): Question {
       sortOrder: (o.sortOrder as number) ?? 0,
       isOther: Boolean(o.isOther),
     })),
-    // Only include optionImages when at least one option has an image
     optionImages: hasOptionImages ? optionImages : undefined,
   } as Question
 }
@@ -74,4 +72,28 @@ export async function submitSurveyAnswers(
   if (res.status === 409) throw new Error('already_submitted')
   if (res.status === 410) throw new Error('survey_closed')
   if (!res.ok) throw new Error('submit_error')
+}
+
+export type SurveyorStatsApiResponse = {
+  todayCount: number
+  totalCount: number
+  surveyorId: string
+  slug: string
+}
+
+/**
+ * Fetch the authoritative stats counters for the given surveyor code.
+ * Returns null on auth failure or network error — callers fall back to
+ * whatever stats are in the cached session.
+ */
+export async function fetchSurveyorStats(code: string): Promise<SurveyorStatsApiResponse | null> {
+  try {
+    const res = await fetch(`${PUBLIC_API_BASE_URL}/surveyor/me/stats`, {
+      headers: { Authorization: `Bearer ${code}` },
+    })
+    if (!res.ok) return null
+    return (await res.json()) as SurveyorStatsApiResponse
+  } catch {
+    return null
+  }
 }

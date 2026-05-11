@@ -43,7 +43,7 @@
   }
 </script>
 
-<div class="flex gap-2 justify-center">
+<div class="boxes">
   {#each chars as char, i}
     <input
       bind:this={inputs[i]}
@@ -53,13 +53,60 @@
       value={char}
       {disabled}
       autofocus={autofocus && i === 0}
-      class="w-11 h-14 text-center text-xl font-mono font-bold border-2 rounded-lg outline-none transition-colors
-             {char ? 'border-primary text-gray-900' : 'border-gray-300 text-gray-400'}
-             focus:border-primary focus:ring-2 focus:ring-primary/20
-             disabled:opacity-50 disabled:cursor-not-allowed"
+      class="box"
+      class:filled={!!char}
       oninput={(e) => handleInput(i, e)}
       onkeydown={(e) => handleKeydown(i, e)}
       onpaste={handlePaste}
     />
   {/each}
 </div>
+
+<style>
+  .boxes {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  .box {
+    width: 48px;
+    height: 56px;
+    border-radius: var(--radius-md);
+    border: 2px solid var(--tertiary-30);
+    background: white;
+    font-family: var(--font);
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--tertiary-100);
+    text-align: center;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .box.filled {
+    border-color: var(--primary-50);
+  }
+
+  .box:focus {
+    border-color: var(--primary-50);
+    box-shadow: 0 0 0 3px rgba(247, 187, 0, 0.18);
+  }
+
+  .box:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  @media (max-width: 400px) {
+    .boxes {
+      gap: 6px;
+    }
+    .box {
+      width: 40px;
+      height: 50px;
+      font-size: 20px;
+    }
+  }
+</style>

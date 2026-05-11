@@ -1,11 +1,11 @@
 <script lang="ts">
   import type { PageData } from './$types.js'
-  import type { ViewState, Answers, AnswerValue, Question } from '$lib/types.js'
+  import type { ViewState, Answers } from '$lib/types.js'
   import { submitSurveyAnswers } from '$lib/api.js'
   import { computeFingerprint } from '$lib/fingerprint.js'
-  import { getAnswerableQuestions, getQuestionNumber } from '$lib/utils.js'
-  import { evaluateNext } from '$lib/skipLogic.js'
+  import { getQuestionNumber } from '$lib/utils.js'
   import { page } from '$app/stores'
+  import { goto } from '$app/navigation'
   import { onMount, tick } from 'svelte'
   import { fly } from 'svelte/transition'
   import { cubicOut } from 'svelte/easing'
@@ -22,16 +22,14 @@
   import ErrorPage from '$lib/components/ErrorPage.svelte'
   import QuestionCard from '$lib/components/QuestionCard.svelte'
   import NavButton from '$lib/components/NavButton.svelte'
-  import SurveyorBanner from '$lib/components/SurveyorBanner.svelte'
-  import NextRespondentPage from '$lib/components/NextRespondentPage.svelte'
-  import { loadSurveyorSession, clearSurveyorSession, type SurveyorSession } from '$lib/surveyorAuth.js'
+  import { loadSurveyorSession } from '$lib/surveyorAuth.js'
+  import { SurveyRunner } from '$lib/runner/SurveyRunner.svelte.js'
 
   let { data }: { data: PageData } = $props()
 
   const survey = $derived(data.survey)
   const slug = $derived(data.slug)
 
-  // Determine initial view state
   function getInitialViewState(): ViewState {
     if (data.error === 'survey_closed') return 'closed'
     if (!survey || data.error) return 'error'
@@ -39,34 +37,30 @@
   }
 
   let viewState = $state<ViewState>(getInitialViewState())
-  let surveyorSession = $state<SurveyorSession | null>(null)
-  let answers = $state<Answers>({})
-  let currentIndex = $state(0)
-  let validationError = $state<string | null>(null)
   let submitting = $state(false)
   let submitError = $state<string | null>(null)
-  let location = $state<{ latitude: number, longitude: number, accuracy?: number } | null>(null)
+  let validationError = $state<string | null>(null)
+  let location = $state<{ latitude: number; longitude: number; accuracy?: number } | null>(null)
   let locationRequesting = $state(false)
   let selfie = $state<{ imageBase64: string } | null>(null)
   let fingerprintHash = $state<string | null>(null)
-  let startTime = $state(0)
   let prefersReducedMotion = $state(false)
-  let autoAdvanceTimer: ReturnType<typeof setTimeout> | null = null
-  let autoAdvancing = $state(false)
-  let lastNavTime = 0
-  let touchStartY = 0
-  let touchStartScrollY = 0
   let resumePrompt = $state<{ answers: Answers; currentIndex: number; startTime: number } | null>(null)
 
-  // Persisted respondent state, keyed per survey slug. Selfie image and
-  // location are intentionally NOT persisted (privacy + size).
+  const runner = new SurveyRunner({
+    getSurvey: () => survey ?? null,
+    onFinish: () => handleFinish(),
+  })
+
+  // Persisted respondent state, keyed per survey slug. Selfie/location are
+  // intentionally NOT persisted (privacy + size).
   type SavedState = {
     answers: Answers
     currentIndex: number
     startTime: number
     savedAt: number
   }
-  const STORAGE_TTL_MS = 30 * 24 * 3600 * 1000 // 30 days
+  const STORAGE_TTL_MS = 30 * 24 * 3600 * 1000
   const storageKey = (s: string) => `survey-fe:state:${s}`
 
   function loadSavedState(s: string): SavedState | null {
@@ -90,12 +84,12 @@
   function saveCurrentState() {
     if (typeof localStorage === 'undefined') return
     if (!data.slug) return
-    if (Object.keys(answers).length === 0) return
+    if (Object.keys(runner.answers).length === 0) return
     try {
       const state: SavedState = {
-        answers,
-        currentIndex,
-        startTime,
+        answers: runner.answers,
+        currentIndex: runner.currentIndex,
+        startTime: runner.startTime,
         savedAt: Date.now(),
       }
       localStorage.setItem(storageKey(data.slug), JSON.stringify(state))
@@ -112,11 +106,7 @@
 
   function resumeSurvey() {
     if (!resumePrompt) return
-    answers = resumePrompt.answers
-    // Clamp in case the survey was edited (questions removed) since save.
-    const maxIdx = Math.max(0, surveyPages.length - 1)
-    currentIndex = Math.min(resumePrompt.currentIndex, maxIdx)
-    startTime = resumePrompt.startTime || Date.now()
+    runner.loadFrom(resumePrompt)
     resumePrompt = null
     viewState = 'question'
   }
@@ -127,19 +117,19 @@
   }
 
   onMount(() => {
-    computeFingerprint().then(fp => { fingerprintHash = fp })
+    computeFingerprint().then((fp) => { fingerprintHash = fp })
 
-    // Surveyor mode: if a valid session exists for this slug, skip welcome.
+    // Surveyor session present for this slug: jump to the surveyor app shell.
+    // The respondent page itself is respondent-only now.
     if (data.slug && !data.error) {
       const session = loadSurveyorSession()
       if (session && session.slug === data.slug) {
-        surveyorSession = session
-        viewState = 'question'
-        startTime = Date.now()
+        goto(`/surveyor/s/${data.slug}/ready`, { replaceState: true })
+        return
       }
     }
 
-    if (!surveyorSession && data.slug && !data.error) {
+    if (data.slug && !data.error) {
       const saved = loadSavedState(data.slug)
       if (saved && saved.currentIndex >= 0 && Object.keys(saved.answers).length > 0) {
         resumePrompt = saved
@@ -157,209 +147,39 @@
 
   // Auto-save on every answer/index change while in the question view.
   $effect(() => {
-    void answers
-    void currentIndex
+    void runner.answers
+    void runner.currentIndex
     if (viewState !== 'question') return
     saveCurrentState()
   })
 
-  const questions = $derived(survey?.questions ?? [])
-  const skipRules = $derived(survey?.skipRules ?? [])
-  const settings = $derived(survey?.settings ?? { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true })
-
-  const answerableQuestions = $derived(getAnswerableQuestions(questions))
+  let questionErrors = $derived(runner.questionErrors)
 
   const welcomeQuestion = $derived(
-    questions.find(q => q.type === 'welcome_page') ?? null
+    survey?.questions.find((q) => q.type === 'welcome_page') ?? null,
   )
   const closingQuestion = $derived(
-    questions.find(q => q.type === 'closing_page') ?? null
+    survey?.questions.find((q) => q.type === 'closing_page') ?? null,
   )
-
-  let questionErrors = $state<Record<string, string>>({})
-
-  type SurveyPage = {
-    id: string
-    title?: string
-    description?: string
-    questions: Question[]
-  }
-
-  const surveyPages = $derived.by((): SurveyPage[] => {
-    if (!answerableQuestions.length) return []
-    
-    const mode = settings.displayMode || 'one_per_page'
-    
-    if (mode === 'scroll') {
-      return [{
-        id: 'all',
-        questions: answerableQuestions
-      }]
-    }
-
-    // one_per_page logic
-    const hasGroups = questions.some(q => q.type === 'question_group')
-    if (!hasGroups) {
-      // True one per page if no groups exist
-      return answerableQuestions.map(q => ({
-        id: q.id,
-        questions: [q]
-      }))
-    }
-
-    // Group-based paging — preserve original sortOrder
-    const pages: SurveyPage[] = []
-    const nonGroupQs = answerableQuestions.filter(q => !q.groupId)
-    if (nonGroupQs.length > 0) {
-      pages.push({ id: 'non-group', questions: nonGroupQs })
-    }
-
-    const groupQs = questions.filter(q => q.type === 'question_group')
-    for (const g of groupQs) {
-      const qInGroup = answerableQuestions.filter(q => q.groupId === g.id)
-      if (qInGroup.length > 0) {
-        pages.push({
-          id: g.id,
-          title: g.title,
-          description: g.description,
-          questions: qInGroup
-        })
-      }
-      // Questions with groupId are emitted above when their group header is encountered
-    }
-
-    return pages
-  })
-
-  const currentPage = $derived(
-    surveyPages[currentIndex] ?? null
-  )
-
-  const progress = $derived(
-    surveyPages.length > 0
-      ? Math.round(((currentIndex + 1) / surveyPages.length) * 100)
-      : 0
-  )
-
-  // Loose RFC-5321-style email check. Strict enough to catch typos like
-  // "foo@" or "foo.com" but doesn't try to validate every edge case the spec
-  // technically permits — server is the source of truth for delivery.
-  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-  function validateOne(q: Question, answer: AnswerValue): string | null {
-    // 1. Required check
-    if (q.required) {
-      if (answer === null || answer === undefined) return 'Pertanyaan ini wajib diisi.'
-      if (typeof answer === 'string' && answer.trim() === '') return 'Pertanyaan ini wajib diisi.'
-      if (Array.isArray(answer) && answer.length === 0) return 'Pilih minimal satu jawaban.'
-      if (q.type === 'contact_info') {
-        const c = answer as { firstName?: string; lastName?: string; phone?: string; email?: string }
-        const filled = [c.firstName, c.lastName, c.phone, c.email].some(v => v && v.trim() !== '')
-        if (!filled) return 'Isi minimal satu data kontak.'
-      }
-    }
-
-    // 2. Empty + optional → ok (file_upload still needs to check upload state below)
-    const isEmpty = answer === null || answer === undefined ||
-      (typeof answer === 'string' && answer.trim() === '') ||
-      (Array.isArray(answer) && answer.length === 0)
-    if (!q.required && isEmpty && q.type !== 'file_upload') return null
-
-    // 3. Number range
-    if (q.type === 'number') {
-      let answerNum: unknown = answer
-      if (typeof answer === 'string' && answer.trim() !== '') answerNum = Number(answer)
-      if (typeof answerNum === 'number' && !isNaN(answerNum)) {
-        const minVal = q.minValue !== undefined && q.minValue !== null ? Number(q.minValue) : null
-        const maxVal = q.maxValue !== undefined && q.maxValue !== null ? Number(q.maxValue) : null
-        if (minVal !== null && answerNum < minVal) return `Nilai minimal adalah ${minVal}.`
-        if (maxVal !== null && answerNum > maxVal) return `Nilai maksimal adalah ${maxVal}.`
-      }
-    }
-
-    // 4. Email format
-    if (q.type === 'email' && typeof answer === 'string' && answer.trim() !== '') {
-      if (!EMAIL_RE.test(answer.trim())) return 'Format email belum sesuai.'
-    }
-
-    // 5. Phone format — accept digits, +, spaces, dashes, parens; require 7-15 digits
-    if (q.type === 'phone' && typeof answer === 'string' && answer.trim() !== '') {
-      const digits = answer.replace(/\D/g, '')
-      if (digits.length < 7 || digits.length > 15) return 'Format nomor telepon belum sesuai.'
-    }
-
-    // 6. File upload still in progress
-    if (q.type === 'file_upload' && typeof answer === 'string' && answer === '__uploading__') {
-      return 'Tunggu hingga berkas selesai diunggah.'
-    }
-
-    return null
-  }
-
-  function validateAnswer(): boolean {
-    if (!currentPage) return true
-
-    const errors: Record<string, string> = {}
-    for (const q of currentPage.questions) {
-      const err = validateOne(q, answers[q.id])
-      if (err) errors[q.id] = err
-    }
-    questionErrors = errors
-
-    const isValid = Object.keys(errors).length === 0
-    if (!isValid) {
-      setTimeout(() => {
-        const firstErrorEl = document.querySelector('.error')
-        if (firstErrorEl) firstErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      }, 50)
-    }
-    return isValid
-  }
-
-  // Inline blur validation. Skipped when the answer is empty so that a
-  // first tab-out of an untouched required field does not immediately
-  // shout "wajib diisi" — that error still surfaces on Selanjutnya click.
-  // Format errors (email, phone, number range) DO surface on blur.
-  function handleBlur(qid: string) {
-    const q = currentPage?.questions.find(x => x.id === qid)
-    if (!q) return
-    const answer = answers[qid]
-    const isEmpty = answer === null || answer === undefined ||
-      (typeof answer === 'string' && answer.trim() === '') ||
-      (Array.isArray(answer) && answer.length === 0)
-    if (isEmpty) return
-
-    const err = validateOne(q, answer)
-    if (err) {
-      questionErrors = { ...questionErrors, [qid]: err }
-    }
-  }
-
+  const settings = $derived(survey?.settings ?? { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true })
 
   async function handleStart() {
     validationError = null
-    startTime = Date.now()
+    runner.reset()
     viewState = 'question'
-    currentIndex = 0
-    // Explicit fresh start — discard any stale resume state.
-    answers = {}
     clearSavedState()
     resumePrompt = null
   }
 
-  // End-of-survey verification gate.
-  // Order: selfie first (higher friction, capture while sunk-cost fresh), then location.
-  // Surveyor mode skips respondent verification gates entirely.
+  // End-of-survey verification gate. Order: selfie first, then location.
   async function handleFinish() {
-    if (!surveyorSession) {
-      if (settings.requireSelfie && !selfie) {
-        await runSelfieGate()
-        return
-      }
-      if (settings.requireLocation && !location) {
-        await requestLocationAndSubmit()
-        return
-      }
+    if (settings.requireSelfie && !selfie) {
+      await runSelfieGate()
+      return
+    }
+    if (settings.requireLocation && !location) {
+      await requestLocationAndSubmit()
+      return
     }
     await handleSubmit()
   }
@@ -369,13 +189,11 @@
     let permState: PermissionState | null = null
     try {
       if (typeof navigator !== 'undefined' && 'permissions' in navigator) {
-        // 'camera' may not be a recognized name in some browsers — query throws and we fall through.
         const status = await navigator.permissions.query({ name: 'camera' as PermissionName })
         permState = status.state
       }
     } catch {
       // Permissions API for camera is not universally supported (notably Safari).
-      // Fall through to letting SelfieCapturePage call getUserMedia and surface NotAllowedError.
     }
 
     if (permState === 'denied') {
@@ -387,7 +205,6 @@
 
   function onSelfieComplete(imageBase64: string) {
     selfie = { imageBase64 }
-    // Continue the gate chain: location next if required, else submit.
     handleFinish()
   }
 
@@ -405,7 +222,7 @@
         permState = status.state
       }
     } catch {
-      // Older Safari may reject the 'geolocation' query — fall through to prompt path
+      // Older Safari may reject the 'geolocation' query
     }
 
     if (permState === 'denied') {
@@ -429,13 +246,13 @@
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: true,
           timeout: 15000,
-          maximumAge: 0
+          maximumAge: 0,
         })
       })
       location = {
         latitude: pos.coords.latitude,
         longitude: pos.coords.longitude,
-        accuracy: pos.coords.accuracy
+        accuracy: pos.coords.accuracy,
       }
       locationRequesting = false
       await handleSubmit()
@@ -453,7 +270,6 @@
       validationError = errMsg
       viewState = 'location_prompt'
     }
-
   }
 
   async function handleSubmit() {
@@ -462,27 +278,17 @@
     viewState = 'submitting'
 
     try {
-      const emailQuestion = answerableQuestions.find(q => q.type === 'email')
-      const respondentEmail = emailQuestion ? (answers[emailQuestion.id] as string | undefined) : undefined
-      const durationSeconds = startTime > 0 ? Math.round((Date.now() - startTime) / 1000) : undefined
+      const emailQuestion = runner.answerableQuestions.find((q) => q.type === 'email')
+      const respondentEmail = emailQuestion ? (runner.answers[emailQuestion.id] as string | undefined) : undefined
+      const durationSeconds = runner.startTime > 0 ? Math.round((Date.now() - runner.startTime) / 1000) : undefined
 
-      await submitSurveyAnswers(slug, answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie, surveyorSession?.code)
+      await submitSurveyAnswers(slug, runner.answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie)
 
       clearSavedState()
-      if (surveyorSession) {
-        viewState = 'next_respondent'
-      } else {
-        viewState = 'closing'
-      }
+      viewState = 'closing'
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'submit_error'
-      if (msg === 'unauthorized') {
-        // Surveyor code has been invalidated — clear session and restart.
-        clearSurveyorSession()
-        surveyorSession = null
-        submitError = 'Sesi petugas tidak valid atau sudah berakhir. Silakan masuk kembali.'
-        viewState = 'welcome'
-      } else if (msg === 'already_submitted') {
+      if (msg === 'already_submitted') {
         submitError = 'Survei ini sudah pernah Anda isi sebelumnya.'
         viewState = 'question'
         clearSavedState()
@@ -498,24 +304,7 @@
     }
   }
 
-  function handleNextRespondent() {
-    answers = {}
-    currentIndex = 0
-    selfie = null
-    location = null
-    submitError = null
-    startTime = Date.now()
-    viewState = 'question'
-  }
-
-  function handleFinishSurveying() {
-    clearSurveyorSession()
-    surveyorSession = null
-    viewState = 'closing'
-  }
-
   // Step indicator for the verification gate.
-  // Counts how many gates the survey requires and what step the user is currently on.
   const gateSteps = $derived.by(() => {
     const steps: Array<'selfie' | 'location'> = []
     if (settings.requireSelfie) steps.push('selfie')
@@ -531,272 +320,9 @@
 
   const showStepIndicator = $derived(gateSteps.length > 1 && gateCurrentIndex >= 0)
 
-  async function handleNext() {
-    clearAutoAdvance()
-    validationError = null
-    questionErrors = {}
-
-    if (!validateAnswer()) return
-    if (!currentPage) return
-
-    let next: string | null | 'END' = null
-    for (const q of currentPage.questions) {
-      const skipDest = evaluateNext(q.id, answers, questions, skipRules)
-      if (skipDest) {
-        next = skipDest
-        break
-      }
-    }
-
-    if (next === 'END') {
-      await handleFinish()
-      return
-    }
-
-    if (next !== null) {
-      // Skip to specific question's page
-      const targetPageIdx = surveyPages.findIndex(p => p.questions.some(q => q.id === next))
-      if (targetPageIdx >= 0) {
-        currentIndex = targetPageIdx
-        window.scrollTo({ top: 0, behavior: 'smooth' })
-        return
-      }
-    }
-
-    // Normal advance
-    if (currentIndex < surveyPages.length - 1) {
-      currentIndex += 1
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    } else {
-      await handleFinish()
-    }
-  }
-
-  function handleBack() {
-    clearAutoAdvance()
-    validationError = null
-    questionErrors = {}
-    if (currentIndex > 0) {
-      currentIndex -= 1
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    }
-  }
-
-  function handleAnswer(qid: string, value: AnswerValue) {
-    answers = { ...answers, [qid]: value }
-    if (questionErrors[qid]) {
-      const newErrors = { ...questionErrors }
-      delete newErrors[qid]
-      questionErrors = newErrors
-    }
-    validationError = null
-
-    // Auto-advance fires only on single-question pages in one_per_page mode.
-    // Multi-question groups and scroll mode would jump away while the user
-    // might still be answering sibling questions.
-    if (
-      settings.displayMode !== 'scroll' &&
-      currentPage &&
-      currentPage.questions.length === 1 &&
-      currentPage.questions[0].id === qid
-    ) {
-      clearAutoAdvance()
-      if (shouldAutoAdvance(currentPage.questions[0], value)) {
-        autoAdvancing = true
-        autoAdvanceTimer = setTimeout(() => {
-          autoAdvanceTimer = null
-          autoAdvancing = false
-          handleNext()
-        }, 400)
-      }
-    }
-  }
-
-  function clearAutoAdvance() {
-    if (autoAdvanceTimer) {
-      clearTimeout(autoAdvanceTimer)
-      autoAdvanceTimer = null
-    }
-    autoAdvancing = false
-  }
-
-  // Single-tap question types where the answer is final on selection.
-  // Excluded: checkbox (multi), text inputs, matrix, contact_info, file_upload, number (range validation).
-  const AUTO_ADVANCE_TYPES = new Set([
-    'single_choice', 'yes_no', 'image_choice', 'nps', 'rating', 'opinion_scale', 'dropdown'
-  ])
-
-  function shouldAutoAdvance(q: Question, v: AnswerValue): boolean {
-    if (!AUTO_ADVANCE_TYPES.has(q.type)) return false
-    if (v === null || v === undefined) return false
-    if (typeof v === 'string' && v === '') return false
-
-    // For single-select with "Other" option: skip auto-advance when user is in
-    // the free-text branch — they still need to type.
-    if ((q.type === 'single_choice' || q.type === 'dropdown') && q.options) {
-      const otherOpt = q.options.find(o => o.isOther)
-      if (otherOpt && typeof v === 'string') {
-        const standardLabels = q.options.filter(o => !o.isOther).map(o => o.label)
-        if (!standardLabels.includes(v)) return false
-      }
-    }
-    return true
-  }
-
-  // Scroll the focused input toward the viewport center on small screens so
-  // the soft keyboard doesn't cover it. Defer briefly to let the keyboard
-  // animate up first; without the delay the scroll happens before the
-  // visual viewport shrinks and the input ends up hidden again.
-  function handleFocusIn(e: FocusEvent) {
-    if (viewState !== 'question') return
-    if (typeof window === 'undefined' || window.innerWidth >= 768) return
-    const target = e.target as HTMLElement | null
-    if (!target) return
-    if (!['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return
-    if (!target.closest('.question-stage')) return
-    setTimeout(() => {
-      target.scrollIntoView({ block: 'center', behavior: 'smooth' })
-    }, 250)
-  }
-
-  // Wheel-based navigation. At the very top of the page, scrolling up jumps
-  // back; at the very bottom, scrolling down jumps forward. Inside content
-  // taller than the viewport (e.g. mobile matrix), normal scrolling still
-  // works — the browser scrolls until it hits the boundary, then a further
-  // wheel tick triggers navigation.
-  function handleWheel(e: WheelEvent) {
-    if (viewState !== 'question') return
-    if (settings.displayMode === 'scroll') return
-    if (!currentPage) return
-    if (autoAdvancing || submitting) return
-    if (Date.now() - lastNavTime < 700) return
-
-    const sy = window.scrollY
-    const sh = document.documentElement.scrollHeight
-    const vh = window.innerHeight
-
-    if (e.deltaY < -30 && sy <= 0 && currentIndex > 0) {
-      lastNavTime = Date.now()
-      handleBack()
-    } else if (e.deltaY > 30 && sy + vh >= sh - 2 && !isLastQuestion) {
-      lastNavTime = Date.now()
-      handleNext()
-    }
-  }
-
-  function handleTouchStart(e: TouchEvent) {
-    if (viewState !== 'question') return
-    touchStartY = e.touches[0]?.clientY ?? 0
-    touchStartScrollY = window.scrollY
-  }
-
-  // Mobile swipe: at scroll-top a downward swipe goes back; at scroll-bottom
-  // an upward swipe advances. The 80 px threshold filters incidental motion.
-  function handleTouchEnd(e: TouchEvent) {
-    if (viewState !== 'question') return
-    if (settings.displayMode === 'scroll') return
-    if (!currentPage) return
-    if (autoAdvancing || submitting) return
-    if (Date.now() - lastNavTime < 700) return
-
-    const endY = e.changedTouches[0]?.clientY ?? 0
-    const deltaY = endY - touchStartY
-    const sy = window.scrollY
-    const sh = document.documentElement.scrollHeight
-    const vh = window.innerHeight
-
-    if (deltaY > 80 && touchStartScrollY <= 0 && sy <= 0 && currentIndex > 0) {
-      lastNavTime = Date.now()
-      handleBack()
-    } else if (deltaY < -80 && touchStartScrollY + vh >= sh - 2 && sy + vh >= sh - 2 && !isLastQuestion) {
-      lastNavTime = Date.now()
-      handleNext()
-    }
-  }
-
-  // Keyboard handling: ArrowUp/Down (any page) and Enter/letters (single-q
-  // pages only). Multi-question groups don't get hijacked by Enter/letters.
-  function handleKeydown(e: KeyboardEvent) {
-    if (viewState !== 'question') return
-    if (submitting) return
-
-    const target = e.target as HTMLElement | null
-    if (!target) return
-    const tag = target.tagName
-    if (tag === 'TEXTAREA') return
-    if (tag === 'INPUT') return
-    if (tag === 'SELECT') return
-    if (target.isContentEditable) return
-
-    // Arrow / PageUp-Down work in any one_per_page configuration so users can
-    // page through groups too. Disabled in scroll mode (browser owns scroll).
-    if (settings.displayMode !== 'scroll') {
-      if (e.key === 'ArrowUp' || e.key === 'PageUp') {
-        if (currentIndex > 0) {
-          e.preventDefault()
-          handleBack()
-        }
-        return
-      }
-      if (e.key === 'ArrowDown' || e.key === 'PageDown') {
-        if (!isLastQuestion) {
-          e.preventDefault()
-          handleNext()
-        }
-        return
-      }
-    }
-
-    // Enter/letter shortcuts gate to one_per_page + single question.
-    if (settings.displayMode === 'scroll') return
-    if (!currentPage || currentPage.questions.length !== 1) return
-
-    if (e.key === 'Enter') {
-      if (tag === 'BUTTON') return // let native button activation run
-      e.preventDefault()
-      handleNext()
-      return
-    }
-
-    // Letter shortcuts. Modifier-aware so Cmd+R, Ctrl+L etc. still work.
-    if (e.altKey || e.ctrlKey || e.metaKey) return
-    if (e.key.length !== 1) return
-    const key = e.key.toUpperCase()
-    const q = currentPage.questions[0]
-
-    if (q.type === 'yes_no') {
-      if (key === 'Y') { e.preventDefault(); handleAnswer(q.id, 'yes'); return }
-      if (key === 'T' || key === 'N') { e.preventDefault(); handleAnswer(q.id, 'no'); return }
-      return
-    }
-
-    if (q.type === 'single_choice' || q.type === 'checkbox' || q.type === 'image_choice') {
-      if (!q.options) return
-      const standard = q.options.filter(o => !o.isOther)
-      const other = q.options.find(o => o.isOther)
-      const opts = other ? [...standard, other] : standard
-      const idx = key.charCodeAt(0) - 65
-      if (idx < 0 || idx >= opts.length) return
-      const opt = opts[idx]
-      e.preventDefault()
-
-      if (q.type === 'checkbox') {
-        const current = Array.isArray(answers[q.id]) ? [...(answers[q.id] as string[])] : []
-        const existingIdx = current.indexOf(opt.label)
-        if (existingIdx >= 0) current.splice(existingIdx, 1)
-        else current.push(opt.label)
-        handleAnswer(q.id, current)
-      } else {
-        handleAnswer(q.id, opt.label)
-      }
-    }
-  }
-
-  // Focus the first input on each new page. For input-less types
-  // (choice / rating / etc), focus the first question heading so screen
-  // readers announce it and Enter-to-advance works without prior tabbing.
+  // Focus the first input on each new page.
   $effect(() => {
-    const id = currentPage?.id
+    const id = runner.currentPage?.id
     if (viewState !== 'question' || !id) return
     void id
     void tick().then(() => {
@@ -804,9 +330,9 @@
       if (!stage) return
       const inputTypes = new Set([
         'short_text', 'long_text', 'email', 'phone', 'website',
-        'number', 'date', 'contact_info'
+        'number', 'date', 'contact_info',
       ])
-      const firstQ = currentPage?.questions[0]
+      const firstQ = runner.currentPage?.questions[0]
       if (firstQ && inputTypes.has(firstQ.type)) {
         const input = stage.querySelector<HTMLInputElement | HTMLTextAreaElement>('input, textarea')
         input?.focus({ preventScroll: true })
@@ -817,27 +343,46 @@
     })
   })
 
-  const isLastQuestion = $derived(currentIndex === surveyPages.length - 1)
-  const nextButtonLabel = $derived(isLastQuestion ? 'Kirim Jawaban' : 'Selanjutnya')
   const errorType = $derived(
     data.error === 'not_found' ? 'not_found' as const
     : data.error === 'server_error' ? 'server_error' as const
-    : 'unknown' as const
+    : 'unknown' as const,
   )
 
-  // Metadata
   const pageTitle = $derived(
-    survey ? `${survey.title} | Logika Teta` : 'Logika Teta Survey'
+    survey ? `${survey.title} | Logika Teta` : 'Logika Teta Survey',
   )
   const metaDescription = $derived(
-    (welcomeQuestion?.description ?? survey?.title ?? 'Isi survei dari Logika Teta — platform riset dan analisis statistik.').slice(0, 160)
+    (welcomeQuestion?.description ?? survey?.title ?? 'Isi survei dari Logika Teta — platform riset dan analisis statistik.').slice(0, 160),
   )
   const ogImage = $derived(
-    welcomeQuestion?.imageUrl ?? `${$page.url.origin}/logo-logika-teta.png`
+    welcomeQuestion?.imageUrl ?? `${$page.url.origin}/logo-logika-teta.png`,
   )
   const canonicalUrl = $derived(
-    `${$page.url.origin}/s/${data.slug}`
+    `${$page.url.origin}/s/${data.slug}`,
   )
+
+  // Event wiring — only react while on the question stage and not submitting.
+  function onKeydown(e: KeyboardEvent) {
+    if (viewState !== 'question' || submitting) return
+    runner.handleKeydown(e)
+  }
+  function onFocusIn(e: FocusEvent) {
+    if (viewState !== 'question') return
+    runner.handleFocusIn(e)
+  }
+  function onWheel(e: WheelEvent) {
+    if (viewState !== 'question' || submitting) return
+    runner.handleWheel(e)
+  }
+  function onTouchStart(e: TouchEvent) {
+    if (viewState !== 'question') return
+    runner.handleTouchStart(e)
+  }
+  function onTouchEnd(e: TouchEvent) {
+    if (viewState !== 'question' || submitting) return
+    runner.handleTouchEnd(e)
+  }
 </script>
 
 <svelte:head>
@@ -845,17 +390,14 @@
   <meta name="description" content={metaDescription} />
   <link rel="canonical" href={canonicalUrl} />
 
-  <!-- Survey pages are reached via direct link, not search -->
   <meta name="robots" content="noindex, nofollow" />
 
-  <!-- Open Graph -->
   <meta property="og:title" content={pageTitle} />
   <meta property="og:description" content={metaDescription} />
   <meta property="og:url" content={canonicalUrl} />
   <meta property="og:image" content={ogImage} />
   <meta property="og:type" content="website" />
 
-  <!-- Twitter Card -->
   <meta name="twitter:title" content={pageTitle} />
   <meta name="twitter:description" content={metaDescription} />
   <meta name="twitter:image" content={ogImage} />
@@ -863,21 +405,14 @@
 </svelte:head>
 
 <svelte:window
-  onkeydown={handleKeydown}
-  onfocusin={handleFocusIn}
-  onwheel={handleWheel}
-  ontouchstart={handleTouchStart}
-  ontouchend={handleTouchEnd}
+  onkeydown={onKeydown}
+  onfocusin={onFocusIn}
+  onwheel={onWheel}
+  ontouchstart={onTouchStart}
+  ontouchend={onTouchEnd}
 />
 
 <div class="page" class:page-question={viewState === 'question'}>
-  {#if surveyorSession}
-    <SurveyorBanner
-      displayName={surveyorSession.displayName}
-      onlogout={() => { clearSurveyorSession(); surveyorSession = null; viewState = 'welcome' }}
-    />
-  {/if}
-
   {#if viewState === 'error'}
     <div class="centered-wrap">
       <ErrorPage type={errorType} />
@@ -974,34 +509,34 @@
   {:else if viewState === 'question'}
     <div class="survey-wrap">
       {#if settings.showProgress}
-        <ProgressBar progress={progress} />
+        <ProgressBar progress={runner.progress} />
       {/if}
 
       <main class="content">
         <div
           class="question-stage"
-          class:single-question={currentPage?.questions.length === 1 && settings.displayMode !== 'scroll'}
+          class:single-question={runner.currentPage?.questions.length === 1 && settings.displayMode !== 'scroll'}
         >
-          {#if currentPage}
-            {#key currentPage.id}
+          {#if runner.currentPage}
+            {#key runner.currentPage.id}
               <div
                 class="stage-slide"
                 in:fly={{ y: prefersReducedMotion ? 0 : 16, duration: prefersReducedMotion ? 0 : 220, easing: cubicOut }}
               >
-                {#if currentPage.title}
+                {#if runner.currentPage.title}
                   <SectionHeader
-                    title={currentPage.title}
-                    description={currentPage.description ?? null}
+                    title={runner.currentPage.title}
+                    description={runner.currentPage.description ?? null}
                   />
                 {/if}
-                {#each currentPage.questions as q (q.id)}
+                {#each runner.currentPage.questions as q (q.id)}
                   <QuestionCard
                     question={q}
-                    questionNumber={settings.showNumbers ? getQuestionNumber(q, questions) : ''}
-                    answer={answers[q.id] ?? null}
+                    questionNumber={settings.showNumbers ? getQuestionNumber(q, runner.questions) : ''}
+                    answer={runner.answers[q.id] ?? null}
                     validationError={questionErrors[q.id] ?? null}
-                    onAnswer={(val) => handleAnswer(q.id, val)}
-                    onBlur={() => handleBlur(q.id)}
+                    onAnswer={(val) => runner.handleAnswer(q.id, val)}
+                    onBlur={() => runner.handleBlur(q.id)}
                     {slug}
                   />
                 {/each}
@@ -1014,7 +549,7 @@
           <div class="submit-error">{submitError}</div>
         {/if}
 
-        {#if autoAdvancing}
+        {#if runner.autoAdvancing}
           <div class="auto-advance-hint" aria-live="polite">
             <span class="auto-advance-spinner" aria-hidden="true"></span>
             Lanjut otomatis…
@@ -1022,18 +557,18 @@
         {/if}
 
         <div class="nav">
-          {#if currentIndex > 0 && settings.showNavArrows}
+          {#if runner.currentIndex > 0 && settings.showNavArrows}
             <NavButton
               label="Sebelumnya"
-              onClick={handleBack}
+              onClick={runner.handleBack}
               variant="secondary"
               disabled={submitting}
             />
           {/if}
           <div class="nav-right">
             <NavButton
-              label={nextButtonLabel}
-              onClick={handleNext}
+              label={runner.nextButtonLabel}
+              onClick={runner.handleNext}
               variant="primary"
               disabled={submitting}
               loading={submitting}
@@ -1041,14 +576,6 @@
           </div>
         </div>
       </main>
-    </div>
-
-  {:else if viewState === 'next_respondent'}
-    <div class="centered-wrap">
-      <NextRespondentPage
-        onnext={handleNextRespondent}
-        onfinish={handleFinishSurveying}
-      />
     </div>
 
   {:else if viewState === 'closing'}
@@ -1148,9 +675,6 @@
     padding: 16px 0;
   }
 
-  /* Vertical-center only when a single question owns the page (one_per_page).
-     Multi-question groups and scroll mode stack from the top so all cards
-     are reachable without compressed centering. */
   .question-stage.single-question {
     justify-content: center;
   }
@@ -1178,9 +702,6 @@
     margin-left: auto;
   }
 
-  /* Mobile: pin the action bar to the viewport bottom so it stays reachable
-     in scroll mode and on long matrix pages. Falls back to inline behavior
-     when content fits, since position: sticky is a no-op without scroll. */
   @media (max-width: 767px) {
     .nav {
       position: sticky;
@@ -1204,8 +725,6 @@
     margin-top: 8px;
   }
 
-  /* Visible cue while the auto-advance timer is counting down so users
-     understand why the next screen is about to appear. */
   .auto-advance-hint {
     display: inline-flex;
     align-items: center;
@@ -1230,7 +749,6 @@
     to { transform: rotate(360deg); }
   }
 
-  /* Resume prompt — shown on welcome state when localStorage has saved answers */
   .resume-card {
     background: white;
     border-radius: var(--radius-xl);
