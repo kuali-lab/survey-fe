@@ -74,9 +74,9 @@
   <meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
-{#if session && data.survey}
+{#if session}
   <SurveyorAppShell
-    surveyTitle={data.survey.title}
+    surveyTitle={data.survey?.title ?? 'Survei'}
     displayName={session.displayName}
     slug={data.slug}
     todayCount={session.stats.todayCount}

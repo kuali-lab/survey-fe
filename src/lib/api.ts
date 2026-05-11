@@ -40,13 +40,45 @@ function normalizeSurvey(raw: Record<string, unknown>): Survey {
   }
 }
 
+const SURVEY_CACHE_PREFIX = 'survey-fe:surveyCache:'
+
+function readSurveyCache(slug: string): Survey | null {
+  if (typeof localStorage === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(SURVEY_CACHE_PREFIX + slug)
+    if (!raw) return null
+    return JSON.parse(raw) as Survey
+  } catch {
+    return null
+  }
+}
+
+function writeSurveyCache(slug: string, survey: Survey): void {
+  if (typeof localStorage === 'undefined') return
+  try { localStorage.setItem(SURVEY_CACHE_PREFIX + slug, JSON.stringify(survey)) } catch { /* quota */ }
+}
+
 export async function fetchSurvey(slug: string, fetchFn: typeof fetch = fetch): Promise<Survey> {
-  const res = await fetchFn(`${PUBLIC_API_BASE_URL}/s/${slug}`)
-  if (res.status === 404) throw new Error('not_found')
-  if (res.status === 410) throw new Error('survey_closed')
-  if (!res.ok) throw new Error('server_error')
-  const data = await res.json()
-  return normalizeSurvey(data.survey as Record<string, unknown>)
+  try {
+    const res = await fetchFn(`${PUBLIC_API_BASE_URL}/s/${slug}`)
+    if (res.status === 404) throw new Error('not_found')
+    if (res.status === 410) throw new Error('survey_closed')
+    if (!res.ok) throw new Error('server_error')
+    const data = await res.json()
+    const survey = normalizeSurvey(data.survey as Record<string, unknown>)
+    writeSurveyCache(slug, survey)
+    return survey
+  } catch (err) {
+    // Network failure (TypeError from fetch) or generic server_error: fall
+    // back to a cached copy if the surveyor has visited this slug while
+    // online before. Real terminal states (not_found / survey_closed) must
+    // surface — don't mask them with stale cache.
+    const msg = err instanceof Error ? err.message : ''
+    if (msg === 'not_found' || msg === 'survey_closed') throw err
+    const cached = readSurveyCache(slug)
+    if (cached) return cached
+    throw err
+  }
 }
 
 
