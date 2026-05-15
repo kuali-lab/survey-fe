@@ -252,7 +252,7 @@ export class SurveyRunner {
 
     if (next !== null) {
       const targetPageIdx = this.surveyPages.findIndex((p) => p.questions.some((q) => q.id === next))
-      if (targetPageIdx >= 0) {
+      if (targetPageIdx > this.currentIndex) {
         this.currentIndex = targetPageIdx
         if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
         return
