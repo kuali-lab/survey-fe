@@ -1,12 +1,12 @@
 <script lang="ts">
   import type { PageData } from './$types.js'
   import type { ViewState, Answers } from '$lib/types.js'
-  import { submitSurveyAnswers } from '$lib/api.js'
+  import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft } from '$lib/api.js'
   import { computeFingerprint } from '$lib/fingerprint.js'
   import { getQuestionNumber } from '$lib/utils.js'
   import { page } from '$app/stores'
   import { goto } from '$app/navigation'
-  import { onMount, tick } from 'svelte'
+  import { onMount, tick, untrack } from 'svelte'
   import { fly } from 'svelte/transition'
   import { cubicOut } from 'svelte/easing'
 
@@ -117,7 +117,17 @@
   }
 
   onMount(() => {
-    computeFingerprint().then((fp) => { fingerprintHash = fp })
+    computeFingerprint().then(async (fp) => {
+      fingerprintHash = fp
+      if (!resumePrompt && fp && data.slug && !data.error) {
+        try {
+          const serverDraft = await getDraft(data.slug, fp)
+          if (serverDraft && serverDraft.currentPageIndex > 0 && Object.keys(serverDraft.answers).length > 0) {
+            resumePrompt = { answers: serverDraft.answers, currentIndex: serverDraft.currentPageIndex, startTime: Date.now() }
+          }
+        } catch { /* server unavailable — continue without draft */ }
+      }
+    })
 
     // Surveyor session present for this slug: jump to the surveyor app shell.
     // The respondent page itself is respondent-only now.
@@ -151,6 +161,20 @@
     void runner.currentIndex
     if (viewState !== 'question') return
     saveCurrentState()
+  })
+
+  // Save draft to backend each time respondent navigates to a new page.
+  // Only tracks currentIndex — answers/viewState/slug/fp read with untrack() so they don't trigger re-runs.
+  let _draftInitialSkip = true
+  $effect(() => {
+    const idx = runner.currentIndex
+    const fp  = untrack(() => fingerprintHash)
+    const vs  = untrack(() => viewState)
+    const ans = untrack(() => runner.answers)
+    const s   = untrack(() => slug)
+    if (vs !== 'question') return
+    if (_draftInitialSkip) { _draftInitialSkip = false; return }
+    if (fp && s) saveDraft(s, fp, ans, idx).catch(() => {})
   })
 
   let questionErrors = $derived(runner.questionErrors)
@@ -285,6 +309,7 @@
       await submitSurveyAnswers(slug, runner.answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie)
 
       clearSavedState()
+      if (fingerprintHash && slug) deleteDraft(slug, fingerprintHash).catch(() => {})
       viewState = 'closing'
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'submit_error'

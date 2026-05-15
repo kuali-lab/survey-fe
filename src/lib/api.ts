@@ -116,6 +116,34 @@ export async function submitSurveyAnswers(
   if (!res.ok) throw new Error('submit_error')
 }
 
+export async function saveDraft(
+  slug: string,
+  sessionKey: string,
+  answers: Answers,
+  currentPageIndex: number,
+): Promise<void> {
+  await fetch(`${PUBLIC_API_BASE_URL}/s/${slug}/draft`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionKey, answers, currentPageIndex }),
+  })
+}
+
+export async function getDraft(
+  slug: string,
+  sessionKey: string,
+): Promise<{ answers: Answers; currentPageIndex: number } | null> {
+  const res = await fetch(`${PUBLIC_API_BASE_URL}/s/${slug}/draft?sessionKey=${encodeURIComponent(sessionKey)}`)
+  if (!res.ok) return null
+  return res.json()
+}
+
+export async function deleteDraft(slug: string, sessionKey: string): Promise<void> {
+  await fetch(`${PUBLIC_API_BASE_URL}/s/${slug}/draft?sessionKey=${encodeURIComponent(sessionKey)}`, {
+    method: 'DELETE',
+  })
+}
+
 export type SurveyorStatsApiResponse = {
   todayCount: number
   totalCount: number
