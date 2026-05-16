@@ -36,7 +36,7 @@
 </script>
 
 <svelte:head>
-  <title>Masuk Petugas · Logika Teta</title>
+  <title>Masuk Petugas · Logika Statistik</title>
   <meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 

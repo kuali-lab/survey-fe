@@ -60,7 +60,7 @@
 </script>
 
 <svelte:head>
-  <title>{data.survey?.title ?? 'Masuk Petugas'} · Logika Teta</title>
+  <title>{data.survey?.title ?? 'Masuk Petugas'} · Logika Statistik</title>
   <meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 

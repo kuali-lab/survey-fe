@@ -1,7 +1,7 @@
 {
-  "name": "Logika Teta Survey",
-  "short_name": "LT Survey",
-  "description": "Isi survei dari Logika Teta — platform riset dan analisis statistik.",
+  "name": "Logika Statistik Survey",
+  "short_name": "LS Survey",
+  "description": "Isi survei dari Logika Statistik — platform riset dan analisis statistik.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f7f8f9",
