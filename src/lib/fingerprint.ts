@@ -14,7 +14,7 @@ export async function computeFingerprint(): Promise<string | null> {
     ctx.fillRect(0, 0, 200, 40)
     ctx.fillStyle = '#069'
     ctx.font = '14px Arial, sans-serif'
-    ctx.fillText('Logika Teta — fp', 4, 24)
+    ctx.fillText('Logika Statistik — fp', 4, 24)
     ctx.fillStyle = 'rgba(100, 200, 50, 0.8)'
     ctx.font = '11px Georgia, serif'
     ctx.fillText('fingerprint', 80, 36)

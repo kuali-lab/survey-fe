@@ -375,10 +375,10 @@
   )
 
   const pageTitle = $derived(
-    survey ? `${survey.title} | Logika Teta` : 'Logika Teta Survey',
+    survey ? `${survey.title} | Logika Statistik` : 'Logika Statistik Survey',
   )
   const metaDescription = $derived(
-    (welcomeQuestion?.description ?? survey?.title ?? 'Isi survei dari Logika Teta — platform riset dan analisis statistik.').slice(0, 160),
+    (welcomeQuestion?.description ?? survey?.title ?? 'Isi survei dari Logika Statistik — platform riset dan analisis statistik.').slice(0, 160),
   )
   const ogImage = $derived(
     welcomeQuestion?.imageUrl ?? `${$page.url.origin}/logo-logika-teta.png`,

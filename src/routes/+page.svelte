@@ -3,8 +3,8 @@
 </script>
 
 <svelte:head>
-  <title>Logika Teta Survey</title>
-  <meta name="description" content="Isi survei dari Logika Teta — platform riset dan analisis statistik." />
+  <title>Logika Statistik Survey</title>
+  <meta name="description" content="Isi survei dari Logika Statistik — platform riset dan analisis statistik." />
   <meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 

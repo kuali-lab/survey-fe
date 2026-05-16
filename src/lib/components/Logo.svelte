@@ -7,7 +7,7 @@
   viewBox="0 0 173 35"
   fill="none"
   xmlns="http://www.w3.org/2000/svg"
-  aria-label="Logika Teta"
+  aria-label="Logika Statistik"
   role="img"
 >
   <g clip-path="url(#clip0_logo)">
