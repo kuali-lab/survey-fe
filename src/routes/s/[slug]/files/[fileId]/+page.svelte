@@ -68,19 +68,35 @@
 	<!-- Main Preview Area -->
 	<main class="preview-area">
 		{#if isImage}
-			<img 
-				src={rawUrl} 
-				alt={meta.name} 
-				class="preview-image" 
-				draggable="false"
-			/>
+			<div class="patreon-card">
+				<div class="patreon-image-wrapper">
+					<img 
+						src={rawUrl} 
+						alt={meta.name} 
+						class="patreon-image" 
+						draggable="false"
+					/>
+				</div>
+				<div class="patreon-content">
+					<h2 class="patreon-title">{meta.name}</h2>
+					<p class="patreon-meta">{formatSize(meta.size)} • {meta.type}</p>
+				</div>
+			</div>
 		{:else if isVideo}
-			<!-- svelte-ignore a11y-media-has-caption -->
-			<video 
-				src={rawUrl} 
-				controls 
-				class="preview-video"
-			></video>
+			<div class="patreon-card">
+				<div class="patreon-image-wrapper bg-black">
+					<!-- svelte-ignore a11y-media-has-caption -->
+					<video 
+						src={rawUrl} 
+						controls 
+						class="patreon-video"
+					></video>
+				</div>
+				<div class="patreon-content">
+					<h2 class="patreon-title">{meta.name}</h2>
+					<p class="patreon-meta">{formatSize(meta.size)} • {meta.type}</p>
+				</div>
+			</div>
 		{:else if isAudio}
 			<div class="audio-card">
 				<div class="audio-icon-wrapper">
@@ -265,31 +281,71 @@
 	.preview-area {
 		flex: 1;
 		position: relative;
-		overflow: hidden;
+		overflow-y: auto;
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		justify-content: center;
-		padding: 16px;
+		padding: 32px 16px;
 		background-color: #0f111a;
 	}
 
-	.preview-image {
-		max-width: 100%;
-		max-height: 100%;
-		object-fit: contain;
-		border-radius: 4px;
-		user-select: none;
-		filter: drop-shadow(0 25px 25px rgba(0, 0, 0, 0.5));
+	/* Patreon Style Card */
+	.patreon-card {
+		width: 100%;
+		max-width: 760px;
+		background-color: #fdfcf7; /* Putih agak kuning / off-white */
+		border-radius: 12px;
+		overflow: hidden;
+		box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+		border: 1px solid rgba(255, 255, 255, 0.05);
+		display: flex;
+		flex-direction: column;
+		margin: auto;
 	}
 
-	.preview-video {
-		max-width: 100%;
-		max-height: 100%;
-		border-radius: 8px;
+	.patreon-image-wrapper {
+		width: 100%;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		background-color: #fdfcf7;
+		border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+	}
+
+	.patreon-image-wrapper.bg-black {
 		background-color: #000000;
-		box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+	}
+
+	.patreon-image {
+		width: 100%;
+		max-height: 70vh;
+		object-fit: contain;
+		user-select: none;
+	}
+
+	.patreon-video {
+		width: 100%;
+		max-height: 70vh;
 		outline: none;
-		border: 1px solid rgba(255, 255, 255, 0.1);
+	}
+
+	.patreon-content {
+		padding: 24px;
+		color: #111827;
+	}
+
+	.patreon-title {
+		font-size: 20px;
+		font-weight: 700;
+		margin: 0 0 6px;
+		line-height: 1.3;
+		word-break: break-word;
+	}
+
+	.patreon-meta {
+		font-size: 14px;
+		color: #4b5563;
+		margin: 0;
 	}
 
 	/* Audio Card */
