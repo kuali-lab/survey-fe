@@ -68,12 +68,14 @@
 	<!-- Main Preview Area -->
 	<main class="preview-area">
 		{#if isImage}
-			<img 
-				src={rawUrl} 
-				alt={meta.name} 
-				class="preview-image" 
-				draggable="false"
-			/>
+			<div class="image-frame">
+				<img 
+					src={rawUrl} 
+					alt={meta.name} 
+					class="preview-image" 
+					draggable="false"
+				/>
+			</div>
 		{:else if isVideo}
 			<!-- svelte-ignore a11y-media-has-caption -->
 			<video 
@@ -273,13 +275,26 @@
 		background-color: #0f111a;
 	}
 
+	.image-frame {
+		max-width: 100%;
+		max-height: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 32px;
+		background-color: #fdfcf7; /* Putih agak kuning */
+		border-radius: 12px;
+		box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+		border: 1px solid rgba(255, 255, 255, 0.05);
+	}
+
 	.preview-image {
 		max-width: 100%;
 		max-height: 100%;
 		object-fit: contain;
 		border-radius: 4px;
 		user-select: none;
-		filter: drop-shadow(0 25px 25px rgba(0, 0, 0, 0.5));
+		box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 	}
 
 	.preview-video {
