@@ -660,7 +660,7 @@
       <!-- File already uploaded -->
       <div class="file-uploaded">
         {#if isImageUrl(uploadUrl)}
-          <img class="file-preview" src={uploadUrl} alt="Pratinjau berkas" />
+          <img class="file-preview" src="{uploadUrl}{uploadUrl.includes('?') ? '&' : '?'}action=raw" alt="Pratinjau berkas" />
         {:else}
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" class="file-icon">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
