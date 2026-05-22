@@ -72,6 +72,12 @@
 				<div class="patreon-image-wrapper">
 					<img 
 						src={rawUrl} 
+						alt="" 
+						class="ambient-bg" 
+						aria-hidden="true"
+					/>
+					<img 
+						src={rawUrl} 
 						alt={meta.name} 
 						class="patreon-image" 
 						draggable="false"
@@ -305,11 +311,26 @@
 
 	.patreon-image-wrapper {
 		width: 100%;
+		position: relative;
 		display: flex;
 		justify-content: center;
 		align-items: center;
-		background-color: #fdfcf7;
+		background-color: #1a1d27; /* Darker base for ambient effect */
 		border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+		overflow: hidden;
+	}
+
+	.ambient-bg {
+		position: absolute;
+		top: -10%;
+		left: -10%;
+		width: 120%;
+		height: 120%;
+		object-fit: cover;
+		filter: blur(50px) saturate(150%);
+		opacity: 0.5;
+		z-index: 0;
+		pointer-events: none;
 	}
 
 	.patreon-image-wrapper.bg-black {
@@ -321,6 +342,7 @@
 		max-height: 70vh;
 		object-fit: contain;
 		user-select: none;
+		z-index: 1;
 	}
 
 	.patreon-video {
