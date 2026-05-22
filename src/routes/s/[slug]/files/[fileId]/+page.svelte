@@ -8,6 +8,7 @@
 		AudioLinesIcon,
 		AlertCircle
 	} from 'lucide-svelte';
+	import Logo from '$lib/components/Logo.svelte';
 	
 	export let data;
 	
@@ -31,81 +32,116 @@
 </script>
 
 <svelte:head>
-	<title>Preview File - Logika Teta</title>
+	<title>{meta.name} - Logika Statistik</title>
 </svelte:head>
 
-<div class="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-	<div class="bg-white rounded-xl shadow-sm border border-gray-200 max-w-3xl w-full overflow-hidden flex flex-col">
-		
-		<!-- Header -->
-		<div class="p-4 border-b border-gray-100 flex items-center gap-3 bg-gray-50/50">
-			<div class="p-2 bg-blue-50 text-blue-600 rounded-lg">
-				{#if isImage}
-					<ImageIcon size={20} />
-				{:else if isVideo}
-					<VideoIcon size={20} />
-				{:else if isAudio}
-					<AudioLinesIcon size={20} />
-				{:else if isPdf}
-					<FileTextIcon size={20} />
-				{:else}
-					<FileIcon size={20} />
-				{/if}
-			</div>
-			<div class="flex-1 min-w-0">
-				<h2 class="text-sm font-semibold text-gray-900 truncate" title={meta.name}>{meta.name}</h2>
-				<p class="text-xs text-gray-500">{formatSize(meta.size)} • {meta.type}</p>
-			</div>
-			<a 
-				href={downloadUrl} 
-				class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
-			>
-				<DownloadIcon size={16} />
-				<span class="hidden sm:inline">Download</span>
+<div class="h-screen w-full flex flex-col bg-[#0f111a] text-gray-200 overflow-hidden font-sans">
+	
+	<!-- Top Navbar -->
+	<header class="h-16 shrink-0 bg-white border-b border-gray-200 shadow-sm flex items-center justify-between px-4 sm:px-6 z-10 text-gray-900">
+		<div class="flex items-center gap-4">
+			<a href="/" class="hover:opacity-80 transition-opacity">
+				<Logo class="h-8" />
 			</a>
 		</div>
 
-		<!-- Preview Area -->
-		<div class="flex-1 min-h-[300px] max-h-[70vh] bg-gray-100 flex items-center justify-center overflow-auto p-4">
-			{#if isImage}
-				<img 
-					src={rawUrl} 
-					alt={meta.name} 
-					class="max-w-full max-h-[60vh] object-contain rounded border border-gray-200 shadow-sm bg-white" 
-				/>
-			{:else if isVideo}
-				<!-- svelte-ignore a11y-media-has-caption -->
-				<video 
-					src={rawUrl} 
-					controls 
-					class="max-w-full max-h-[60vh] rounded border border-gray-200 shadow-sm bg-black"
-				></video>
-			{:else if isAudio}
-				<div class="w-full max-w-md bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center gap-4">
-					<div class="p-4 bg-gray-50 rounded-full text-gray-400">
-						<AudioLinesIcon size={48} />
-					</div>
-					<audio src={rawUrl} controls class="w-full"></audio>
+		<div class="hidden md:flex flex-col items-center flex-1 mx-4 max-w-xl">
+			<h1 class="text-sm font-semibold truncate w-full text-center" title={meta.name}>{meta.name}</h1>
+			<p class="text-xs text-gray-500">{formatSize(meta.size)} • {meta.type}</p>
+		</div>
+
+		<div class="flex items-center gap-3">
+			<a 
+				href={downloadUrl} 
+				class="inline-flex items-center gap-2 px-4 py-2 bg-[#f4b41a] hover:bg-[#dca012] text-white text-sm font-semibold rounded-full transition-colors shadow-sm"
+			>
+				<DownloadIcon size={16} strokeWidth={2.5} />
+				<span class="hidden sm:inline">Download</span>
+			</a>
+		</div>
+	</header>
+
+	<!-- Mobile Info Bar (Visible only on small screens) -->
+	<div class="md:hidden shrink-0 bg-[#161925] border-b border-white/5 p-3 flex flex-col items-center justify-center text-center">
+		<h1 class="text-sm font-medium truncate w-full px-4" title={meta.name}>{meta.name}</h1>
+		<p class="text-xs text-gray-400 mt-0.5">{formatSize(meta.size)}</p>
+	</div>
+
+	<!-- Main Preview Area -->
+	<main class="flex-1 overflow-hidden relative flex items-center justify-center p-4 sm:p-8 bg-[#0f111a] backdrop-blur-sm">
+		{#if isImage}
+			<img 
+				src={rawUrl} 
+				alt={meta.name} 
+				class="max-w-full max-h-full object-contain rounded drop-shadow-2xl select-none" 
+				draggable="false"
+			/>
+		{:else if isVideo}
+			<!-- svelte-ignore a11y-media-has-caption -->
+			<video 
+				src={rawUrl} 
+				controls 
+				class="max-w-full max-h-full rounded-lg shadow-2xl bg-black outline-none ring-1 ring-white/10"
+			></video>
+		{:else if isAudio}
+			<div class="w-full max-w-md bg-[#161925] p-8 rounded-2xl shadow-2xl flex flex-col items-center gap-6 ring-1 ring-white/10">
+				<div class="w-24 h-24 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-400">
+					<AudioLinesIcon size={48} strokeWidth={1.5} />
 				</div>
-			{:else if isPdf}
+				<div class="text-center w-full">
+					<h3 class="font-medium text-gray-100 truncate w-full mb-1">{meta.name}</h3>
+					<p class="text-sm text-gray-400 mb-6">{formatSize(meta.size)}</p>
+					<audio src={rawUrl} controls class="w-full custom-audio"></audio>
+				</div>
+			</div>
+		{:else if isPdf}
+			<div class="w-full h-full max-w-5xl rounded-xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-white flex flex-col">
 				<object 
 					title="PDF Document Preview"
 					data={rawUrl} 
 					type="application/pdf" 
-					class="w-full h-[60vh] rounded border border-gray-200 shadow-sm bg-white"
+					class="w-full flex-1"
 				>
-					<div class="flex flex-col items-center gap-2 text-gray-500 py-10">
-						<AlertCircle size={32} />
-						<p>Browser tidak mendukung preview PDF.</p>
-						<a href={downloadUrl} class="text-blue-600 hover:underline">Download PDF</a>
+					<div class="flex flex-col items-center justify-center h-full gap-4 text-gray-500 bg-gray-50">
+						<AlertCircle size={48} class="text-gray-400" />
+						<p class="text-lg font-medium text-gray-700">Preview PDF tidak didukung di browser ini.</p>
+						<p class="text-sm text-gray-500 mb-4">Silakan download file untuk membacanya.</p>
+						<a 
+							href={downloadUrl} 
+							class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-medium transition-colors"
+						>
+							Download PDF
+						</a>
 					</div>
 				</object>
-			{:else}
-				<div class="flex flex-col items-center gap-3 text-gray-400 py-12">
-					<FileIcon size={64} strokeWidth={1} />
-					<p class="text-sm text-gray-500">Preview tidak tersedia untuk format ini.</p>
+			</div>
+		{:else}
+			<div class="flex flex-col items-center gap-5 text-gray-300 py-12 px-8 bg-[#161925] rounded-2xl ring-1 ring-white/5 shadow-2xl max-w-sm text-center">
+				<div class="w-20 h-20 bg-gray-800 rounded-2xl flex items-center justify-center">
+					<FileIcon size={40} strokeWidth={1.5} class="text-gray-400" />
 				</div>
-			{/if}
-		</div>
-	</div>
+				<div>
+					<h3 class="font-medium text-gray-100 mb-2 truncate max-w-[250px]">{meta.name}</h3>
+					<p class="text-sm text-gray-400 mb-6">Preview tidak tersedia untuk tipe file ini ({meta.type || 'Unknown'}).</p>
+					<a 
+						href={downloadUrl} 
+						class="inline-flex items-center justify-center w-full px-4 py-2.5 bg-white hover:bg-gray-100 text-gray-900 rounded-xl font-medium transition-colors"
+					>
+						Download File
+					</a>
+				</div>
+			</div>
+		{/if}
+	</main>
 </div>
+
+<style>
+	/* Make default audio player look a bit better in dark mode context */
+	.custom-audio {
+		border-radius: 999px;
+		background: #f1f3f5;
+	}
+	.custom-audio::-webkit-media-controls-panel {
+		background-color: #f1f3f5;
+	}
+</style>
