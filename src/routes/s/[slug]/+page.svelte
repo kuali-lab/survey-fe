@@ -31,7 +31,7 @@
   const slug = $derived(data.slug)
 
   function getInitialViewState(): ViewState {
-    if (data.error === 'survey_closed') return 'closed'
+    if (data.error === 'survey_closed' || survey?.status === 'closed') return 'closed'
     if (!survey || data.error) return 'error'
     return 'welcome'
   }

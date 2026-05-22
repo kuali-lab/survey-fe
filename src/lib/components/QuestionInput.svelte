@@ -654,7 +654,7 @@
     />
   </div>
 
-{:else if question.type === 'file_upload' || question.type === 'upload_file'}
+{:else if question.type === 'file_upload'}
   <div class="file-upload-area">
     {#if uploadUrl}
       <!-- File already uploaded -->
