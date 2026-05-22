@@ -89,6 +89,7 @@
 				</div>
 			{:else if isPdf}
 				<object 
+					title="PDF Document Preview"
 					data={rawUrl} 
 					type="application/pdf" 
 					class="w-full h-[60vh] rounded border border-gray-200 shadow-sm bg-white"
