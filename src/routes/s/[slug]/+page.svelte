@@ -45,7 +45,7 @@
   let selfie = $state<{ imageBase64: string } | null>(null)
   let fingerprintHash = $state<string | null>(null)
   let prefersReducedMotion = $state(false)
-  let resumePrompt = $state<{ answers: Answers; currentIndex: number; startTime: number } | null>(null)
+  let resumePrompt = $state<{ answers: Answers; currentIndex: number; accumulatedTimeMs?: number } | null>(null)
 
   const runner = new SurveyRunner({
     getSurvey: () => survey ?? null,
@@ -57,7 +57,7 @@
   type SavedState = {
     answers: Answers
     currentIndex: number
-    startTime: number
+    accumulatedTimeMs: number
     savedAt: number
   }
   const STORAGE_TTL_MS = 30 * 24 * 3600 * 1000
@@ -75,6 +75,12 @@
         localStorage.removeItem(storageKey(s))
         return null
       }
+      
+      // Fallback for old localStorage format that used startTime
+      if (typeof parsed.accumulatedTimeMs !== 'number') {
+        const anyParsed = parsed as any
+        parsed.accumulatedTimeMs = anyParsed.startTime || 0
+      }
       return parsed as SavedState
     } catch {
       return null
@@ -89,7 +95,7 @@
       const state: SavedState = {
         answers: runner.answers,
         currentIndex: runner.currentIndex,
-        startTime: runner.startTime,
+        accumulatedTimeMs: runner.accumulatedTimeMs + (runner.lastActiveTime > 0 ? Date.now() - runner.lastActiveTime : 0),
         savedAt: Date.now(),
       }
       localStorage.setItem(storageKey(data.slug), JSON.stringify(state))
@@ -123,7 +129,7 @@
         try {
           const serverDraft = await getDraft(data.slug, fp)
           if (serverDraft && serverDraft.currentPageIndex > 0 && Object.keys(serverDraft.answers).length > 0) {
-            resumePrompt = { answers: serverDraft.answers, currentIndex: serverDraft.currentPageIndex, startTime: Date.now() }
+            resumePrompt = { answers: serverDraft.answers, currentIndex: serverDraft.currentPageIndex, accumulatedTimeMs: 0 }
           }
         } catch { /* server unavailable — continue without draft */ }
       }
@@ -153,6 +159,18 @@
       mq.addEventListener('change', onChange)
       return () => mq.removeEventListener('change', onChange)
     }
+  })
+
+  $effect(() => {
+    const handleVisibility = () => {
+      if (document.hidden) {
+        runner.pauseTimer()
+      } else {
+        runner.resumeTimer()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
   })
 
   // Auto-save on every answer/index change while in the question view.
@@ -304,7 +322,7 @@
     try {
       const emailQuestion = runner.answerableQuestions.find((q) => q.type === 'email')
       const respondentEmail = emailQuestion ? (runner.answers[emailQuestion.id] as string | undefined) : undefined
-      const durationSeconds = runner.startTime > 0 ? Math.round((Date.now() - runner.startTime) / 1000) : undefined
+      const durationSeconds = runner.getDurationSeconds()
 
       await submitSurveyAnswers(slug, runner.answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie)
 

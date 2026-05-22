@@ -14,7 +14,7 @@ let _surveyId: string | null = null
 export type AnswerSnapshot = {
   answers: Answers
   currentIndex: number
-  startTime: number
+  accumulatedTimeMs: number
 }
 
 /**
@@ -35,7 +35,7 @@ export function getSurveyorRunner(
   }
   _runner = new SurveyRunner({ getSurvey, onFinish, lastButtonLabel: 'Tinjau Jawaban' })
   _surveyId = survey.id
-  _runner.startTime = Date.now()
+  _runner.lastActiveTime = Date.now()
   return _runner
 }
 
@@ -69,6 +69,12 @@ export function loadSurveyorAnswers(slug: string): AnswerSnapshot | null {
     const parsed = JSON.parse(raw) as Partial<AnswerSnapshot>
     if (typeof parsed?.currentIndex !== 'number') return null
     if (!parsed.answers || typeof parsed.answers !== 'object') return null
+    
+    // Fallback for legacy state
+    if (typeof parsed.accumulatedTimeMs !== 'number') {
+      const anyParsed = parsed as any
+      parsed.accumulatedTimeMs = anyParsed.startTime || 0
+    }
     return parsed as AnswerSnapshot
   } catch {
     return null

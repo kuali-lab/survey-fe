@@ -61,7 +61,8 @@ export class SurveyRunner {
   currentIndex = $state(0)
   questionErrors = $state<Record<string, string>>({})
   autoAdvancing = $state(false)
-  startTime = $state(0)
+  accumulatedTimeMs = $state(0)
+  lastActiveTime = $state(0)
 
   // ---- Private nav guards ----
   private autoAdvanceTimer: ReturnType<typeof setTimeout> | null = null
@@ -342,14 +343,35 @@ export class SurveyRunner {
     this.answers = {}
     this.currentIndex = 0
     this.questionErrors = {}
-    this.startTime = Date.now()
+    this.accumulatedTimeMs = 0
+    this.lastActiveTime = Date.now()
   }
 
-  loadFrom = (state: { answers: Answers; currentIndex: number; startTime?: number }) => {
+  loadFrom = (state: { answers: Answers; currentIndex: number; accumulatedTimeMs?: number }) => {
     this.answers = state.answers
     const maxIdx = Math.max(0, this.surveyPages.length - 1)
     this.currentIndex = Math.min(state.currentIndex, maxIdx)
-    this.startTime = state.startTime || Date.now()
+    this.accumulatedTimeMs = state.accumulatedTimeMs || 0
+    this.lastActiveTime = Date.now()
+  }
+
+  getDurationSeconds = () => {
+    let extra = 0
+    if (this.lastActiveTime > 0) extra = Date.now() - this.lastActiveTime
+    return Math.round((this.accumulatedTimeMs + extra) / 1000)
+  }
+
+  pauseTimer = () => {
+    if (this.lastActiveTime > 0) {
+      this.accumulatedTimeMs += Date.now() - this.lastActiveTime
+      this.lastActiveTime = 0
+    }
+  }
+
+  resumeTimer = () => {
+    if (this.lastActiveTime === 0) {
+      this.lastActiveTime = Date.now()
+    }
   }
 
   // ---- Event handlers (wire via <svelte:window> when on the question stage) ----

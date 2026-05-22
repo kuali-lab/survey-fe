@@ -19,7 +19,7 @@
 
   let session = $state<SurveyorSession | null>(null)
   let answers = $state<Answers>({})
-  let startTime = $state<number>(0)
+  let accumulatedTimeMs = $state<number>(0)
   let submitting = $state(false)
   let submitError = $state<string | null>(null)
 
@@ -40,12 +40,12 @@
     const r = peekSurveyorRunner()
     if (r && Object.keys(r.answers).length > 0) {
       answers = r.answers
-      startTime = r.startTime
+      accumulatedTimeMs = r.accumulatedTimeMs + (r.lastActiveTime > 0 ? Date.now() - r.lastActiveTime : 0)
     } else {
       const fb = loadSurveyorAnswers(data.slug)
       if (fb) {
         answers = fb.answers
-        startTime = fb.startTime
+        accumulatedTimeMs = fb.accumulatedTimeMs
       } else {
         // Nothing to recap; bounce back to interview.
         goto(`/surveyor/s/${data.slug}/interview`, { replaceState: true })
@@ -79,7 +79,7 @@
 
     const emailQ = data.survey.questions.find((q) => q.type === 'email')
     const respondentEmail = emailQ ? (answers[emailQ.id] as string | undefined) : undefined
-    const durationSeconds = startTime > 0 ? Math.round((Date.now() - startTime) / 1000) : undefined
+    const durationSeconds = accumulatedTimeMs > 0 ? Math.round(accumulatedTimeMs / 1000) : undefined
 
     const submissionId = crypto.randomUUID()
     try {
@@ -132,7 +132,7 @@
     slug={data.slug}
     todayCount={session.stats.todayCount}
     totalCount={session.stats.totalCount}
-    interviewStartedAt={startTime || null}
+    interviewStartedAt={Date.now() - accumulatedTimeMs}
   />
 
   <main class="wrap">

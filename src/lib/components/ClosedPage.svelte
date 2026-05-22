@@ -58,15 +58,20 @@
 
   .cover {
     width: 100%;
-    height: 220px;
-    overflow: hidden;
+    max-height: 320px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: var(--tertiary-10);
+    padding: 24px;
+    box-sizing: border-box;
   }
 
   .cover img {
-    width: 100%;
-    height: 100%;
+    max-width: 100%;
+    max-height: 272px;
     object-fit: contain;
+    border-radius: var(--radius-sm);
   }
 
   .illustration {

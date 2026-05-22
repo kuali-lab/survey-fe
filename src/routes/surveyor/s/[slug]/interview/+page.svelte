@@ -55,8 +55,8 @@
     }
 
     // Read the URL query reactively could re-trigger; only run once on mount.
-    // Apply a default startTime if not set yet.
-    if (runner.startTime === 0) runner.startTime = Date.now()
+    // Apply a default lastActiveTime if not set yet.
+    if (runner.lastActiveTime === 0) runner.lastActiveTime = Date.now()
 
     startGpsCapture()
 
@@ -67,6 +67,18 @@
       mq.addEventListener('change', onChange)
       return () => mq.removeEventListener('change', onChange)
     }
+  })
+
+  $effect(() => {
+    const handleVisibility = () => {
+      if (document.hidden) {
+        runner?.pauseTimer()
+      } else {
+        runner?.resumeTimer()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
   })
 
   function stashLocation(fix: GpsFix) {
@@ -108,7 +120,7 @@
       saveSurveyorAnswers(data.slug, {
         answers: runner.answers,
         currentIndex: runner.currentIndex,
-        startTime: runner.startTime,
+        accumulatedTimeMs: runner.accumulatedTimeMs + (runner.lastActiveTime > 0 ? Date.now() - runner.lastActiveTime : 0),
       })
     }
   })
@@ -143,7 +155,6 @@
     const ok = window.confirm('Buang jawaban responden ini dan mulai ulang?')
     if (!ok) return
     runner.reset()
-    runner.startTime = Date.now()
     // Clear the local recap-fallback storage too.
     try { localStorage.removeItem(`surveyor:answers:${data.slug}`) } catch {}
     goto(`/surveyor/s/${data.slug}/interview`, { replaceState: true })
@@ -188,7 +199,7 @@
     slug={data.slug}
     todayCount={session.stats.todayCount}
     totalCount={session.stats.totalCount}
-    interviewStartedAt={runner.startTime || null}
+    interviewStartedAt={runner.lastActiveTime || null}
     {gpsStatus}
     onDiscard={handleDiscard}
   />
