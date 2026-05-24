@@ -29,6 +29,37 @@
 	$: isVideo = meta.type.startsWith('video/');
 	$: isAudio = meta.type.startsWith('audio/');
 	$: isPdf = meta.type === 'application/pdf';
+
+	let iconError = false;
+
+	$: fileExtension = meta.name.split('.').pop()?.toUpperCase() || 'UNKNOWN';
+	
+	$: fileTypeInfo = (() => {
+		if (isImage) return { label: 'Gambar', icon: 'image', color: '#3b82f6', bgColor: 'rgba(59, 130, 246, 0.1)' };
+		if (isVideo) return { label: 'Video', icon: 'video', color: '#ef4444', bgColor: 'rgba(239, 68, 68, 0.1)' };
+		if (isAudio) return { label: 'Audio', icon: 'audio', color: '#8b5cf6', bgColor: 'rgba(139, 92, 246, 0.1)' };
+		if (isPdf) return { label: 'PDF', icon: 'pdf', color: '#ef4444', bgColor: 'rgba(239, 68, 68, 0.1)' };
+		
+		const type = (meta.type || '').toLowerCase();
+		const ext = fileExtension.toLowerCase();
+		
+		if (type.includes('spreadsheet') || type.includes('excel') || type.includes('csv') || ['xlsx', 'xls', 'csv'].includes(ext)) {
+			return { label: 'Spreadsheet', icon: 'spreadsheet', color: '#10b981', bgColor: 'rgba(16, 185, 129, 0.1)' };
+		}
+		if (type.includes('word') || type.includes('document') || ['doc', 'docx'].includes(ext)) {
+			return { label: 'Dokumen', icon: 'document', color: '#3b82f6', bgColor: 'rgba(59, 130, 246, 0.1)' };
+		}
+		if (type.includes('presentation') || type.includes('powerpoint') || ['ppt', 'pptx'].includes(ext)) {
+			return { label: 'Presentasi', icon: 'presentation', color: '#f97316', bgColor: 'rgba(249, 115, 22, 0.1)' };
+		}
+		if (type.includes('zip') || type.includes('compressed') || type.includes('tar') || ['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
+			return { label: 'Arsip', icon: 'archive', color: '#eab308', bgColor: 'rgba(234, 179, 8, 0.1)' };
+		}
+		if (type.includes('json') || type.includes('javascript') || type.includes('html') || type.includes('css')) {
+			return { label: 'Kode', icon: 'code', color: '#a855f7', bgColor: 'rgba(168, 85, 247, 0.1)' };
+		}
+		return { label: 'File Lainnya', icon: 'unknown', color: '#8c8f93', bgColor: '#1f2937' };
+	})();
 </script>
 
 <svelte:head>
@@ -85,7 +116,13 @@
 				</div>
 				<div class="patreon-content">
 					<h2 class="patreon-title">{meta.name}</h2>
-					<p class="patreon-meta">{formatSize(meta.size)} • {meta.type}</p>
+					<div class="meta-badges">
+						<span class="badge file-ext-badge" style="background-color: {fileTypeInfo.bgColor}; color: {fileTypeInfo.color}; border: 1px solid {fileTypeInfo.color}40;">
+							.{fileExtension}
+						</span>
+						<span class="badge size-badge">{formatSize(meta.size)}</span>
+						<span class="badge type-badge">{fileTypeInfo.label}</span>
+					</div>
 				</div>
 			</div>
 		{:else if isVideo}
@@ -100,7 +137,13 @@
 				</div>
 				<div class="patreon-content">
 					<h2 class="patreon-title">{meta.name}</h2>
-					<p class="patreon-meta">{formatSize(meta.size)} • {meta.type}</p>
+					<div class="meta-badges">
+						<span class="badge file-ext-badge" style="background-color: {fileTypeInfo.bgColor}; color: {fileTypeInfo.color}; border: 1px solid {fileTypeInfo.color}40;">
+							.{fileExtension}
+						</span>
+						<span class="badge size-badge">{formatSize(meta.size)}</span>
+						<span class="badge type-badge">{fileTypeInfo.label}</span>
+					</div>
 				</div>
 			</div>
 		{:else if isAudio}
@@ -110,7 +153,13 @@
 				</div>
 				<div class="audio-info">
 					<h3 class="audio-title">{meta.name}</h3>
-					<p class="audio-meta">{formatSize(meta.size)}</p>
+					<div class="meta-badges" style="justify-content: center; margin-bottom: 24px;">
+						<span class="badge file-ext-badge" style="background-color: {fileTypeInfo.bgColor}; color: {fileTypeInfo.color}; border: 1px solid {fileTypeInfo.color}40;">
+							.{fileExtension}
+						</span>
+						<span class="badge size-badge">{formatSize(meta.size)}</span>
+						<span class="badge type-badge">{fileTypeInfo.label}</span>
+					</div>
 					<audio src={rawUrl} controls class="custom-audio"></audio>
 				</div>
 			</div>
@@ -134,12 +183,28 @@
 			</div>
 		{:else}
 			<div class="unknown-card">
-				<div class="unknown-icon-wrapper">
-					<FileIcon size={40} strokeWidth={1.5} color="#8c8f93" />
+				<div class="unknown-icon-wrapper" style="background-color: {fileTypeInfo.bgColor};">
+					{#if !iconError}
+						<img 
+							src="/icons/filetypes/{fileTypeInfo.icon}.svg" 
+							alt="{fileTypeInfo.label}" 
+							class="filetype-icon" 
+							on:error={() => iconError = true} 
+						/>
+					{:else}
+						<FileIcon size={40} strokeWidth={1.5} color={fileTypeInfo.color} />
+					{/if}
 				</div>
 				<div class="unknown-info">
 					<h3 class="unknown-title">{meta.name}</h3>
-					<p class="unknown-meta">Preview tidak tersedia untuk tipe file ini ({meta.type || 'Unknown'}).</p>
+					<div class="meta-badges" style="justify-content: center; margin-bottom: 24px;">
+						<span class="badge file-ext-badge" style="background-color: {fileTypeInfo.bgColor}; color: {fileTypeInfo.color}; border: 1px solid {fileTypeInfo.color}40;">
+							.{fileExtension}
+						</span>
+						<span class="badge size-badge">{formatSize(meta.size)}</span>
+						<span class="badge type-badge">{fileTypeInfo.label}</span>
+					</div>
+					<p class="unknown-meta">Preview visual tidak tersedia untuk format file ini.</p>
 					<a href={downloadUrl} class="btn-download-unknown">
 						Download File
 					</a>
@@ -511,6 +576,12 @@
 		justify-content: center;
 	}
 
+	.filetype-icon {
+		width: 48px;
+		height: 48px;
+		object-fit: contain;
+	}
+
 	.unknown-info {
 		width: 100%;
 	}
@@ -528,6 +599,49 @@
 		font-size: 14px;
 		color: #9ca3af;
 		margin: 0 0 24px;
+	}
+
+	/* Badges */
+	.meta-badges {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px;
+		margin-top: 12px;
+	}
+
+	.badge {
+		font-size: 12px;
+		font-weight: 600;
+		padding: 4px 10px;
+		border-radius: 9999px;
+		display: inline-flex;
+		align-items: center;
+	}
+
+	.file-ext-badge {
+		letter-spacing: 0.5px;
+	}
+
+	.size-badge {
+		background-color: #f3f4f6;
+		color: #4b5563;
+		border: 1px solid #e5e7eb;
+	}
+
+	.type-badge {
+		background-color: #f3f4f6;
+		color: #4b5563;
+		border: 1px solid #e5e7eb;
+	}
+	
+	:global(.unknown-card) .size-badge,
+	:global(.unknown-card) .type-badge,
+	:global(.audio-card) .size-badge,
+	:global(.audio-card) .type-badge {
+		background-color: rgba(255, 255, 255, 0.05);
+		color: #9ca3af;
+		border-color: rgba(255, 255, 255, 0.1);
 	}
 
 	.btn-download-unknown {
