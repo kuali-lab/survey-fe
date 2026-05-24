@@ -159,16 +159,9 @@
 
   const MAX_UPLOAD_BYTES = 10 * 1024 * 1024 // 10 MB — matches the UI hint
 
-  async function handleFileChange(e: Event) {
-    const input = e.currentTarget as HTMLInputElement
-    const file = input.files?.[0] ?? null
-    if (!file) return
-
-    // Client-side size guard so users see a clear message instead of
-    // waiting for the upload to fail at the server.
+  async function processFile(file: File) {
     if (file.size > MAX_UPLOAD_BYTES) {
       uploadError = 'Ukuran berkas melebihi batas 10 MB.'
-      input.value = ''
       onChange(null)
       return
     }
@@ -198,6 +191,25 @@
       onChange(null)
     } finally {
       uploading = false
+    }
+  }
+
+  function handleFileChange(e: Event) {
+    const input = e.currentTarget as HTMLInputElement
+    const file = input.files?.[0] ?? null
+    if (file) {
+      processFile(file)
+    }
+    input.value = '' // Clear so same file can be re-selected if removed
+  }
+
+  function handleDrop(e: DragEvent) {
+    e.preventDefault()
+    dragOver = false
+    if (uploading) return
+    const file = e.dataTransfer?.files?.[0] ?? null
+    if (file) {
+      processFile(file)
     }
   }
 
@@ -680,7 +692,7 @@
         ondragover={(e) => { e.preventDefault(); dragOver = true }}
         ondragenter={(e) => { e.preventDefault(); dragOver = true }}
         ondragleave={() => { dragOver = false }}
-        ondrop={() => { dragOver = false }}
+        ondrop={handleDrop}
       >
         {#if uploading}
           <svg class="upload-spinner" width="24" height="24" viewBox="0 0 24 24" fill="none">
