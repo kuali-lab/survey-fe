@@ -16,6 +16,17 @@ import { evaluateNext } from '$lib/skipLogic.js'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+function isAnsweredValue(v: AnswerValue | undefined): boolean {
+  if (v === null || v === undefined) return false
+  if (typeof v === 'string') return v.trim() !== '' && v !== '__uploading__'
+  if (Array.isArray(v)) return v.length > 0
+  if (typeof v === 'object') {
+    const c = v as { firstName?: string; lastName?: string; phone?: string; email?: string }
+    return [c.firstName, c.lastName, c.phone, c.email].some((x) => typeof x === 'string' && x.trim() !== '')
+  }
+  return true
+}
+
 const AUTO_ADVANCE_TYPES = new Set([
   'single_choice', 'yes_no', 'image_choice', 'nps', 'rating', 'opinion_scale', 'dropdown',
 ])
@@ -134,11 +145,23 @@ export class SurveyRunner {
 
   currentPage = $derived(this.surveyPages[this.currentIndex] ?? null)
 
-  progress = $derived(
-    this.surveyPages.length > 0
+  // In scroll mode the survey is a single page, so page-ratio reports 100% on first render.
+  // Instead, report the share of answerable questions that the respondent has filled.
+  progress = $derived.by(() => {
+    const total = this.answerableQuestions.length
+    if (total === 0) return 0
+    const mode = this.settings.displayMode || 'one_per_page'
+    if (mode === 'scroll') {
+      let answered = 0
+      for (const q of this.answerableQuestions) {
+        if (isAnsweredValue(this.answers[q.id])) answered++
+      }
+      return Math.round((answered / total) * 100)
+    }
+    return this.surveyPages.length > 0
       ? Math.round(((this.currentIndex + 1) / this.surveyPages.length) * 100)
-      : 0,
-  )
+      : 0
+  })
 
   isLastQuestion = $derived(this.currentIndex === this.surveyPages.length - 1)
 
