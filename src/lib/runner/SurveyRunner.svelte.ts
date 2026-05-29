@@ -74,6 +74,9 @@ export class SurveyRunner {
   autoAdvancing = $state(false)
   accumulatedTimeMs = $state(0)
   lastActiveTime = $state(0)
+  // Navigation history stack: tracks the actual page indices the user
+  // visited so that handleBack() can retrace skip-logic jumps correctly.
+  private navHistory: number[] = []
 
   // ---- Private nav guards ----
   private autoAdvanceTimer: ReturnType<typeof setTimeout> | null = null
@@ -110,7 +113,11 @@ export class SurveyRunner {
     const answerable = this.answerableQuestions
     if (!answerable.length) return []
 
-    const mode = this.settings.displayMode || 'one_per_page'
+    // When skip rules are active, force one_per_page regardless of what
+    // the backend stored in display_mode. This is a defense-in-depth guard:
+    // skip logic requires individual page evaluation to function correctly.
+    const hasSkipRules = this.skipRules.length > 0
+    const mode = hasSkipRules ? 'one_per_page' : (this.settings.displayMode || 'one_per_page')
 
     if (mode === 'scroll') {
       return [{ id: 'all', questions: answerable }]
@@ -123,7 +130,14 @@ export class SurveyRunner {
 
     const pages: SurveyPage[] = []
     const nonGroupQs = answerable.filter((q) => !q.groupId)
-    if (nonGroupQs.length > 0) {
+    // When skip rules are active, each non-group question must be its own
+    // page so that evaluateNext() can skip/show per-question.
+    // Without skip rules, bundle them together (original behavior).
+    if (this.skipRules.length > 0) {
+      for (const q of nonGroupQs) {
+        pages.push({ id: q.id, questions: [q] })
+      }
+    } else if (nonGroupQs.length > 0) {
       pages.push({ id: 'non-group', questions: nonGroupQs })
     }
 
@@ -260,6 +274,9 @@ export class SurveyRunner {
     if (!this.validateCurrentPage()) return
     if (!this.currentPage) return
 
+    // Push current page to navigation history before moving forward.
+    this.navHistory.push(this.currentIndex)
+
     let next: string | null | 'END' = null
     for (const q of this.currentPage.questions) {
       const skipDest = evaluateNext(q.id, this.answers, this.questions, this.skipRules)
@@ -276,7 +293,10 @@ export class SurveyRunner {
 
     if (next !== null) {
       const targetPageIdx = this.surveyPages.findIndex((p) => p.questions.some((q) => q.id === next))
-      if (targetPageIdx > this.currentIndex) {
+      // Navigate to the target page if it exists and is ahead of current.
+      // If targetPageIdx === -1 (target question was deleted or not found),
+      // fall through to the normal sequential advance below.
+      if (targetPageIdx >= 0 && targetPageIdx !== this.currentIndex) {
         this.currentIndex = targetPageIdx
         if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
         return
@@ -294,7 +314,13 @@ export class SurveyRunner {
   handleBack = () => {
     this.cancelAutoAdvance()
     this.questionErrors = {}
-    if (this.currentIndex > 0) {
+    // When skip logic is active, use the navigation history to retrace the
+    // actual path the user followed. Without skip rules, simple decrement
+    // is sufficient (the two are equivalent in that case).
+    if (this.navHistory.length > 0) {
+      this.currentIndex = this.navHistory.pop()!
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+    } else if (this.currentIndex > 0) {
       this.currentIndex -= 1
       if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
     }
@@ -366,6 +392,7 @@ export class SurveyRunner {
     this.answers = {}
     this.currentIndex = 0
     this.questionErrors = {}
+    this.navHistory = []
     this.accumulatedTimeMs = 0
     this.lastActiveTime = Date.now()
   }
