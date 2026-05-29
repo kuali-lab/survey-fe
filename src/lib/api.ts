@@ -58,6 +58,36 @@ function writeSurveyCache(slug: string, survey: Survey): void {
   try { localStorage.setItem(SURVEY_CACHE_PREFIX + slug, JSON.stringify(survey)) } catch { /* quota */ }
 }
 
+// ─── Invitation tracking (best-effort, fire-and-forget) ──────────────────────
+// These calls are anonymous when no `?t=` was on the URL; the runner skips
+// them in that case. Failures never block the survey flow.
+
+/** POST /api/v1/invitations/:token/track — records the click on first mount. */
+export async function trackInvitationClick(token: string): Promise<void> {
+  try {
+    await fetch(`${PUBLIC_API_BASE_URL}/invitations/${encodeURIComponent(token)}/track`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    })
+  } catch {
+    // Best-effort: a tracking failure must not break the survey.
+  }
+}
+
+/** POST /api/v1/invitations/:token/progress — fires once per state transition. */
+export async function reportInvitationProgress(token: string, status: 'started' | 'completed'): Promise<void> {
+  try {
+    await fetch(`${PUBLIC_API_BASE_URL}/invitations/${encodeURIComponent(token)}/progress`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    })
+  } catch {
+    // Best-effort.
+  }
+}
+
 export async function fetchSurvey(slug: string, fetchFn: typeof fetch = fetch): Promise<Survey> {
   try {
     const res = await fetchFn(`${PUBLIC_API_BASE_URL}/s/${slug}`)
