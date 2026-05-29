@@ -129,6 +129,7 @@ export async function submitSurveyAnswers(
   selfie?: { imageBase64: string } | null,
   surveyorCode?: string,
   submissionId?: string,
+  invitationToken?: string | null,
 ): Promise<void> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (surveyorCode) headers['Authorization'] = `Bearer ${surveyorCode}`
@@ -145,6 +146,10 @@ export async function submitSurveyAnswers(
       fingerprintHash,
       selfie,
       submissionId,
+      // Pass the raw invitation token (if any) so the backend can advance the
+      // invite state to 'completed' and bypass the require_login email-dedup
+      // when the invite has been reopened for re-fill.
+      invitationToken: invitationToken ?? undefined,
     })
   })
   if (res.status === 401) throw new Error('unauthorized')

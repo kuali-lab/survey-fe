@@ -360,7 +360,7 @@
       const respondentEmail = emailQuestion ? (runner.answers[emailQuestion.id] as string | undefined) : undefined
       const durationSeconds = runner.getDurationSeconds()
 
-      await submitSurveyAnswers(slug, runner.answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie)
+      await submitSurveyAnswers(slug, runner.answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie, undefined, undefined, invitationToken)
 
       clearSavedState()
       if (fingerprintHash && slug) deleteDraft(slug, fingerprintHash).catch(() => {})
