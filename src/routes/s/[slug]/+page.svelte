@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { PageData } from './$types.js'
   import type { ViewState, Answers } from '$lib/types.js'
-  import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft } from '$lib/api.js'
+  import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress } from '$lib/api.js'
   import { computeFingerprint } from '$lib/fingerprint.js'
   import { getQuestionNumber } from '$lib/utils.js'
   import { page } from '$app/stores'
@@ -46,6 +46,9 @@
   let fingerprintHash = $state<string | null>(null)
   let prefersReducedMotion = $state(false)
   let resumePrompt = $state<{ answers: Answers; currentIndex: number; accumulatedTimeMs?: number } | null>(null)
+  // Invitation token captured from ?t= on first mount; null for anonymous fill.
+  let invitationToken = $state<string | null>(null)
+  let invitationStartedFired = false
 
   const runner = new SurveyRunner({
     getSurvey: () => survey ?? null,
@@ -123,6 +126,27 @@
   }
 
   onMount(() => {
+    // Capture ?t= invitation token before we strip it from the URL. Persisted
+    // to sessionStorage so a mid-survey reload retains the link to the invite.
+    if (typeof window !== 'undefined' && data.slug) {
+      const tokenKey = `survey-fe:invtoken:${data.slug}`
+      const fromQuery = $page.url.searchParams.get('t')
+      const fromSession = sessionStorage.getItem(tokenKey)
+      if (fromQuery) {
+        invitationToken = fromQuery
+        try { sessionStorage.setItem(tokenKey, fromQuery) } catch {}
+        trackInvitationClick(fromQuery)
+        // Strip the token from the URL so a casual share/copy doesn't leak it.
+        try {
+          const cleanUrl = new URL(window.location.href)
+          cleanUrl.searchParams.delete('t')
+          history.replaceState({}, '', cleanUrl)
+        } catch {}
+      } else if (fromSession) {
+        invitationToken = fromSession
+      }
+    }
+
     computeFingerprint().then(async (fp) => {
       fingerprintHash = fp
       if (!resumePrompt && fp && data.slug && !data.error) {
@@ -179,6 +203,18 @@
     void runner.currentIndex
     if (viewState !== 'question') return
     saveCurrentState()
+  })
+
+  // Mark the invite as 'started' the first time the respondent supplies any
+  // answer in the question stage. Idempotent on the backend (status only moves
+  // forward from sent/clicked/pending), but we also dedupe on the client to
+  // avoid spamming the rate-limited endpoint.
+  $effect(() => {
+    void runner.answers
+    if (viewState !== 'question' || !invitationToken || invitationStartedFired) return
+    if (Object.keys(runner.answers).length === 0) return
+    invitationStartedFired = true
+    reportInvitationProgress(invitationToken, 'started')
   })
 
   // Save draft to backend each time respondent navigates to a new page.
@@ -328,6 +364,7 @@
 
       clearSavedState()
       if (fingerprintHash && slug) deleteDraft(slug, fingerprintHash).catch(() => {})
+      if (invitationToken) reportInvitationProgress(invitationToken, 'completed')
       viewState = 'closing'
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'submit_error'
