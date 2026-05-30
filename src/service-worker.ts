@@ -45,7 +45,7 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url)
 
-  // Cross-origin (e.g., api.logika-teta.web.id) → don't touch. The outbox
+  // Cross-origin (e.g., the API subdomain) → don't touch. The outbox
   // drain handles offline submit retry; intercepting here would just cause
   // confusing failure modes.
   if (url.origin !== self.location.origin) return
