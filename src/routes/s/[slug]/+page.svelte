@@ -64,7 +64,16 @@
     savedAt: number
   }
   const STORAGE_TTL_MS = 30 * 24 * 3600 * 1000
-  const storageKey = (s: string) => `survey-fe:state:${s}`
+  // Draft state is scoped per invitation token (not just per survey slug). This is
+  // the fix for the reopen bug: a respondent who completed the survey and is then
+  // re-invited arrives with a NEW token, so there is no saved state under the new
+  // key → they start fresh instead of resuming the old (completed) fill at the
+  // wrong question. A genuinely interrupted fill resumes only under its own token.
+  // Anonymous fills (no token) share one per-slug key as before.
+  const storageKey = (s: string) => `survey-fe:state:${s}:${invitationToken ?? 'anon'}`
+  // Server-draft session key mirrors the same token scoping on top of the device
+  // fingerprint, so a new token never loads a previous token's server draft.
+  const draftSessionKey = (fp: string) => (invitationToken ? `${fp}:${invitationToken}` : fp)
 
   function loadSavedState(s: string): SavedState | null {
     if (typeof localStorage === 'undefined') return null
@@ -151,7 +160,7 @@
       fingerprintHash = fp
       if (!resumePrompt && fp && data.slug && !data.error) {
         try {
-          const serverDraft = await getDraft(data.slug, fp)
+          const serverDraft = await getDraft(data.slug, draftSessionKey(fp))
           if (serverDraft && serverDraft.currentPageIndex > 0 && Object.keys(serverDraft.answers).length > 0) {
             resumePrompt = { answers: serverDraft.answers, currentIndex: serverDraft.currentPageIndex, accumulatedTimeMs: 0 }
           }
@@ -228,7 +237,7 @@
     const s   = untrack(() => slug)
     if (vs !== 'question') return
     if (_draftInitialSkip) { _draftInitialSkip = false; return }
-    if (fp && s) saveDraft(s, fp, ans, idx).catch(() => {})
+    if (fp && s) saveDraft(s, draftSessionKey(fp), ans, idx).catch(() => {})
   })
 
   let questionErrors = $derived(runner.questionErrors)
@@ -363,7 +372,7 @@
       await submitSurveyAnswers(slug, runner.answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie, undefined, undefined, invitationToken)
 
       clearSavedState()
-      if (fingerprintHash && slug) deleteDraft(slug, fingerprintHash).catch(() => {})
+      if (fingerprintHash && slug) deleteDraft(slug, draftSessionKey(fingerprintHash)).catch(() => {})
       if (invitationToken) reportInvitationProgress(invitationToken, 'completed')
       viewState = 'closing'
     } catch (err) {
