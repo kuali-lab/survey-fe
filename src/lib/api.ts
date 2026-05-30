@@ -88,6 +88,25 @@ export async function reportInvitationProgress(token: string, status: 'started' 
   }
 }
 
+/**
+ * One-time-link gate (item 4): returns the invitation's fill state so the runner
+ * can show a "sudah selesai / kedaluwarsa" screen instead of letting a reused or
+ * expired link re-open the form. States: 'ok' | 'completed' | 'expired' | 'invalid'.
+ * Network failure → 'ok' (fail-open: never block a legit respondent on a hiccup).
+ */
+export async function getInvitationStatus(token: string): Promise<'ok' | 'completed' | 'expired' | 'invalid'> {
+  try {
+    const res = await fetch(`${PUBLIC_API_BASE_URL}/invitations/${encodeURIComponent(token)}/status`)
+    if (!res.ok) return 'ok'
+    const data = await res.json()
+    const state = data?.state
+    if (state === 'completed' || state === 'expired' || state === 'invalid') return state
+    return 'ok'
+  } catch {
+    return 'ok'
+  }
+}
+
 export async function fetchSurvey(slug: string, fetchFn: typeof fetch = fetch): Promise<Survey> {
   try {
     const res = await fetchFn(`${PUBLIC_API_BASE_URL}/s/${slug}`)

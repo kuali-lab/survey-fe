@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { PageData } from './$types.js'
   import type { ViewState, Answers } from '$lib/types.js'
-  import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress } from '$lib/api.js'
+  import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress, getInvitationStatus } from '$lib/api.js'
   import { computeFingerprint } from '$lib/fingerprint.js'
   import { getQuestionNumber } from '$lib/utils.js'
   import { page } from '$app/stores'
@@ -49,6 +49,8 @@
   // Invitation token captured from ?t= on first mount; null for anonymous fill.
   let invitationToken = $state<string | null>(null)
   let invitationStartedFired = false
+  // Item 4 — one-time link gate: 'done' (already completed) | 'expired' | null.
+  let inviteBlocked = $state<'done' | 'expired' | null>(null)
 
   const runner = new SurveyRunner({
     getSurvey: () => survey ?? null,
@@ -153,6 +155,19 @@
         } catch {}
       } else if (fromSession) {
         invitationToken = fromSession
+      }
+
+      // Item 4 — one-time link: block a token that was already completed (and not
+      // reopened) or has expired, so a reused old link shows a clear message
+      // instead of silently re-opening the form. Fail-open on any error.
+      if (invitationToken) {
+        getInvitationStatus(invitationToken).then((state) => {
+          if (state === 'completed') {
+            inviteBlocked = 'done'
+          } else if (state === 'expired') {
+            inviteBlocked = 'expired'
+          }
+        })
       }
     }
 
@@ -502,7 +517,19 @@
 />
 
 <div class="page" class:page-question={viewState === 'question'}>
-  {#if viewState === 'error'}
+  {#if inviteBlocked}
+    <div class="centered-wrap">
+      <div class="resume-card" role="region" aria-label="Status undangan">
+        <h2 class="resume-title">{inviteBlocked === 'done' ? 'Survei sudah selesai' : 'Tautan kedaluwarsa'}</h2>
+        <p class="resume-description">
+          {inviteBlocked === 'done'
+            ? 'Anda sudah menyelesaikan survei ini. Terima kasih atas partisipasi Anda. Jika perlu mengisi ulang, mintalah undangan baru dari penyelenggara.'
+            : 'Tautan undangan ini sudah tidak berlaku. Silakan minta undangan terbaru dari penyelenggara survei.'}
+        </p>
+      </div>
+    </div>
+
+  {:else if viewState === 'error'}
     <div class="centered-wrap">
       <ErrorPage type={errorType} />
     </div>
