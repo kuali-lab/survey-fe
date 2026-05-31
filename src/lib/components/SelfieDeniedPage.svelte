@@ -10,6 +10,9 @@
   } = $props()
 
   let showInstructions = $state(false)
+
+  // Show the actual site host in the permission instructions (env/domain-agnostic).
+  const siteHost = typeof window !== 'undefined' ? window.location.host : 'situs survei ini'
 </script>
 
 <div class="card">
@@ -56,7 +59,7 @@
         </div>
         <div class="instr-block">
           <strong>Chrome (Android)</strong>
-          <p>Tap menu titik tiga → <em>Settings</em> → <em>Site settings</em> → <em>Camera</em> → cari survey.logika-teta.web.id → <em>Allow</em>.</p>
+          <p>Tap menu titik tiga → <em>Settings</em> → <em>Site settings</em> → <em>Camera</em> → cari {siteHost} → <em>Allow</em>.</p>
         </div>
         <div class="instr-block">
           <strong>Aplikasi dalam aplikasi (Instagram, TikTok, dll.)</strong>
