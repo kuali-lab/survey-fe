@@ -160,7 +160,7 @@
     goto(`/surveyor/s/${data.slug}/interview`, { replaceState: true })
   }
 
-  const settings = $derived(data.survey?.settings ?? { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true })
+  const settings = $derived(data.survey?.settings ?? { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' as const })
 
   function onKeydown(e: KeyboardEvent) {
     if (runner) runner.handleKeydown(e)

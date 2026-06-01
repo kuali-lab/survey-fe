@@ -263,7 +263,7 @@
   const closingQuestion = $derived(
     survey?.questions.find((q) => q.type === 'closing_page') ?? null,
   )
-  const settings = $derived(survey?.settings ?? { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true })
+  const settings = $derived(survey?.settings ?? { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' as const })
 
   async function handleStart() {
     validationError = null
@@ -633,7 +633,31 @@
           class="question-stage"
           class:single-question={runner.currentPage?.questions.length === 1 && settings.displayMode !== 'scroll'}
         >
-          {#if runner.currentPage}
+          {#if settings.displayMode === 'scroll'}
+            <!-- Scroll mode: render every group as its own section so the
+                 respondent view matches the builder (groups don't disappear). -->
+            {#each runner.scrollSections as section (section.id)}
+              <div class="stage-slide">
+                {#if section.title}
+                  <SectionHeader
+                    title={section.title}
+                    description={section.description ?? null}
+                  />
+                {/if}
+                {#each section.questions as q (q.id)}
+                  <QuestionCard
+                    question={q}
+                    questionNumber={settings.showNumbers ? getQuestionNumber(q, runner.questions) : ''}
+                    answer={runner.answers[q.id] ?? null}
+                    validationError={questionErrors[q.id] ?? null}
+                    onAnswer={(val) => runner.handleAnswer(q.id, val)}
+                    onBlur={() => runner.handleBlur(q.id)}
+                    {slug}
+                  />
+                {/each}
+              </div>
+            {/each}
+          {:else if runner.currentPage}
             {#key runner.currentPage.id}
               <div
                 class="stage-slide"
