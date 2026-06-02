@@ -58,7 +58,7 @@
     const fp = flatpickr(node, {
       dateFormat: 'Y-m-d',
       altInput: true,
-      altInputClass: 'text-input',
+      altInputClass: 'survey-date-input',
       altFormat: flatpickrAltFormat(p.fmt),
       allowInput: false,
       defaultDate: p.value || undefined,
@@ -844,6 +844,29 @@
   }
 
   .text-input:focus {
+    outline: none;
+    border-color: #f7bb00;
+    box-shadow: 0 0 0 3px #fce18e;
+  }
+
+  /* flatpickr builds its visible "alt" input via JS, outside Svelte's scoped
+     CSS — so the .text-input rule above can't reach it. Mirror the same look
+     here via :global so the date field matches every other input. */
+  :global(.survey-date-input) {
+    width: 100%;
+    height: 52px;
+    border: 1px solid #d9dde3;
+    border-radius: 14px;
+    padding: 0 20px;
+    font-family: var(--font);
+    font-size: 16px;
+    color: var(--tertiary-80);
+    background: white;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  :global(.survey-date-input:focus) {
     outline: none;
     border-color: #f7bb00;
     box-shadow: 0 0 0 3px #fce18e;
