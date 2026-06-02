@@ -432,11 +432,19 @@
       <p style="margin-top:6px;font-size:0.85rem;color:#6b7280;">Format: {isoToDisplay(strValue, dateFmt)}</p>
     {/if}
   {:else}
-    <input
-      class="text-input"
-      type="text"
-      use:datePicker={{ value: strValue, fmt: dateFmt, onPick: (iso) => onChange(iso), onClose: () => onBlur?.() }}
-    />
+    <div class="date-field">
+      <input
+        class="text-input"
+        type="text"
+        use:datePicker={{ value: strValue, fmt: dateFmt, onPick: (iso) => onChange(iso), onClose: () => onBlur?.() }}
+      />
+      <svg class="date-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+      </svg>
+    </div>
   {/if}
 
 {:else if question.type === 'single_choice'}
@@ -852,12 +860,26 @@
   /* flatpickr builds its visible "alt" input via JS, outside Svelte's scoped
      CSS — so the .text-input rule above can't reach it. Mirror the same look
      here via :global so the date field matches every other input. */
+  .date-field {
+    position: relative;
+  }
+  .date-field-icon {
+    position: absolute;
+    top: 50%;
+    right: 18px;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    color: var(--tertiary-80);
+    opacity: 0.55;
+    pointer-events: none; /* clicks fall through to the input → opens flatpickr */
+  }
   :global(.survey-date-input) {
     width: 100%;
     height: 52px;
     border: 1px solid #d9dde3;
     border-radius: 14px;
-    padding: 0 20px;
+    padding: 0 44px 0 20px; /* extra right room for the calendar icon */
     font-family: var(--font);
     font-size: 16px;
     color: var(--tertiary-80);
