@@ -8,21 +8,15 @@ export function getAnswerableQuestions(questions: Question[]): Question[] {
     .filter(q => !STRUCTURAL.includes(q.type))
 }
 
-/** Returns display number like "1.1" or "2" */
+/**
+ * Flat display number (1..N) over all answerable questions in sort order.
+ * Groups (and welcome/closing) are structural → never numbered; their member
+ * questions are numbered inline in the same continuous sequence as ungrouped
+ * ones. Mirrors the builder's `buildQuestionNumbers` so the number a respondent
+ * sees always matches the builder — no desync, and a group never consumes a
+ * number. Display-only; skip-logic keys off question ids / sortOrder.
+ */
 export function getQuestionNumber(question: Question, questions: Question[]): string {
-  const sorted = [...questions].sort((a, b) => a.sortOrder - b.sortOrder)
-  const groups = sorted.filter(q => q.type === 'question_group')
-
-  if (!question.groupId || groups.length === 0) {
-    const answerable = sorted.filter(q => !STRUCTURAL.includes(q.type))
-    const idx = answerable.findIndex(q => q.id === question.id)
-    return String(idx + 1)
-  }
-
-  const groupIdx = groups.findIndex(g => g.id === question.groupId)
-  const inGroup = sorted.filter(
-    q => q.groupId === question.groupId && !STRUCTURAL.includes(q.type)
-  )
-  const qIdx = inGroup.findIndex(q => q.id === question.id)
-  return `${groupIdx + 1}.${qIdx + 1}`
+  const idx = getAnswerableQuestions(questions).findIndex(q => q.id === question.id)
+  return idx >= 0 ? String(idx + 1) : ''
 }
