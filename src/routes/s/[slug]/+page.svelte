@@ -631,9 +631,9 @@
       <main class="content">
         <div
           class="question-stage"
-          class:single-question={runner.currentPage?.questions.length === 1 && settings.displayMode !== 'scroll'}
+          class:single-question={runner.currentPage?.questions.length === 1 && !runner.isScrollMode}
         >
-          {#if settings.displayMode === 'scroll'}
+          {#if runner.isScrollMode}
             <!-- Scroll mode: render every group as its own section so the
                  respondent view matches the builder (groups don't disappear). -->
             {#each runner.scrollSections as section (section.id)}

@@ -134,6 +134,16 @@ export class SurveyRunner {
   private skipRules = $derived(this.survey?.skipRules ?? [])
   answerableQuestions = $derived(getAnswerableQuestions(this.questions))
 
+  // Skip logic requires per-page evaluation, so any active skip rule forces
+  // one_per_page. Everything that branches on display mode — pagination, the
+  // page's scroll-vs-paged render branch, nav handlers, progress, and auto-
+  // advance — reads this single derived so they can never diverge. Scroll
+  // layout is therefore used only when the survey has no skip rules.
+  effectiveDisplayMode = $derived<'scroll' | 'one_per_page'>(
+    this.skipRules.length > 0 ? 'one_per_page' : (this.settings.displayMode || 'one_per_page'),
+  )
+  isScrollMode = $derived(this.effectiveDisplayMode === 'scroll')
+
   // ---- Derived: pagination ----
   // one_per_page: each standalone question is its own page; each group is one
   // page (members inside). Ordered by sort_order so it matches the builder.
@@ -142,10 +152,9 @@ export class SurveyRunner {
     const answerable = this.answerableQuestions
     if (!answerable.length) return []
 
-    // When skip rules are active, force one_per_page regardless of what the
-    // backend stored in display_mode — skip logic requires per-page evaluation.
-    const hasSkipRules = this.skipRules.length > 0
-    const mode = hasSkipRules ? 'one_per_page' : (this.settings.displayMode || 'one_per_page')
+    // Skip-aware mode (see effectiveDisplayMode) — never trust the raw stored
+    // display_mode here, or scroll layout could suppress skip-logic navigation.
+    const mode = this.effectiveDisplayMode
 
     if (mode === 'scroll') {
       return [{ id: 'all', questions: answerable }]
@@ -167,7 +176,7 @@ export class SurveyRunner {
   progress = $derived.by(() => {
     const total = this.answerableQuestions.length
     if (total === 0) return 0
-    const mode = this.settings.displayMode || 'one_per_page'
+    const mode = this.effectiveDisplayMode
     if (mode === 'scroll') {
       let answered = 0
       for (const q of this.answerableQuestions) {
@@ -338,7 +347,7 @@ export class SurveyRunner {
     }
 
     if (
-      this.settings.displayMode !== 'scroll' &&
+      this.effectiveDisplayMode !== 'scroll' &&
       this.currentPage &&
       this.currentPage.questions.length === 1 &&
       this.currentPage.questions[0].id === qid
@@ -440,7 +449,7 @@ export class SurveyRunner {
   }
 
   handleWheel = (e: WheelEvent) => {
-    if (this.settings.displayMode === 'scroll') return
+    if (this.effectiveDisplayMode === 'scroll') return
     if (!this.currentPage) return
     if (this.autoAdvancing) return
     if (Date.now() - this.lastNavTime < 700) return
@@ -464,7 +473,7 @@ export class SurveyRunner {
   }
 
   handleTouchEnd = (e: TouchEvent) => {
-    if (this.settings.displayMode === 'scroll') return
+    if (this.effectiveDisplayMode === 'scroll') return
     if (!this.currentPage) return
     if (this.autoAdvancing) return
     if (Date.now() - this.lastNavTime < 700) return
@@ -496,7 +505,7 @@ export class SurveyRunner {
     if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT') return
     if (target.isContentEditable) return
 
-    if (this.settings.displayMode !== 'scroll') {
+    if (this.effectiveDisplayMode !== 'scroll') {
       if (e.key === 'ArrowUp' || e.key === 'PageUp') {
         if (this.currentIndex > 0) {
           e.preventDefault()
@@ -513,7 +522,7 @@ export class SurveyRunner {
       }
     }
 
-    if (this.settings.displayMode === 'scroll') return
+    if (this.effectiveDisplayMode === 'scroll') return
     if (!this.currentPage || this.currentPage.questions.length !== 1) return
 
     if (e.key === 'Enter') {
