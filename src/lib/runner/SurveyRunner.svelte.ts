@@ -46,6 +46,32 @@ export type SurveyPage = {
   questions: Question[]
 }
 
+// Pure helper (module-level, no reactivity) — builds the ordered section list:
+// walks `questions` in sort_order, emits a section per question_group (members
+// matched by groupId, kept in answerable order) and each standalone answerable
+// question as its own section. A groupId pointing to a missing group falls back
+// to standalone (never silently dropped). Callers read the reactive inputs in
+// their own $derived so dependency tracking is direct and unambiguous.
+function buildSurveySections(questions: Question[], answerable: Question[]): SurveyPage[] {
+  if (!answerable.length) return []
+  const answerableIds = new Set(answerable.map((q) => q.id))
+  const groupIds = new Set(
+    questions.filter((q) => q.type === 'question_group').map((g) => g.id),
+  )
+  const sections: SurveyPage[] = []
+  for (const q of questions) {
+    if (q.type === 'question_group') {
+      const members = answerable.filter((m) => m.groupId === q.id)
+      if (members.length > 0) {
+        sections.push({ id: q.id, title: q.title, description: q.description ?? undefined, questions: members })
+      }
+    } else if (answerableIds.has(q.id) && !(q.groupId && groupIds.has(q.groupId))) {
+      sections.push({ id: q.id, questions: [q] })
+    }
+  }
+  return sections
+}
+
 export type RunnerOptions = {
   /**
    * Returns the current survey definition. Passed as a getter so reactive
@@ -109,40 +135,10 @@ export class SurveyRunner {
   answerableQuestions = $derived(getAnswerableQuestions(this.questions))
 
   // ---- Derived: pagination ----
-  // Ordered list of sections, interleaving standalone questions and group blocks
-  // strictly by sort_order so the respondent order faithfully matches the builder.
-  // Group membership is authoritative via groupId: a member is emitted under its
-  // group header (members kept in sort_order), and a standalone question keeps its
-  // own position. A question whose groupId points to a non-existent group (stale)
-  // is treated as standalone so it never silently disappears.
-  private buildSections(): SurveyPage[] {
-    const answerable = this.answerableQuestions
-    if (!answerable.length) return []
-    const answerableIds = new Set(answerable.map((q) => q.id))
-    const groupIds = new Set(
-      this.questions.filter((q) => q.type === 'question_group').map((g) => g.id),
-    )
-    const sections: SurveyPage[] = []
-    // this.questions is ordered by sort_order (backend ListBySurvey ORDER BY sort_order).
-    for (const q of this.questions) {
-      if (q.type === 'question_group') {
-        const members = answerable.filter((m) => m.groupId === q.id)
-        if (members.length > 0) {
-          sections.push({
-            id: q.id,
-            title: q.title,
-            description: q.description ?? undefined,
-            questions: members,
-          })
-        }
-      } else if (answerableIds.has(q.id) && !(q.groupId && groupIds.has(q.groupId))) {
-        sections.push({ id: q.id, questions: [q] })
-      }
-    }
-    return sections
-  }
-
+  // one_per_page: each standalone question is its own page; each group is one
+  // page (members inside). Ordered by sort_order so it matches the builder.
   surveyPages = $derived.by<SurveyPage[]>(() => {
+    const questions = this.questions
     const answerable = this.answerableQuestions
     if (!answerable.length) return []
 
@@ -154,16 +150,17 @@ export class SurveyRunner {
     if (mode === 'scroll') {
       return [{ id: 'all', questions: answerable }]
     }
-    // one_per_page: each standalone question is its own page; each group is one
-    // page. Ordered by sort_order so the sequence matches the builder exactly.
-    return this.buildSections()
+    return buildSurveySections(questions, answerable)
   })
 
   currentPage = $derived(this.surveyPages[this.currentIndex] ?? null)
 
-  // Scroll mode shows the whole survey on one page, but groups must still render
-  // as sections to match the builder. Same interleaved ordering as one_per_page.
-  scrollSections = $derived.by<SurveyPage[]>(() => this.buildSections())
+  // Scroll mode shows everything on one page but still renders group sections.
+  scrollSections = $derived.by<SurveyPage[]>(() => {
+    const questions = this.questions
+    const answerable = this.answerableQuestions
+    return buildSurveySections(questions, answerable)
+  })
 
   // In scroll mode the survey is a single page, so page-ratio reports 100% on first render.
   // Instead, report the share of answerable questions that the respondent has filled.
