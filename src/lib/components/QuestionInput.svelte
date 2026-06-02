@@ -88,6 +88,12 @@
   // Checkbox / single_choice helpers
   const arrValue = $derived(Array.isArray(value) ? (value as string[]) : [])
 
+  // Checkbox multi-select limit (0/undefined = unlimited). When the limit is
+  // reached, unselected options are disabled; deselecting one frees a slot.
+  // Answer shape (array) is unchanged → skip-logic / dataset / export unaffected.
+  const selectLimit = $derived(question.maxSelections && question.maxSelections > 0 ? question.maxSelections : 0)
+  const atSelectLimit = $derived(selectLimit > 0 && arrValue.length >= selectLimit)
+
   // Options for choice types — already a typed array from the normalized schema
   const options = $derived(question.options ?? [])
 
@@ -130,6 +136,7 @@
     if (idx >= 0) {
       current.splice(idx, 1)
     } else {
+      if (selectLimit > 0 && current.length >= selectLimit) return // batas tercapai
       current.push(label)
     }
     onChange(current)
@@ -192,6 +199,7 @@
       const standardLabels = options.filter(o => !o.isOther).map(o => o.label)
       onChange(current.filter(v => standardLabels.includes(v)))
     } else {
+      if (selectLimit > 0 && current.length >= selectLimit) return // batas tercapai
       current.push(otherOption.label)
       onChange(current)
     }
@@ -474,6 +482,8 @@
       <button
         class="option-card {checked ? 'selected' : ''}"
         type="button"
+        disabled={!checked && atSelectLimit}
+        style={!checked && atSelectLimit ? 'opacity:0.55;cursor:not-allowed;' : ''}
         onclick={() => toggleCheckbox(opt.label)}
       >
         <span class="checkbox-indicator {checked ? 'selected' : ''}">
@@ -492,6 +502,8 @@
       <button
         class="option-card {isOtherSelected ? 'selected' : ''}"
         type="button"
+        disabled={!isOtherSelected && atSelectLimit}
+        style={!isOtherSelected && atSelectLimit ? 'opacity:0.55;cursor:not-allowed;' : ''}
         onclick={toggleOtherCheckbox}
       >
         <span class="checkbox-indicator {isOtherSelected ? 'selected' : ''}">
@@ -515,6 +527,9 @@
       {/if}
     {/if}
   </div>
+  {#if selectLimit > 0}
+    <p style="margin-top:8px;font-size:0.85rem;color:#6b7280;">Pilih maksimal {selectLimit} jawaban ({arrValue.length}/{selectLimit}).</p>
+  {/if}
 
 {:else if question.type === 'dropdown'}
   <div class="options-list">

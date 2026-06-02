@@ -43,6 +43,7 @@ export interface Question {
   maxStars?: number
   minValue?: number
   maxValue?: number
+  maxSelections?: number
   minLabel?: string
   maxLabel?: string
   midLabel?: string
