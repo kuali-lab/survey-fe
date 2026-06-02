@@ -159,6 +159,32 @@ export class SurveyRunner {
 
   currentPage = $derived(this.surveyPages[this.currentIndex] ?? null)
 
+  // Scroll mode renders the whole survey on one page (see surveyPages), but groups
+  // must still appear as sections to match the builder. scrollSections mirrors the
+  // one_per_page grouping (non-group questions first, then one block per group) so
+  // the view can render section headers inline. Navigation/progress are unaffected:
+  // scroll remains a single surveyPages entry. Only used when displayMode === 'scroll'.
+  scrollSections = $derived.by<SurveyPage[]>(() => {
+    const answerable = this.answerableQuestions
+    if (!answerable.length) return []
+    const sections: SurveyPage[] = []
+    const nonGroupQs = answerable.filter((q) => !q.groupId)
+    if (nonGroupQs.length > 0) sections.push({ id: 'non-group', questions: nonGroupQs })
+    const groupQs = this.questions.filter((q) => q.type === 'question_group')
+    for (const g of groupQs) {
+      const qInGroup = answerable.filter((q) => q.groupId === g.id)
+      if (qInGroup.length > 0) {
+        sections.push({
+          id: g.id,
+          title: g.title,
+          description: g.description ?? undefined,
+          questions: qInGroup,
+        })
+      }
+    }
+    return sections
+  })
+
   // In scroll mode the survey is a single page, so page-ratio reports 100% on first render.
   // Instead, report the share of answerable questions that the respondent has filled.
   progress = $derived.by(() => {
