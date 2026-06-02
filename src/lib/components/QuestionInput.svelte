@@ -21,6 +21,56 @@
   const strValue = $derived(typeof value === 'string' ? value : (value != null ? String(value) : ''))
   const numValue = $derived(typeof value === 'number' ? value : null)
 
+  // ── Date question ──────────────────────────────────────────────────────────
+  // The stored answer is ALWAYS canonical ISO (YYYY-MM-DD, or YYYY-MM for the
+  // MM/YYYY format) so downstream consumers that assume ISO keep working — most
+  // importantly the skip-logic engine, which compares dates lexicographically.
+  // Only the on-screen text honors the configured dateFormat.
+  const dateFmt = $derived(question.dateFormat || 'DD/MM/YYYY')
+  let dateDisplay = $state('')
+
+  function pad2(n: number): string { return String(n).padStart(2, '0') }
+
+  // Parse a user-typed string (in dateFmt) into ISO; '' if incomplete/invalid.
+  function displayToIso(s: string, fmt: string): string {
+    const p = s.split(/\D+/).filter(Boolean)
+    let y = '', m = '', d = ''
+    if (fmt === 'YYYY-MM-DD') { [y, m, d] = p }
+    else if (fmt === 'MM/DD/YYYY') { [m, d, y] = p }
+    else if (fmt === 'MM/YYYY') { [m, y] = p }
+    else { [d, m, y] = p } // DD/MM/YYYY
+    const Y = Number(y), M = Number(m)
+    if (!Y || String(Y).length !== 4 || !M || M < 1 || M > 12) return ''
+    if (fmt === 'MM/YYYY') return `${Y}-${pad2(M)}`
+    const D = Number(d)
+    if (!D || D < 1 || D > 31) return ''
+    return `${Y}-${pad2(M)}-${pad2(D)}`
+  }
+
+  // Render a stored ISO value into the configured display format.
+  function isoToDisplay(iso: string, fmt: string): string {
+    if (!iso) return ''
+    const [Y, M, D] = iso.split('-')
+    if (fmt === 'YYYY-MM-DD') return D ? `${Y}-${M}-${D}` : `${Y}-${M}`
+    if (fmt === 'MM/DD/YYYY') return D ? `${M}/${D}/${Y}` : `${M}/${Y}`
+    if (fmt === 'MM/YYYY') return `${M}/${Y}`
+    return D ? `${D}/${M}/${Y}` : `${M}/${Y}` // DD/MM/YYYY
+  }
+
+  // Sync the display text from the stored ISO value (load / external change),
+  // without clobbering valid in-progress typing.
+  $effect(() => {
+    const iso = strValue
+    const cur = untrack(() => dateDisplay)
+    if (displayToIso(cur, dateFmt) === iso) return
+    dateDisplay = isoToDisplay(iso, dateFmt)
+  })
+
+  function onDateInput(raw: string) {
+    dateDisplay = raw
+    onChange(displayToIso(raw, dateFmt)) // store ISO; '' keeps required validation working
+  }
+
   // For website: strip https:// prefix from display
   const websiteDisplay = $derived(
     strValue.startsWith('https://') ? strValue.slice(8)
@@ -352,11 +402,16 @@
   {/if}
 
 {:else if question.type === 'date'}
+  <!-- Format-masked input: shows the configured dateFormat, but stores canonical
+       ISO (see displayToIso) so skip-logic / dataset / export stay correct. -->
   <input
     class="text-input"
-    type="date"
-    value={strValue}
-    oninput={(e) => onChange((e.currentTarget as HTMLInputElement).value)}
+    type="text"
+    inputmode="numeric"
+    autocomplete="off"
+    placeholder={dateFmt}
+    value={dateDisplay}
+    oninput={(e) => onDateInput((e.currentTarget as HTMLInputElement).value)}
     onblur={() => onBlur?.()}
   />
 
