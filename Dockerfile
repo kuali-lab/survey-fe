@@ -19,6 +19,11 @@ ENV APP_ENV=${APP_ENV}
 
 RUN npm run build
 
+# Prune dev dependencies so the already-resolved prod-only tree can be copied
+# into the runtime stage. Avoids the flaky, non-deterministic network re-install
+# at runtime (no lockfile/cache was available there).
+RUN npm prune --omit=dev
+
 # Stage 2: Runtime
 FROM node:20-alpine AS runtime
 
@@ -26,8 +31,7 @@ WORKDIR /app
 
 COPY --from=builder /app/build ./build
 COPY --from=builder /app/package.json ./
-
-RUN npm install --omit=dev
+COPY --from=builder /app/node_modules ./node_modules
 
 EXPOSE 3000
 
