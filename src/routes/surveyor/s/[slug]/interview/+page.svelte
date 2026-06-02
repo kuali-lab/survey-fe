@@ -216,7 +216,7 @@
     <main class="content">
       <div
         class="question-stage"
-        class:single-question={runner.currentPage?.questions.length === 1 && settings.displayMode !== 'scroll'}
+        class:single-question={runner.currentPage?.questions.length === 1 && !runner.isScrollMode}
       >
         {#if runner.currentPage}
           {#key runner.currentPage.id}
