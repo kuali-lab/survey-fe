@@ -2,6 +2,9 @@
   import type { Question, AnswerValue, ContactInfo } from '$lib/types.js'
   import { PUBLIC_API_BASE_URL } from '$env/static/public'
   import { untrack } from 'svelte'
+  import type { Action } from 'svelte/action'
+  import flatpickr from 'flatpickr'
+  import 'flatpickr/dist/flatpickr.css'
 
   let {
     question,
@@ -22,32 +25,13 @@
   const numValue = $derived(typeof value === 'number' ? value : null)
 
   // ── Date question ──────────────────────────────────────────────────────────
-  // The stored answer is ALWAYS canonical ISO (YYYY-MM-DD, or YYYY-MM for the
-  // MM/YYYY format) so downstream consumers that assume ISO keep working — most
-  // importantly the skip-logic engine, which compares dates lexicographically.
-  // Only the on-screen text honors the configured dateFormat.
+  // Native date/month picker: respondent picks from a calendar (no manual typing),
+  // and the value is stored as canonical ISO (YYYY-MM-DD, or YYYY-MM for MM/YYYY).
+  // ISO keeps every consumer correct — most importantly the skip-logic engine,
+  // which compares dates lexicographically. The configured dateFormat is shown as
+  // a formatted echo of the chosen value (the native widget uses the OS locale).
   const dateFmt = $derived(question.dateFormat || 'DD/MM/YYYY')
-  let dateDisplay = $state('')
 
-  function pad2(n: number): string { return String(n).padStart(2, '0') }
-
-  // Parse a user-typed string (in dateFmt) into ISO; '' if incomplete/invalid.
-  function displayToIso(s: string, fmt: string): string {
-    const p = s.split(/\D+/).filter(Boolean)
-    let y = '', m = '', d = ''
-    if (fmt === 'YYYY-MM-DD') { [y, m, d] = p }
-    else if (fmt === 'MM/DD/YYYY') { [m, d, y] = p }
-    else if (fmt === 'MM/YYYY') { [m, y] = p }
-    else { [d, m, y] = p } // DD/MM/YYYY
-    const Y = Number(y), M = Number(m)
-    if (!Y || String(Y).length !== 4 || !M || M < 1 || M > 12) return ''
-    if (fmt === 'MM/YYYY') return `${Y}-${pad2(M)}`
-    const D = Number(d)
-    if (!D || D < 1 || D > 31) return ''
-    return `${Y}-${pad2(M)}-${pad2(D)}`
-  }
-
-  // Render a stored ISO value into the configured display format.
   function isoToDisplay(iso: string, fmt: string): string {
     if (!iso) return ''
     const [Y, M, D] = iso.split('-')
@@ -57,18 +41,41 @@
     return D ? `${D}/${M}/${Y}` : `${M}/${Y}` // DD/MM/YYYY
   }
 
-  // Sync the display text from the stored ISO value (load / external change),
-  // without clobbering valid in-progress typing.
-  $effect(() => {
-    const iso = strValue
-    const cur = untrack(() => dateDisplay)
-    if (displayToIso(cur, dateFmt) === iso) return
-    dateDisplay = isoToDisplay(iso, dateFmt)
-  })
+  // flatpickr → builder's configured format. The stored value stays ISO
+  // (dateFormat:'Y-m-d'); only the visible altInput shows the chosen altFormat.
+  // allowInput:false forces calendar selection (no manual typing). SSR-safe:
+  // Svelte actions run only in the browser. Used for full-date formats; MM/YYYY
+  // uses a native month input (flatpickr month-only needs a plugin).
+  function flatpickrAltFormat(fmt: string): string {
+    if (fmt === 'MM/DD/YYYY') return 'm/d/Y'
+    if (fmt === 'YYYY-MM-DD') return 'Y-m-d'
+    return 'd/m/Y' // DD/MM/YYYY (default)
+  }
 
-  function onDateInput(raw: string) {
-    dateDisplay = raw
-    onChange(displayToIso(raw, dateFmt)) // store ISO; '' keeps required validation working
+  type DatePickerParams = { value: string; fmt: string; onPick: (iso: string) => void; onClose?: () => void }
+  const datePicker: Action<HTMLInputElement, DatePickerParams> = (node, params) => {
+    let p = params as DatePickerParams
+    const fp = flatpickr(node, {
+      dateFormat: 'Y-m-d',
+      altInput: true,
+      altInputClass: 'text-input',
+      altFormat: flatpickrAltFormat(p.fmt),
+      allowInput: false,
+      defaultDate: p.value || undefined,
+      onChange: (_dates, dateStr) => p.onPick(dateStr),
+      onClose: () => p.onClose?.(),
+    })
+    return {
+      update(next: DatePickerParams) {
+        p = next
+        if ((next.value || '') !== (fp.input.value || '')) {
+          fp.setDate(next.value || '', false)
+        }
+      },
+      destroy() {
+        fp.destroy()
+      },
+    }
   }
 
   // For website: strip https:// prefix from display
@@ -80,6 +87,12 @@
 
   // Checkbox / single_choice helpers
   const arrValue = $derived(Array.isArray(value) ? (value as string[]) : [])
+
+  // Checkbox multi-select limit (0/undefined = unlimited). When the limit is
+  // reached, unselected options are disabled; deselecting one frees a slot.
+  // Answer shape (array) is unchanged → skip-logic / dataset / export unaffected.
+  const selectLimit = $derived(question.maxSelections && question.maxSelections > 0 ? question.maxSelections : 0)
+  const atSelectLimit = $derived(selectLimit > 0 && arrValue.length >= selectLimit)
 
   // Options for choice types — already a typed array from the normalized schema
   const options = $derived(question.options ?? [])
@@ -123,6 +136,7 @@
     if (idx >= 0) {
       current.splice(idx, 1)
     } else {
+      if (selectLimit > 0 && current.length >= selectLimit) return // batas tercapai
       current.push(label)
     }
     onChange(current)
@@ -185,6 +199,7 @@
       const standardLabels = options.filter(o => !o.isOther).map(o => o.label)
       onChange(current.filter(v => standardLabels.includes(v)))
     } else {
+      if (selectLimit > 0 && current.length >= selectLimit) return // batas tercapai
       current.push(otherOption.label)
       onChange(current)
     }
@@ -402,18 +417,27 @@
   {/if}
 
 {:else if question.type === 'date'}
-  <!-- Format-masked input: shows the configured dateFormat, but stores canonical
-       ISO (see displayToIso) so skip-logic / dataset / export stay correct. -->
-  <input
-    class="text-input"
-    type="text"
-    inputmode="numeric"
-    autocomplete="off"
-    placeholder={dateFmt}
-    value={dateDisplay}
-    oninput={(e) => onDateInput((e.currentTarget as HTMLInputElement).value)}
-    onblur={() => onBlur?.()}
-  />
+  <!-- Calendar picker (no manual typing). Value stored as canonical ISO so
+       skip-logic / dataset / export stay correct. Full-date formats use flatpickr
+       (shows the configured format); MM/YYYY uses a native month picker. -->
+  {#if dateFmt === 'MM/YYYY'}
+    <input
+      class="text-input"
+      type="month"
+      value={strValue}
+      oninput={(e) => onChange((e.currentTarget as HTMLInputElement).value)}
+      onblur={() => onBlur?.()}
+    />
+    {#if strValue}
+      <p style="margin-top:6px;font-size:0.85rem;color:#6b7280;">Format: {isoToDisplay(strValue, dateFmt)}</p>
+    {/if}
+  {:else}
+    <input
+      class="text-input"
+      type="text"
+      use:datePicker={{ value: strValue, fmt: dateFmt, onPick: (iso) => onChange(iso), onClose: () => onBlur?.() }}
+    />
+  {/if}
 
 {:else if question.type === 'single_choice'}
   <div class="options-list">
@@ -458,6 +482,8 @@
       <button
         class="option-card {checked ? 'selected' : ''}"
         type="button"
+        disabled={!checked && atSelectLimit}
+        style={!checked && atSelectLimit ? 'opacity:0.55;cursor:not-allowed;' : ''}
         onclick={() => toggleCheckbox(opt.label)}
       >
         <span class="checkbox-indicator {checked ? 'selected' : ''}">
@@ -476,6 +502,8 @@
       <button
         class="option-card {isOtherSelected ? 'selected' : ''}"
         type="button"
+        disabled={!isOtherSelected && atSelectLimit}
+        style={!isOtherSelected && atSelectLimit ? 'opacity:0.55;cursor:not-allowed;' : ''}
         onclick={toggleOtherCheckbox}
       >
         <span class="checkbox-indicator {isOtherSelected ? 'selected' : ''}">
@@ -499,6 +527,9 @@
       {/if}
     {/if}
   </div>
+  {#if selectLimit > 0}
+    <p style="margin-top:8px;font-size:0.85rem;color:#6b7280;">Pilih maksimal {selectLimit} jawaban ({arrValue.length}/{selectLimit}).</p>
+  {/if}
 
 {:else if question.type === 'dropdown'}
   <div class="options-list">
