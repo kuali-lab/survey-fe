@@ -16,8 +16,8 @@
     position: sticky;
     top: 0;
     z-index: 10;
-    background: white;
-    padding: 10px 16px;
+    background: var(--canvas);
+    padding: 12px 16px;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -26,22 +26,22 @@
   .track {
     flex: 1;
     height: 4px;
-    background: #d9dde3;
-    border-radius: 100px;
+    background: var(--canvas-soft);
+    border-radius: var(--radius-pill);
     overflow: hidden;
   }
 
   .fill {
     height: 100%;
-    background: #f7bb00;
-    border-radius: 100px;
+    background: var(--ink);
+    border-radius: var(--radius-pill);
     transition: width 0.3s ease;
   }
 
   .percent {
     font-size: 12px;
-    font-weight: 700;
-    color: var(--tertiary-70, #5a5a55);
+    font-weight: 500;
+    color: var(--text-body);
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
     min-width: 32px;
@@ -50,7 +50,7 @@
 
   @media (min-width: 768px) {
     .progress-wrap {
-      padding: 12px 24px;
+      padding: 16px 24px;
     }
     .percent {
       font-size: 13px;

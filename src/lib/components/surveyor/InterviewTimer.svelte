@@ -34,14 +34,18 @@
   .timer {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     font-variant-numeric: tabular-nums;
     font-size: 13px;
-    font-weight: 700;
-    color: var(--tertiary-80);
+    font-weight: 600;
+    color: var(--tertiary-100);
+    background: var(--canvas-soft);
+    border-radius: var(--radius-pill);
+    padding: 6px 12px;
+    line-height: 1;
   }
   .icon {
-    color: var(--primary-50);
+    color: var(--ink);
   }
   .time {
     line-height: 1;

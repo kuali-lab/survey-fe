@@ -18,9 +18,9 @@
   } = $props()
 </script>
 
-<div class="card">
+<div class="welcome">
   <div class="logo-bar">
-    <Logo height={24} />
+    <Logo height={28} />
   </div>
 
   {#if imageUrl}
@@ -36,7 +36,7 @@
     {/if}
 
     {#if error}
-      <div class="error-msg">
+      <div class="error-msg" role="alert">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
           <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/>
           <line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -46,9 +46,9 @@
       </div>
     {/if}
 
-    <button class="cta" onclick={onStart}>
+    <button class="cta" type="button" onclick={onStart}>
       {ctaText}
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </button>
@@ -56,90 +56,102 @@
 </div>
 
 <style>
-  .card {
-    background: white;
-    border-radius: var(--radius-xl);
-    max-width: 520px;
+  .welcome {
+    background: var(--canvas);
+    max-width: 560px;
     width: 100%;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
-    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .logo-bar {
+    display: flex;
+    align-items: center;
   }
 
   .cover {
     width: 100%;
-    height: 220px;
+    aspect-ratio: 16 / 9;
     overflow: hidden;
-    background: var(--tertiary-10);
+    background: var(--canvas-soft);
+    border-radius: var(--radius-card);
   }
 
   .cover img {
     width: 100%;
     height: 100%;
-    object-fit: contain;
-  }
-
-  .logo-bar {
-    padding: 20px 32px 0;
+    object-fit: cover;
+    display: block;
   }
 
   .body {
-    padding: 32px;
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
     gap: 16px;
   }
 
   .title {
-    font-size: 28px;
+    font-family: var(--font-display);
+    font-size: 32px;
+    line-height: 40px;
     font-weight: 700;
-    color: var(--tertiary-100);
-    line-height: 1.2;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
   }
 
   .description {
     font-size: 16px;
-    color: var(--tertiary-70);
-    line-height: 1.6;
+    line-height: 24px;
+    color: var(--text-body);
     white-space: pre-wrap;
   }
 
   .cta {
+    align-self: flex-start;
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    background: var(--primary-50);
-    color: #221500;
+    gap: 10px;
+    background: var(--ink);
+    color: var(--on-ink);
     font-family: var(--font);
     font-size: 16px;
-    font-weight: 700;
+    font-weight: 500;
     border: none;
-    border-radius: var(--radius-xl);
+    border-radius: var(--radius-pill);
     padding: 14px 28px;
     cursor: pointer;
-    transition: background 0.2s, transform 0.1s;
-    margin-top: 8px;
+    transition: background 0.15s;
+    margin-top: 4px;
   }
 
-  .cta:hover {
-    background: #e8ae00;
-  }
+  .cta:hover { background: var(--ink-elevated); }
 
-  .cta:active {
-    transform: scale(0.98);
+  @media (prefers-reduced-motion: no-preference) {
+    .cta:active { transform: scale(0.97); }
   }
 
   .error-msg {
     display: flex;
     align-items: center;
     gap: 8px;
-    background: #fee2e2;
-    color: #dc2626;
+    background: var(--error-bg);
+    color: var(--error);
+    border: 1px solid var(--error-border);
     padding: 12px 16px;
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-input);
     font-size: 14px;
     font-weight: 500;
-    width: 100%;
-    margin-top: 4px;
+  }
+
+  @media (min-width: 768px) {
+    .title {
+      font-size: 40px;
+      line-height: 48px;
+    }
+    .description {
+      font-size: 17px;
+      line-height: 26px;
+    }
   }
 </style>

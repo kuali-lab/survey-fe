@@ -320,9 +320,9 @@
           {:else}
             <div class="image-option-placeholder">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-                <rect x="3" y="3" width="18" height="18" rx="3" stroke="#d9dde3" stroke-width="1.5"/>
-                <circle cx="8.5" cy="8.5" r="1.5" fill="#d9dde3"/>
-                <path d="M3 16l5-5 4 4 3-3 6 5" stroke="#d9dde3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <rect x="3" y="3" width="18" height="18" rx="3" stroke="var(--surface-pressed)" stroke-width="1.5"/>
+                <circle cx="8.5" cy="8.5" r="1.5" fill="var(--surface-pressed)"/>
+                <path d="M3 16l5-5 4 4 3-3 6 5" stroke="var(--surface-pressed)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </div>
           {/if}
@@ -429,7 +429,7 @@
       onblur={() => onBlur?.()}
     />
     {#if strValue}
-      <p style="margin-top:6px;font-size:0.85rem;color:#6b7280;">Format: {isoToDisplay(strValue, dateFmt)}</p>
+      <p style="margin-top:6px;font-size:0.85rem;color:var(--text-body);">Format: {isoToDisplay(strValue, dateFmt)}</p>
     {/if}
   {:else}
     <div class="date-field">
@@ -536,7 +536,7 @@
     {/if}
   </div>
   {#if selectLimit > 0}
-    <p style="margin-top:8px;font-size:0.85rem;color:#6b7280;">Pilih maksimal {selectLimit} jawaban ({arrValue.length}/{selectLimit}).</p>
+    <p style="margin-top:8px;font-size:0.85rem;color:var(--text-body);">Pilih maksimal {selectLimit} jawaban ({arrValue.length}/{selectLimit}).</p>
   {/if}
 
 {:else if question.type === 'dropdown'}
@@ -618,8 +618,8 @@
             <path
               class="star-path"
               d="M12 2l2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77 5.82 21.02 7 14.14 2 9.27l7.1-1.01L12 2z"
-              fill={star <= (hoverRating || ratingValue) ? '#f7bb00' : '#d9dde3'}
-              stroke={star <= (hoverRating || ratingValue) ? '#e8ae00' : '#c8ccd2'}
+              fill={star <= (hoverRating || ratingValue) ? 'var(--ink)' : 'var(--canvas-soft)'}
+              stroke={star <= (hoverRating || ratingValue) ? 'var(--ink)' : 'var(--surface-pressed)'}
               stroke-width="1"
             />
           </svg>
@@ -790,15 +790,15 @@
       >
         {#if uploading}
           <svg class="upload-spinner" width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" stroke="#d9dde3" stroke-width="2"/>
-            <path d="M12 2a10 10 0 0 1 10 10" stroke="#f7bb00" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="12" cy="12" r="10" stroke="var(--canvas-soft)" stroke-width="2"/>
+            <path d="M12 2a10 10 0 0 1 10 10" stroke="var(--ink)" stroke-width="2" stroke-linecap="round"/>
           </svg>
-          <span>Mengunggah berkas...</span>
+          <span>Mengunggah berkas…</span>
         {:else}
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>
-            <polyline points="17 8 12 3 7 8" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="12" y1="3" x2="12" y2="15" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <polyline points="17 8 12 3 7 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="12" y1="3" x2="12" y2="15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
           <span>Klik atau seret berkas ke sini</span>
           <span class="file-hint">Gambar, PDF, atau Word — Maks. 10 MB</span>
@@ -839,22 +839,25 @@
   .text-input {
     width: 100%;
     height: 52px;
-    border: 1px solid #d9dde3;
-    border-radius: 14px;
-    padding: 0 20px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-input);
+    padding: 0 16px;
     font-family: var(--font);
     font-size: 16px;
-    color: var(--tertiary-80);
-    background: white;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    color: var(--text-primary);
+    background: var(--canvas-soft);
+    transition: background 0.15s, border-color 0.15s;
     appearance: none;
     -webkit-appearance: none;
   }
 
+  .text-input::placeholder { color: var(--text-muted); }
+
   .text-input:focus {
     outline: none;
-    border-color: #f7bb00;
-    box-shadow: 0 0 0 3px #fce18e;
+    background: var(--canvas);
+    border-color: var(--ink);
+    border-width: 2px;
   }
 
   /* flatpickr builds its visible "alt" input via JS, outside Svelte's scoped
@@ -866,98 +869,102 @@
   .date-field-icon {
     position: absolute;
     top: 50%;
-    right: 18px;
+    right: 16px;
     transform: translateY(-50%);
     width: 20px;
     height: 20px;
-    color: var(--tertiary-80);
-    opacity: 0.55;
-    pointer-events: none; /* clicks fall through to the input → opens flatpickr */
+    color: var(--text-body);
+    pointer-events: none;
   }
   :global(.survey-date-input) {
     width: 100%;
     height: 52px;
-    border: 1px solid #d9dde3;
-    border-radius: 14px;
-    padding: 0 44px 0 20px; /* extra right room for the calendar icon */
+    border: 1px solid transparent;
+    border-radius: var(--radius-input);
+    padding: 0 44px 0 16px;
     font-family: var(--font);
     font-size: 16px;
-    color: var(--tertiary-80);
-    background: white;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    color: var(--text-primary);
+    background: var(--canvas-soft);
+    transition: background 0.15s, border-color 0.15s;
     appearance: none;
     -webkit-appearance: none;
   }
   :global(.survey-date-input:focus) {
     outline: none;
-    border-color: #f7bb00;
-    box-shadow: 0 0 0 3px #fce18e;
+    background: var(--canvas);
+    border-color: var(--ink);
+    border-width: 2px;
   }
 
   .textarea-input {
     width: 100%;
-    border: 1px solid #d9dde3;
-    border-radius: 14px;
-    padding: 14px 20px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-input);
+    padding: 14px 16px;
     font-family: var(--font);
     font-size: 16px;
-    color: var(--tertiary-80);
-    background: white;
+    color: var(--text-primary);
+    background: var(--canvas-soft);
     resize: vertical;
     min-height: 120px;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: background 0.15s, border-color 0.15s;
     line-height: 1.5;
   }
 
+  .textarea-input::placeholder { color: var(--text-muted); }
+
   .textarea-input:focus {
     outline: none;
-    border-color: #f7bb00;
-    box-shadow: 0 0 0 3px #fce18e;
+    background: var(--canvas);
+    border-color: var(--ink);
+    border-width: 2px;
   }
 
   .number-hint {
     margin: 6px 4px 0;
-    font-size: 12.5px;
-    color: var(--tertiary-60);
+    font-size: 12px;
+    color: var(--text-body);
   }
 
   /* ── URL field ── */
   .url-field {
     display: flex;
     align-items: center;
-    border: 1px solid #d9dde3;
-    border-radius: 14px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-input);
     overflow: hidden;
-    transition: border-color 0.2s, box-shadow 0.2s;
-    background: white;
+    transition: background 0.15s, border-color 0.15s;
+    background: var(--canvas-soft);
   }
 
   .url-field:focus-within {
-    border-color: #f7bb00;
-    box-shadow: 0 0 0 3px #fce18e;
+    background: var(--canvas);
+    border-color: var(--ink);
+    border-width: 2px;
   }
 
   .prefix {
-    padding: 0 12px 0 20px;
-    font-size: 15px;
-    color: var(--tertiary-60);
+    padding: 0 12px 0 16px;
+    font-size: 14px;
+    color: var(--text-body);
     white-space: nowrap;
     flex-shrink: 0;
     height: 52px;
     display: flex;
     align-items: center;
-    background: var(--tertiary-20);
-    border-right: 1px solid #d9dde3;
+    background: transparent;
+    border-right: 1px solid var(--surface-pressed);
   }
 
   .url-input {
     flex: 1;
     height: 52px;
     border: none;
-    padding: 0 20px;
+    padding: 0 16px;
     font-family: var(--font);
     font-size: 16px;
-    color: var(--tertiary-80);
+    color: var(--text-primary);
     background: transparent;
     outline: none;
   }
@@ -966,23 +973,24 @@
   .select-input {
     width: 100%;
     height: 52px;
-    border: 1px solid #d9dde3;
-    border-radius: 14px;
-    padding: 0 40px 0 20px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-input);
+    padding: 0 40px 0 16px;
     font-family: var(--font);
     font-size: 16px;
-    color: var(--tertiary-80);
-    background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9l6 6 6-6' stroke='%238c8f93' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 16px center;
+    color: var(--text-primary);
+    background: var(--canvas-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9l6 6 6-6' stroke='%23000000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 16px center;
     appearance: none;
     -webkit-appearance: none;
     cursor: pointer;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: background-color 0.15s, border-color 0.15s;
   }
 
   .select-input:focus {
     outline: none;
-    border-color: #f7bb00;
-    box-shadow: 0 0 0 3px #fce18e;
+    background-color: var(--canvas);
+    border-color: var(--ink);
+    border-width: 2px;
   }
 
   /* ── Option cards ── */
@@ -998,61 +1006,70 @@
     gap: 12px;
     width: 100%;
     text-align: left;
-    border: 1px solid #d9dde3;
-    border-radius: 12px;
-    padding: 12px 16px;
-    background: white;
+    border: 1px solid var(--canvas-soft);
+    border-radius: var(--radius-option);
+    padding: 14px 16px;
+    background: var(--canvas);
     cursor: pointer;
     font-family: var(--font);
     font-size: 15px;
-    font-weight: 600;
-    color: var(--tertiary-80);
-    transition: border-color 0.15s, background 0.15s;
+    font-weight: 500;
+    color: var(--text-primary);
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
   }
 
   .option-card:hover {
-    border-color: #f7bb00;
-    background: #fffbed;
+    border-color: var(--ink);
   }
 
   .option-card.selected {
-    border-color: #f7bb00;
-    background: #fffbed;
+    border-color: var(--ink);
+    background: var(--ink);
+    color: var(--on-ink);
   }
 
   .radio-indicator {
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    border: 2px solid #d9dde3;
+    border: 2px solid var(--surface-pressed);
     flex-shrink: 0;
-    transition: border-color 0.15s;
+    background: var(--canvas);
+    transition: border-color 0.15s, background 0.15s;
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
+  .option-card.selected .radio-indicator,
   .radio-indicator.selected {
-    border-color: #f7bb00;
-    border-width: 6px;
+    border-color: var(--on-ink);
+    background: var(--on-ink);
+    box-shadow: inset 0 0 0 4px var(--ink);
   }
 
   .checkbox-indicator {
     width: 20px;
     height: 20px;
-    border-radius: 6px;
-    border: 2px solid #d9dde3;
+    border-radius: 4px;
+    border: 2px solid var(--surface-pressed);
     flex-shrink: 0;
+    background: var(--canvas);
     transition: border-color 0.15s, background 0.15s;
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
+  .option-card.selected .checkbox-indicator,
   .checkbox-indicator.selected {
-    border-color: #f7bb00;
-    background: #f7bb00;
+    border-color: var(--on-ink);
+    background: var(--on-ink);
+  }
+
+  .option-card.selected .checkbox-indicator :global(svg path) {
+    stroke: var(--ink);
   }
 
   .option-label {
@@ -1067,10 +1084,10 @@
     flex-shrink: 0;
     width: 22px;
     height: 22px;
-    border-radius: 6px;
-    border: 1px solid #d9dde3;
-    background: var(--tertiary-10, #f9fafb);
-    color: var(--tertiary-60);
+    border-radius: 4px;
+    border: 1px solid var(--surface-pressed);
+    background: var(--canvas);
+    color: var(--text-body);
     font-size: 11px;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
@@ -1081,9 +1098,9 @@
 
   .option-card.selected .option-letter,
   .yes-no-btn.selected .option-letter {
-    border-color: #e8ae00;
-    background: white;
-    color: #221500;
+    border-color: transparent;
+    background: var(--on-ink);
+    color: var(--ink);
   }
 
   /* ── Yes/No ── */
@@ -1098,14 +1115,15 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 16px 18px;
-    border: 2px solid #d9dde3;
-    border-radius: var(--radius-lg);
-    background: white;
+    padding: 16px 20px;
+    height: 56px;
+    border: 1px solid var(--canvas-soft);
+    border-radius: var(--radius-pill);
+    background: var(--canvas);
     font-family: var(--font);
     font-size: 16px;
-    font-weight: 600;
-    color: var(--tertiary-70);
+    font-weight: 500;
+    color: var(--text-primary);
     cursor: pointer;
     transition: border-color 0.15s, background 0.15s, color 0.15s;
   }
@@ -1119,15 +1137,13 @@
   }
 
   .yes-no-btn:hover {
-    border-color: #f7bb00;
-    background: #fffbed;
-    color: var(--tertiary-80);
+    border-color: var(--ink);
   }
 
   .yes-no-btn.selected {
-    border-color: #f7bb00;
-    background: #f7bb00;
-    color: #221500;
+    border-color: var(--ink);
+    background: var(--ink);
+    color: var(--on-ink);
   }
 
   /* ── Rating stars ── */
@@ -1151,8 +1167,10 @@
     transition: transform 0.1s;
   }
 
-  .star-btn:hover {
-    transform: scale(1.15);
+  @media (prefers-reduced-motion: no-preference) {
+    .star-btn:hover {
+      transform: scale(1.15);
+    }
   }
 
   .star-path {
@@ -1162,12 +1180,12 @@
   .rating-label {
     margin: 4px 0 0 4px;
     font-size: 13px;
-    font-weight: 600;
-    color: var(--tertiary-70);
+    font-weight: 500;
+    color: var(--text-body);
     font-variant-numeric: tabular-nums;
   }
 
-  /* ── NPS ── */
+  /* ── NPS (kept gradient on selected; chrome flips to canvas-soft) ── */
   .nps-wrap {
     display: flex;
     flex-direction: column;
@@ -1182,14 +1200,14 @@
   .nps-btn {
     flex: 1;
     min-width: 0;
-    height: 40px;
-    border: 2px solid #d9dde3;
-    border-radius: var(--radius-md);
-    background: white;
+    height: 44px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-input);
+    background: var(--canvas-soft);
     font-family: var(--font);
     font-size: 14px;
-    font-weight: 600;
-    color: var(--tertiary-70);
+    font-weight: 500;
+    color: var(--text-primary);
     cursor: pointer;
     transition: border-color 0.15s, background 0.15s, color 0.15s;
     display: flex;
@@ -1197,24 +1215,21 @@
     justify-content: center;
   }
 
-  .nps-btn.nps-red:hover { border-color: #ef4444; background: #fef2f2; }
-  .nps-btn.nps-red.selected { border-color: #ef4444; background: #ef4444; color: white; }
+  .nps-btn:hover { border-color: var(--ink); }
 
-  .nps-btn.nps-amber:hover { border-color: #f59e0b; background: #fffbeb; }
-  .nps-btn.nps-amber.selected { border-color: #f59e0b; background: #f59e0b; color: #221500; }
-
-  .nps-btn.nps-green:hover { border-color: #22c55e; background: #f0fdf4; }
-  .nps-btn.nps-green.selected { border-color: #22c55e; background: #22c55e; color: white; }
+  .nps-btn.nps-red.selected { border-color: var(--scale-low); background: var(--scale-low); color: var(--on-ink); }
+  .nps-btn.nps-amber.selected { border-color: var(--scale-mid); background: var(--scale-mid); color: var(--tertiary-100); }
+  .nps-btn.nps-green.selected { border-color: var(--scale-high); background: var(--scale-high); color: var(--on-ink); }
 
   .nps-labels {
     display: flex;
     justify-content: space-between;
     font-size: 12px;
-    color: var(--tertiary-60);
+    color: var(--text-body);
     padding: 0 2px;
   }
 
-  /* ── Opinion scale ── */
+  /* ── Opinion scale (kept gradient on selected; chrome flips to canvas-soft) ── */
   .opinion-wrap {
     display: flex;
     flex-direction: column;
@@ -1226,45 +1241,40 @@
     gap: 4px;
   }
 
-  /* Opinion scale buttons fill on a red→yellow→green gradient by position
-     so the scale reads at a glance. --scale-position is set inline per
-     button (0..1) and drives the HSL hue. */
   .opinion-btn {
     flex: 1;
     min-width: 0;
-    height: 40px;
+    height: 44px;
     padding: 0 4px;
-    border: 2px solid hsl(calc(120 * var(--scale-position, 0.5)), 35%, 82%);
-    border-radius: var(--radius-md);
-    background: hsl(calc(120 * var(--scale-position, 0.5)), 65%, 96%);
+    border: 1px solid transparent;
+    border-radius: var(--radius-input);
+    background: var(--canvas-soft);
     font-family: var(--font);
     font-size: 14px;
-    font-weight: 600;
-    color: hsl(calc(120 * var(--scale-position, 0.5)), 50%, 28%);
+    font-weight: 500;
+    color: var(--text-primary);
     cursor: pointer;
-    transition: border-color 0.15s, background 0.15s, color 0.15s, transform 0.1s;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
   .opinion-btn:hover {
-    background: hsl(calc(120 * var(--scale-position, 0.5)), 70%, 90%);
-    border-color: hsl(calc(120 * var(--scale-position, 0.5)), 55%, 65%);
+    border-color: var(--ink);
   }
 
   .opinion-btn.selected {
     background: hsl(calc(120 * var(--scale-position, 0.5)), 65%, 50%);
     border-color: hsl(calc(120 * var(--scale-position, 0.5)), 60%, 38%);
-    color: white;
-    transform: scale(1.05);
+    color: var(--on-ink);
   }
 
   .opinion-labels {
     display: flex;
     justify-content: space-between;
     font-size: 12px;
-    color: var(--tertiary-60);
+    color: var(--text-body);
     padding: 0 2px;
   }
 
@@ -1273,7 +1283,6 @@
     overflow-x: auto;
   }
 
-  /* Default to mobile-card layout; table swaps in at >= 640px below. */
   .matrix-table {
     display: none;
   }
@@ -1292,8 +1301,8 @@
 
   .matrix-mobile-label {
     font-size: 14px;
-    font-weight: 600;
-    color: var(--tertiary-90, #2a2a25);
+    font-weight: 500;
+    color: var(--text-primary);
     line-height: 1.4;
   }
 
@@ -1318,26 +1327,26 @@
   .matrix-col-header {
     text-align: center;
     padding: 8px 12px;
-    font-weight: 600;
+    font-weight: 500;
     font-size: 13px;
-    color: var(--tertiary-60);
+    color: var(--text-body);
     white-space: nowrap;
-    border-bottom: 1px solid #e8eaed;
+    border-bottom: 1px solid var(--canvas-soft);
   }
 
   .matrix-row-header {
     padding: 8px;
-    border-bottom: 1px solid #e8eaed;
+    border-bottom: 1px solid var(--canvas-soft);
   }
 
   .matrix-row:nth-child(even) {
-    background: var(--tertiary-10, #f9fafb);
+    background: var(--canvas-soft);
   }
 
   .matrix-row-label {
     padding: 12px 16px 12px 4px;
     font-size: 14px;
-    color: var(--tertiary-80);
+    color: var(--text-primary);
     line-height: 1.4;
     min-width: 120px;
   }
@@ -1352,8 +1361,8 @@
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    border: 2px solid #d9dde3;
-    background: white;
+    border: 2px solid var(--surface-pressed);
+    background: var(--canvas);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -1363,13 +1372,12 @@
   }
 
   .matrix-radio:hover {
-    border-color: #f7bb00;
-    background: #fffbed;
+    border-color: var(--ink);
   }
 
   .matrix-radio.selected {
-    border-color: #f7bb00;
-    background: #f7bb00;
+    border-color: var(--ink);
+    background: var(--ink);
   }
 
   .matrix-radio .radio-dot {
@@ -1381,19 +1389,19 @@
   }
 
   .matrix-radio.selected .radio-dot {
-    background: #221500;
+    background: var(--on-ink);
   }
 
   /* ── Statement ── */
   .statement-body {
-    background: var(--tertiary-20);
-    border-radius: var(--radius-md);
+    background: var(--canvas-soft);
+    border-radius: var(--radius-card);
     padding: 16px 20px;
   }
 
   .statement-body p {
     font-size: 16px;
-    color: var(--tertiary-70);
+    color: var(--text-primary);
     line-height: 1.6;
     white-space: pre-wrap;
   }
@@ -1407,26 +1415,26 @@
 
   .image-option-card {
     position: relative;
-    border: 2px solid #d9dde3;
-    border-radius: 12px;
+    border: 2px solid var(--canvas-soft);
+    border-radius: var(--radius-option);
     overflow: hidden;
-    background: white;
+    background: var(--canvas);
     cursor: pointer;
     text-align: left;
     transition: border-color 0.15s, background 0.15s;
     padding: 0;
   }
 
-  .image-option-card:hover {
-    border-color: #f7bb00;
-  }
+  .image-option-card:hover { border-color: var(--ink); }
 
   .image-option-card.selected {
-    border-color: #f7bb00;
-    background: #fffbed;
+    border-color: var(--ink);
+    background: var(--ink);
+    color: var(--on-ink);
   }
 
-  /* Letter badge for image_choice when labels are hidden — corner overlay. */
+  .image-option-card.selected .image-option-label { color: var(--on-ink); }
+
   .image-option-corner-letter {
     position: absolute;
     top: 8px;
@@ -1436,26 +1444,26 @@
     justify-content: center;
     width: 22px;
     height: 22px;
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.92);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.95);
     border: 1px solid rgba(0, 0, 0, 0.08);
-    color: var(--tertiary-80);
+    color: var(--tertiary-100);
     font-size: 11px;
     font-weight: 700;
     z-index: 1;
   }
 
   .image-option-card.selected .image-option-corner-letter {
-    background: var(--primary-50, #f7bb00);
-    color: #221500;
-    border-color: #e8ae00;
+    background: var(--canvas);
+    color: var(--primary-on);
+    border-color: transparent;
   }
 
   .image-option-img-wrap {
     width: 100%;
     aspect-ratio: 1 / 1;
     overflow: hidden;
-    background: #f5f6f8;
+    background: var(--canvas-soft);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1479,13 +1487,13 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 12px;
+    padding: 10px 12px;
   }
 
   .image-option-label {
     font-size: 13px;
-    font-weight: 600;
-    color: var(--tertiary-80);
+    font-weight: 500;
+    color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1528,29 +1536,29 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    border: 2px dashed #d9dde3;
-    border-radius: 14px;
+    border: 2px dashed var(--surface-pressed);
+    border-radius: var(--radius-option);
     padding: 32px 24px;
     cursor: pointer;
     text-align: center;
     transition: border-color 0.2s, background 0.2s;
-    color: var(--tertiary-60);
+    color: var(--text-body);
     font-size: 14px;
     font-weight: 500;
     position: relative;
+    background: var(--canvas);
   }
 
   .file-drop-zone:hover {
-    border-color: #f7bb00;
-    background: #fffdf0;
+    border-color: var(--ink);
+    background: var(--canvas-soft);
   }
 
-  /* Active drag-over state — clear visual cue that the drop will land. */
   .file-drop-zone.drag-over {
-    border-color: #f7bb00;
+    border-color: var(--ink);
     border-style: solid;
-    background: #fef3c7;
-    color: var(--tertiary-80);
+    background: var(--canvas-soft);
+    color: var(--text-primary);
   }
 
   .file-drop-zone.uploading {
@@ -1560,7 +1568,7 @@
 
   .file-hint {
     font-size: 12px;
-    color: var(--tertiary-40);
+    color: var(--text-muted);
   }
 
   .file-input-hidden {
@@ -1580,9 +1588,9 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    background: #f0fdf4;
-    border: 1px solid #bbf7d0;
-    border-radius: 12px;
+    background: var(--success-bg);
+    border: 1px solid var(--success-border);
+    border-radius: var(--radius-option);
     padding: 12px 16px;
     color: #166534;
   }
@@ -1596,15 +1604,15 @@
     width: 48px;
     height: 48px;
     object-fit: cover;
-    border-radius: 8px;
-    border: 1px solid #bbf7d0;
-    background: white;
+    border-radius: 6px;
+    border: 1px solid var(--success-border);
+    background: var(--canvas);
   }
 
   .file-name {
     flex: 1;
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1629,8 +1637,8 @@
 
   .upload-error {
     font-size: 12px;
-    color: var(--error-50, #dc2626);
-    font-weight: 600;
+    color: var(--error);
+    font-weight: 500;
     padding: 0 4px;
   }
 
