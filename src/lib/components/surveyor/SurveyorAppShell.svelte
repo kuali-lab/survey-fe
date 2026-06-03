@@ -118,10 +118,9 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    background: white;
-    border-bottom: 1px solid var(--tertiary-30);
-    box-shadow: inset 3px 0 0 var(--primary-50);
-    padding: 8px 16px;
+    background: var(--canvas);
+    border-bottom: 1px solid var(--canvas-soft);
+    padding: 10px 16px;
     min-height: 56px;
   }
 
@@ -142,8 +141,8 @@
 
   .title {
     font-size: 14px;
-    font-weight: 700;
-    color: var(--tertiary-100);
+    font-weight: 500;
+    color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -151,14 +150,14 @@
   }
 
   .sub {
-    font-size: 11.5px;
-    color: var(--tertiary-70);
+    font-size: 12px;
+    color: var(--text-body);
   }
 
   .right {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     flex-shrink: 0;
   }
 
@@ -167,34 +166,33 @@
   }
 
   .menu-btn {
-    background: transparent;
-    border: 1px solid var(--tertiary-30);
-    border-radius: var(--radius-md);
-    width: 32px;
-    height: 32px;
+    background: var(--canvas-soft);
+    border: none;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    color: var(--tertiary-70);
+    color: var(--tertiary-100);
     cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
+    transition: background 0.15s;
   }
 
   .menu-btn:hover {
     background: var(--tertiary-20);
-    border-color: var(--tertiary-40);
   }
 
   .menu {
     position: absolute;
     top: calc(100% + 6px);
     right: 0;
-    min-width: 200px;
-    background: white;
-    border: 1px solid var(--tertiary-30);
-    border-radius: var(--radius-md);
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
-    padding: 6px;
+    min-width: 220px;
+    background: var(--canvas);
+    border: 1px solid var(--canvas-soft);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-level-1);
+    padding: 8px;
     display: flex;
     flex-direction: column;
     z-index: 40;
@@ -204,26 +202,26 @@
     text-align: left;
     background: transparent;
     border: none;
-    border-radius: var(--radius-sm);
-    padding: 8px 10px;
+    border-radius: var(--radius-input);
+    padding: 10px 12px;
     font-family: var(--font);
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--tertiary-100);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
     cursor: pointer;
   }
 
   .menu-item:hover {
-    background: var(--tertiary-20);
+    background: var(--canvas-soft);
   }
 
   .menu-item.danger {
-    color: var(--error-50);
+    color: var(--error);
   }
 
   .menu-sep {
     height: 1px;
-    background: var(--tertiary-30);
+    background: var(--canvas-soft);
     margin: 4px 2px;
   }
 

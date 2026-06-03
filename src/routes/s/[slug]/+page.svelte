@@ -732,12 +732,12 @@
 <style>
   .page {
     min-height: 100vh;
-    background: var(--tertiary-20);
+    background: var(--canvas);
     transition: background-color 0.2s ease;
   }
 
   .page.page-question {
-    background: white;
+    background: var(--canvas);
   }
 
   .centered-wrap {
@@ -746,44 +746,43 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 16px;
+    padding: 24px 16px;
     gap: 12px;
   }
 
   .step-indicator {
-    font-size: 12.5px;
+    font-size: 12px;
     font-weight: 700;
-    color: var(--tertiary-80, #4a4a45);
-    background: white;
-    border: 1px solid var(--tertiary-20, #ececea);
-    border-radius: 999px;
+    color: var(--text-primary);
+    background: var(--canvas-soft);
+    border-radius: var(--radius-pill);
     padding: 6px 14px;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
   }
 
   .submitting-card {
-    background: white;
-    border-radius: var(--radius-xl);
+    background: var(--canvas);
+    border-radius: var(--radius-card);
     padding: 40px 48px;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 18px;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
   }
 
   .submitting-card p {
     font-size: 15px;
-    font-weight: 600;
-    color: var(--tertiary-90, #2a2a25);
+    font-weight: 500;
+    color: var(--text-primary);
     margin: 0;
   }
 
   .big-spinner {
     width: 32px;
     height: 32px;
-    border: 3px solid var(--tertiary-30, #d8d8d2);
-    border-top-color: var(--primary-50, #f7bb00);
+    border: 3px solid var(--canvas-soft);
+    border-top-color: var(--ink);
     border-radius: 50%;
     animation: submit-spin 0.8s linear infinite;
   }
@@ -813,10 +812,20 @@
     display: flex;
     flex-direction: column;
     padding: 16px 0;
+    /* Outer gap between scroll-mode section blocks. Without card chrome the
+       questions are visually flat; a moderate gap keeps grouping legible
+       without making the page feel sparse. In one_per_page mode there's only
+       one .stage-slide child so the gap is inert. */
+    gap: 32px;
   }
 
-  .question-stage.single-question {
-    justify-content: center;
+  /* On desktop, vertically center the single question for a Typeform-like
+     focus. On mobile, top-anchor — centering creates a floating-in-space feel
+     because the viewport is tall and the question alone can't fill it. */
+  @media (min-width: 768px) {
+    .question-stage.single-question {
+      justify-content: center;
+    }
   }
 
   .stage-slide {
@@ -826,7 +835,14 @@
   }
 
   .question-stage:not(.single-question) .stage-slide {
-    gap: 28px;
+    /* Inner gap between questions within a single section. */
+    gap: 24px;
+  }
+
+  @media (min-width: 768px) {
+    .question-stage {
+      gap: 40px;
+    }
   }
 
   .nav {
@@ -846,20 +862,20 @@
     .nav {
       position: sticky;
       bottom: 0;
-      background: white;
+      background: var(--canvas);
       margin: 12px -20px 0;
       padding: 12px 20px;
       padding-bottom: max(12px, env(safe-area-inset-bottom));
-      border-top: 1px solid var(--tertiary-20, #ececea);
+      border-top: 1px solid var(--canvas-soft);
       z-index: 5;
     }
   }
 
   .submit-error {
-    background: #fef2f2;
-    border: 1px solid #fecaca;
-    border-radius: var(--radius-md);
-    color: var(--error-50);
+    background: var(--error-bg);
+    border: 1px solid var(--error-border);
+    border-radius: var(--radius-input);
+    color: var(--error);
     padding: 12px 16px;
     font-size: 14px;
     margin-top: 8px;
@@ -870,8 +886,8 @@
     align-items: center;
     gap: 8px;
     font-size: 13px;
-    font-weight: 600;
-    color: var(--tertiary-70, #5a5a55);
+    font-weight: 500;
+    color: var(--text-body);
     margin: 8px 0 0;
     align-self: flex-start;
   }
@@ -879,8 +895,8 @@
   .auto-advance-spinner {
     width: 12px;
     height: 12px;
-    border: 2px solid #d9dde3;
-    border-top-color: #f7bb00;
+    border: 2px solid var(--canvas-soft);
+    border-top-color: var(--ink);
     border-radius: 50%;
     animation: auto-spin 0.6s linear infinite;
   }
@@ -890,28 +906,30 @@
   }
 
   .resume-card {
-    background: white;
-    border-radius: var(--radius-xl);
+    background: var(--canvas);
+    border-radius: var(--radius-card);
     max-width: 480px;
     width: 100%;
-    padding: 24px 24px;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
+    padding: 24px;
+    border: 1px solid var(--canvas-soft);
     display: flex;
     flex-direction: column;
     gap: 14px;
   }
 
   .resume-title {
-    font-size: 20px;
+    font-family: var(--font-display);
+    font-size: 22px;
     font-weight: 700;
-    color: var(--tertiary-100);
+    color: var(--text-primary);
     margin: 0;
-    line-height: 1.3;
+    line-height: 30px;
+    letter-spacing: -0.01em;
   }
 
   .resume-description {
-    font-size: 14px;
-    color: var(--tertiary-70, #5a5a55);
+    font-size: 15px;
+    color: var(--text-body);
     line-height: 1.55;
     margin: 0;
   }
@@ -927,49 +945,49 @@
     flex: 1;
     min-width: 140px;
     height: 48px;
-    padding: 0 20px;
-    border-radius: var(--radius-xl);
+    padding: 0 24px;
+    border-radius: var(--radius-pill);
     font-family: var(--font);
-    font-size: 15px;
-    font-weight: 700;
+    font-size: 16px;
+    font-weight: 500;
     cursor: pointer;
-    transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.1s;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    border: 1px solid transparent;
   }
 
-  .resume-btn:active {
-    transform: scale(0.97);
+  @media (prefers-reduced-motion: no-preference) {
+    .resume-btn:active { transform: scale(0.97); }
   }
 
   .resume-btn.primary {
-    background: var(--primary-50);
-    color: #221500;
-    border: 2px solid transparent;
+    background: var(--ink);
+    color: var(--on-ink);
   }
 
   .resume-btn.primary:hover {
-    background: #e8ae00;
+    background: var(--ink-elevated);
   }
 
   .resume-btn.secondary {
-    background: white;
-    color: var(--tertiary-80);
-    border: 2px solid #d9dde3;
+    background: var(--canvas);
+    color: var(--tertiary-100);
+    border-color: var(--tertiary-100);
   }
 
   .resume-btn.secondary:hover {
-    border-color: #f7bb00;
-    background: #fffbed;
+    background: var(--surface);
   }
 
   @media (min-width: 768px) {
     .resume-card {
-      padding: 32px 32px;
+      padding: 32px;
     }
     .resume-title {
-      font-size: 22px;
+      font-size: 26px;
+      line-height: 34px;
     }
     .resume-description {
-      font-size: 15px;
+      font-size: 16px;
     }
   }
 

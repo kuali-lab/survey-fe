@@ -185,19 +185,17 @@
 {#if !isFullScreen}
   <!-- Intro card: shown before camera opens. Tips live here so user reads them
        once, before being immersed in the camera UI. -->
-  <div class="card">
+  <div class="intro">
     <div class="logo-bar">
       <Logo height={24} />
       <span class="title-pill">Foto Selfie</span>
     </div>
 
-    <div class="intro-icon-wrap">
-      <div class="icon-circle">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-          <path d="M9 4h6l1.5 2H20a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h3.5L9 4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-          <circle cx="12" cy="13" r="4" stroke="currentColor" stroke-width="1.6"/>
-        </svg>
-      </div>
+    <div class="icon-circle" aria-hidden="true">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <path d="M9 4h6l1.5 2H20a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h3.5L9 4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <circle cx="12" cy="13" r="4" stroke="currentColor" stroke-width="1.6"/>
+      </svg>
     </div>
 
     <div class="body">
@@ -207,13 +205,13 @@
       </p>
 
       <ul class="tips">
-        <li><span class="check">✓</span> Wajah terlihat jelas dan terang</li>
-        <li><span class="check">✓</span> Lepas masker dan kacamata gelap</li>
-        <li><span class="check">✓</span> Hindari cahaya dari belakang</li>
+        <li><span class="check" aria-hidden="true">✓</span> Wajah terlihat jelas dan terang</li>
+        <li><span class="check" aria-hidden="true">✓</span> Lepas masker dan kacamata gelap</li>
+        <li><span class="check" aria-hidden="true">✓</span> Hindari cahaya dari belakang</li>
       </ul>
 
       {#if errorMsg}
-        <div class="error-msg">
+        <div class="error-msg" role="alert">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/>
             <line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -223,8 +221,8 @@
         </div>
       {/if}
 
-      <button class="cta" onclick={startCamera} disabled={loading}>
-        Mulai Foto Selfie
+      <button class="cta" type="button" onclick={startCamera} disabled={loading}>
+        Mulai foto selfie
       </button>
     </div>
   </div>
@@ -316,53 +314,10 @@
 
 <style>
   /* ─── Intro card ───────────────────────────────────────────────────────── */
-  .card {
-    background: white;
-    border-radius: var(--radius-xl);
-    max-width: 520px;
+  .intro {
+    background: var(--canvas);
+    max-width: 480px;
     width: 100%;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .logo-bar {
-    padding: 16px 24px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 1px solid var(--tertiary-20, #f0f0ec);
-  }
-
-  .title-pill {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--tertiary-90);
-    background: var(--tertiary-10, #f7f7f4);
-    padding: 4px 10px;
-    border-radius: 999px;
-  }
-
-  .intro-icon-wrap {
-    display: flex;
-    justify-content: center;
-    padding: 32px 32px 0;
-  }
-
-  .icon-circle {
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: var(--primary-10, #fff7d6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--primary-50, #f7bb00);
-  }
-
-  .body {
-    padding: 24px 32px 32px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -370,27 +325,67 @@
     gap: 16px;
   }
 
-  .title {
-    font-size: 24px;
+  .logo-bar {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .title-pill {
+    font-size: 12px;
     font-weight: 700;
-    color: var(--tertiary-100);
-    line-height: 1.3;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--on-ink);
+    background: var(--ink);
+    padding: 6px 12px;
+    border-radius: var(--radius-pill);
+  }
+
+  .icon-circle {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--canvas-soft);
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 8px;
+  }
+
+  .body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 16px;
+    width: 100%;
+  }
+
+  .title {
+    font-family: var(--font-display);
+    font-size: 24px;
+    line-height: 32px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
   }
 
   .description {
-    font-size: 15px;
-    color: var(--tertiary-70);
-    line-height: 1.6;
+    font-size: 16px;
+    line-height: 24px;
+    color: var(--text-body);
     max-width: 90%;
   }
 
   .tips {
     list-style: none;
     margin: 0;
-    padding: 0;
     width: 100%;
-    background: var(--tertiary-10, #f7f7f4);
-    border-radius: var(--radius-lg);
+    background: var(--canvas-soft);
+    border-radius: var(--radius-card);
     padding: 14px 16px;
     display: flex;
     flex-direction: column;
@@ -402,45 +397,49 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 13.5px;
-    color: var(--tertiary-90, #2a2a25);
+    font-size: 14px;
+    color: var(--text-primary);
     font-weight: 500;
   }
 
   .check {
-    color: #16a34a;
+    color: var(--success);
     font-weight: 800;
   }
 
   .cta {
     width: 100%;
-    background: var(--primary-50);
-    color: #221500;
+    background: var(--ink);
+    color: var(--on-ink);
     font-family: var(--font);
     font-size: 16px;
-    font-weight: 700;
+    font-weight: 500;
     border: none;
-    border-radius: var(--radius-xl);
-    padding: 16px 28px;
+    border-radius: var(--radius-pill);
+    padding: 16px 24px;
     cursor: pointer;
-    transition: background 0.2s, transform 0.1s;
+    transition: background 0.15s;
     margin-top: 4px;
   }
 
-  .cta:hover:not(:disabled) { background: #e8ae00; }
-  .cta:active:not(:disabled) { transform: scale(0.98); }
-  .cta:disabled { opacity: 0.7; cursor: not-allowed; }
+  .cta:hover:not(:disabled) { background: var(--ink-elevated); }
+  .cta:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .cta:active:not(:disabled) { transform: scale(0.98); }
+  }
 
   .error-msg {
     display: flex;
     align-items: flex-start;
     text-align: left;
     gap: 8px;
-    background: #fee2e2;
-    color: #dc2626;
+    background: var(--error-bg);
+    color: var(--error);
+    border: 1px solid var(--error-border);
     padding: 12px 16px;
-    border-radius: var(--radius-lg);
-    font-size: 13.5px;
+    border-radius: var(--radius-input);
+    font-size: 14px;
     font-weight: 500;
     width: 100%;
   }
@@ -614,7 +613,7 @@
     transition: background 0.2s;
   }
 
-  .shutter:hover .shutter-inner { background: var(--primary-50, #f7bb00); }
+  .shutter:hover .shutter-inner { background: var(--canvas-soft); }
 
   .confirm-row {
     width: 100%;
@@ -641,26 +640,28 @@
   }
 
   .btn-primary {
-    background: var(--primary-50, #f7bb00);
-    color: #221500;
+    background: var(--primary);
+    color: var(--primary-on);
+    border-radius: var(--radius-pill);
   }
-  .btn-primary:hover:not(:disabled) { background: #e8ae00; }
-  .btn-primary:disabled { opacity: 0.7; cursor: not-allowed; }
+  .btn-primary:hover:not(:disabled) { background: var(--primary-60); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .btn-secondary {
     background: rgba(255,255,255,0.15);
     color: white;
     border: 1px solid rgba(255,255,255,0.4);
+    border-radius: var(--radius-pill);
     backdrop-filter: blur(4px);
   }
   .btn-secondary:hover:not(:disabled) { background: rgba(255,255,255,0.25); }
-  .btn-secondary:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .spinner {
     width: 14px;
     height: 14px;
-    border: 2px solid rgba(34, 21, 0, 0.25);
-    border-top-color: #221500;
+    border: 2px solid rgba(0, 0, 0, 0.2);
+    border-top-color: var(--ink);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }

@@ -108,15 +108,15 @@
 
 <style>
   .recap {
-    background: white;
-    border: 1px solid var(--tertiary-30);
-    border-radius: var(--radius-lg);
+    background: var(--canvas);
+    border: 1px solid var(--canvas-soft);
+    border-radius: var(--radius-card);
     overflow: hidden;
   }
 
   .row {
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--tertiary-30);
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--canvas-soft);
   }
 
   .row:last-child {
@@ -132,17 +132,18 @@
 
   .qnum {
     font-size: 13px;
-    font-weight: 700;
-    color: var(--tertiary-70);
+    font-weight: 500;
+    color: var(--text-body);
     flex-shrink: 0;
     line-height: 1.4;
+    font-variant-numeric: tabular-nums;
   }
 
   .qtitle {
     flex: 1;
     font-size: 14px;
-    font-weight: 600;
-    color: var(--tertiary-100);
+    font-weight: 500;
+    color: var(--text-primary);
     line-height: 1.4;
   }
 
@@ -150,28 +151,26 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    background: transparent;
-    border: 1px solid var(--tertiary-30);
-    border-radius: var(--radius-sm);
-    padding: 3px 8px;
-    color: var(--tertiary-70);
+    background: var(--canvas-soft);
+    border: none;
+    border-radius: var(--radius-pill);
+    padding: 4px 10px;
+    color: var(--tertiary-100);
     font-family: var(--font);
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    transition: background 0.15s;
     flex-shrink: 0;
   }
 
   .edit-btn:hover {
-    background: var(--primary-10);
-    border-color: var(--primary-30);
-    color: #b45309;
+    background: var(--tertiary-20);
   }
 
   .answer {
     font-size: 14px;
-    color: var(--tertiary-80);
+    color: var(--text-primary);
     line-height: 1.5;
     padding-left: 22px;
     word-break: break-word;

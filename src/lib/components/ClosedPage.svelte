@@ -10,34 +10,29 @@
   } = $props()
 </script>
 
-<div class="card">
+<div class="closed">
   {#if imageUrl}
     <div class="cover">
       <img src={imageUrl} alt={title} />
     </div>
   {:else}
-    <div class="illustration">
-      <svg width="80" height="80" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <!-- Clipboard body -->
-        <rect x="10" y="12" width="44" height="48" rx="4" fill="#f7f8f9" stroke="#d9dde3" stroke-width="2"/>
-        <!-- Clipboard clip -->
-        <rect x="22" y="8" width="20" height="10" rx="3" fill="white" stroke="#d9dde3" stroke-width="2"/>
-        <!-- Lock shackle -->
-        <path d="M24 36c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="#c8ccd2" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-        <!-- Lock body -->
-        <rect x="20" y="36" width="24" height="18" rx="4" fill="#d9dde3"/>
-        <!-- Lock keyhole -->
-        <circle cx="32" cy="44" r="3" fill="#8c8f93"/>
-        <rect x="30.5" y="44" width="3" height="5" rx="1.5" fill="#8c8f93"/>
+    <div class="illustration" aria-hidden="true">
+      <svg width="80" height="80" viewBox="0 0 64 64" fill="none">
+        <rect x="10" y="12" width="44" height="48" rx="4" fill="var(--canvas-soft)" stroke="var(--ink)" stroke-width="2"/>
+        <rect x="22" y="8" width="20" height="10" rx="3" fill="var(--canvas)" stroke="var(--ink)" stroke-width="2"/>
+        <path d="M24 36c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <rect x="20" y="36" width="24" height="18" rx="4" fill="var(--ink)"/>
+        <circle cx="32" cy="44" r="3" fill="var(--canvas)"/>
+        <rect x="30.5" y="44" width="3" height="5" rx="1.5" fill="var(--canvas)"/>
       </svg>
     </div>
   {/if}
 
   <div class="body">
-    <h1 class="heading">Pengumpulan Jawaban Telah Ditutup</h1>
     {#if title}
-      <p class="survey-title">{title}</p>
+      <span class="eyebrow">{title}</span>
     {/if}
+    <h1 class="heading">Pengumpulan jawaban telah ditutup</h1>
     {#if message}
       <p class="message">{message}</p>
     {:else}
@@ -47,71 +42,75 @@
 </div>
 
 <style>
-  .card {
-    background: white;
-    border-radius: var(--radius-xl);
-    max-width: 520px;
+  .closed {
+    background: var(--canvas);
+    max-width: 560px;
     width: 100%;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
-    overflow: hidden;
-  }
-
-  .cover {
-    width: 100%;
-    max-height: 320px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--tertiary-10);
-    padding: 24px;
-    box-sizing: border-box;
-  }
-
-  .cover img {
-    max-width: 100%;
-    max-height: 272px;
-    object-fit: contain;
-    border-radius: var(--radius-sm);
-  }
-
-  .illustration {
-    width: 100%;
-    padding: 40px 0 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--tertiary-20);
-  }
-
-  .body {
-    padding: 32px;
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
+    gap: 20px;
+  }
+
+  .cover {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    background: var(--canvas-soft);
+    border-radius: var(--radius-card);
+  }
+
+  .cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .illustration {
+    padding: 24px 0 8px;
+  }
+
+  .body {
+    display: flex;
+    flex-direction: column;
     gap: 12px;
+    align-items: center;
+  }
+
+  .eyebrow {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-body);
   }
 
   .heading {
-    font-size: 24px;
+    font-family: var(--font-display);
+    font-size: 26px;
+    line-height: 34px;
     font-weight: 700;
-    color: var(--tertiary-100);
-    line-height: 1.2;
-  }
-
-  .survey-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--tertiary-60);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
   }
 
   .message {
     font-size: 16px;
-    color: var(--tertiary-70);
-    line-height: 1.6;
-    max-width: 380px;
+    line-height: 24px;
+    color: var(--text-body);
+    max-width: 440px;
     white-space: pre-wrap;
+  }
+
+  @media (min-width: 768px) {
+    .heading {
+      font-size: 32px;
+      line-height: 40px;
+    }
+    .message {
+      font-size: 17px;
+      line-height: 26px;
+    }
   }
 </style>
