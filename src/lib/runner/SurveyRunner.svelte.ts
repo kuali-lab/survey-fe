@@ -13,6 +13,9 @@
 import type { Survey, Question, Answers, AnswerValue, SurveySettings } from '$lib/types.js'
 import { getAnswerableQuestions } from '$lib/utils.js'
 import { evaluateNext } from '$lib/skipLogic.js'
+import { buildSurveySections, type SurveyPage } from './sections.js'
+
+export type { SurveyPage }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -37,39 +40,6 @@ const DEFAULT_SETTINGS: SurveySettings = {
   showNavArrows: true,
   showNumbers: true,
   displayMode: 'one_per_page',
-}
-
-export type SurveyPage = {
-  id: string
-  title?: string
-  description?: string
-  questions: Question[]
-}
-
-// Pure helper (module-level, no reactivity) — builds the ordered section list:
-// walks `questions` in sort_order, emits a section per question_group (members
-// matched by groupId, kept in answerable order) and each standalone answerable
-// question as its own section. A groupId pointing to a missing group falls back
-// to standalone (never silently dropped). Callers read the reactive inputs in
-// their own $derived so dependency tracking is direct and unambiguous.
-function buildSurveySections(questions: Question[], answerable: Question[]): SurveyPage[] {
-  if (!answerable.length) return []
-  const answerableIds = new Set(answerable.map((q) => q.id))
-  const groupIds = new Set(
-    questions.filter((q) => q.type === 'question_group').map((g) => g.id),
-  )
-  const sections: SurveyPage[] = []
-  for (const q of questions) {
-    if (q.type === 'question_group') {
-      const members = answerable.filter((m) => m.groupId === q.id)
-      if (members.length > 0) {
-        sections.push({ id: q.id, title: q.title, description: q.description ?? undefined, questions: members })
-      }
-    } else if (answerableIds.has(q.id) && !(q.groupId && groupIds.has(q.groupId))) {
-      sections.push({ id: q.id, questions: [q] })
-    }
-  }
-  return sections
 }
 
 export type RunnerOptions = {
@@ -159,7 +129,10 @@ export class SurveyRunner {
     if (mode === 'scroll') {
       return [{ id: 'all', questions: answerable }]
     }
-    return buildSurveySections(questions, answerable)
+    // Flatten groups into per-question pages only when skip logic is live, so a
+    // group never leaks skipped siblings/pre-target questions (audit Temuan F).
+    // Non-skip one_per_page surveys keep their grouped pages unchanged.
+    return buildSurveySections(questions, answerable, this.skipRules.length > 0)
   })
 
   currentPage = $derived(this.surveyPages[this.currentIndex] ?? null)
@@ -305,10 +278,12 @@ export class SurveyRunner {
 
     if (next !== null) {
       const targetPageIdx = this.surveyPages.findIndex((p) => p.questions.some((q) => q.id === next))
-      // Navigate to the target page if it exists and is ahead of current.
-      // If targetPageIdx === -1 (target question was deleted or not found),
-      // fall through to the normal sequential advance below.
-      if (targetPageIdx >= 0 && targetPageIdx !== this.currentIndex) {
+      // Jump only FORWARD. The builder already restricts targets to order > host,
+      // but the engine enforces it too (defense-in-depth, audit §4): a backward
+      // or self jump from corrupt/stale data could loop forever, so it is
+      // ignored and we fall through to the normal sequential advance below.
+      // targetPageIdx === -1 (target deleted/not found) also falls through.
+      if (targetPageIdx > this.currentIndex) {
         this.currentIndex = targetPageIdx
         if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
         return
