@@ -278,10 +278,12 @@ export class SurveyRunner {
 
     if (next !== null) {
       const targetPageIdx = this.surveyPages.findIndex((p) => p.questions.some((q) => q.id === next))
-      // Navigate to the target page if it exists and is ahead of current.
-      // If targetPageIdx === -1 (target question was deleted or not found),
-      // fall through to the normal sequential advance below.
-      if (targetPageIdx >= 0 && targetPageIdx !== this.currentIndex) {
+      // Jump only FORWARD. The builder already restricts targets to order > host,
+      // but the engine enforces it too (defense-in-depth, audit §4): a backward
+      // or self jump from corrupt/stale data could loop forever, so it is
+      // ignored and we fall through to the normal sequential advance below.
+      // targetPageIdx === -1 (target deleted/not found) also falls through.
+      if (targetPageIdx > this.currentIndex) {
         this.currentIndex = targetPageIdx
         if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
         return
