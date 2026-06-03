@@ -66,31 +66,29 @@
   .badge {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    font-size: 11.5px;
-    font-weight: 700;
-    padding: 3px 9px;
-    border-radius: 999px;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 12px;
+    border-radius: var(--radius-pill);
     line-height: 1.2;
-    border: 1px solid transparent;
+    background: var(--canvas-soft);
+    color: var(--text-primary);
     white-space: nowrap;
   }
   .badge.sending,
   .badge.queued {
-    color: #1d4ed8;
-    background: #dbeafe;
-    border-color: #bfdbfe;
+    color: var(--info-strong);
+    background: var(--info-tint);
   }
   .badge.offline,
   .badge.offline_queued {
-    color: #b45309;
-    background: #fef3c7;
-    border-color: #fde68a;
+    background: var(--warning-tint);
+    color: var(--warning-strong);
   }
   .badge.attention {
-    color: #b91c1c;
-    background: #fee2e2;
-    border-color: #fecaca;
+    background: var(--error-bg);
+    color: var(--error);
   }
   .spinner {
     width: 10px;

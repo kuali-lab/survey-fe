@@ -12,9 +12,16 @@
   } = $props()
 </script>
 
-<div class="card">
+<div class="closing">
   <div class="logo-bar">
-    <Logo height={24} />
+    <Logo height={28} />
+  </div>
+
+  <div class="check-icon" aria-hidden="true">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="10" fill="var(--ink)"/>
+      <path d="M7 12.5l3.5 3.5 6.5-7" stroke="var(--on-ink)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
   </div>
 
   {#if imageUrl}
@@ -24,15 +31,7 @@
   {/if}
 
   <div class="body">
-    <div class="check-icon">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="12" cy="12" r="10" fill="#16a34a"/>
-        <path d="M7 12.5l3.5 3.5 6.5-7" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </div>
-
     <h1 class="title">{title}</h1>
-
     {#if description}
       <p class="description">{description}</p>
     {:else}
@@ -42,59 +41,72 @@
 </div>
 
 <style>
-  .card {
-    background: white;
-    border-radius: var(--radius-xl);
-    max-width: 520px;
+  .closing {
+    background: var(--canvas);
+    max-width: 560px;
     width: 100%;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
-    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 20px;
   }
 
   .logo-bar {
-    padding: 20px 32px 0;
     display: flex;
-    justify-content: center;
+    align-items: center;
+    align-self: flex-start;
+  }
+
+  .check-icon {
+    margin-top: 8px;
   }
 
   .cover {
     width: 100%;
-    height: 220px;
+    aspect-ratio: 16 / 9;
     overflow: hidden;
-    background: var(--tertiary-10);
+    background: var(--canvas-soft);
+    border-radius: var(--radius-card);
   }
 
   .cover img {
     width: 100%;
     height: 100%;
-    object-fit: contain;
+    object-fit: cover;
   }
 
   .body {
-    padding: 40px 32px;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: 16px;
-  }
-
-  .check-icon {
-    margin-bottom: 8px;
+    gap: 12px;
   }
 
   .title {
+    font-family: var(--font-display);
     font-size: 28px;
+    line-height: 36px;
     font-weight: 700;
-    color: var(--tertiary-100);
-    line-height: 1.2;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
   }
 
   .description {
     font-size: 16px;
-    color: var(--tertiary-70);
-    line-height: 1.6;
-    max-width: 380px;
+    line-height: 24px;
+    color: var(--text-body);
+    max-width: 440px;
     white-space: pre-wrap;
+  }
+
+  @media (min-width: 768px) {
+    .title {
+      font-size: 36px;
+      line-height: 44px;
+    }
+    .description {
+      font-size: 17px;
+      line-height: 26px;
+    }
   }
 </style>

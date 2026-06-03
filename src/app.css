@@ -1,24 +1,283 @@
-/* Design tokens */
+/* Design tokens — Logika Statistik (Teta Brand) yellow palette.
+   Mirrors dashboard-fe's tailwind.config.ts and base.css so both apps share
+   the same color/typography/radii vocabulary. */
 :root {
-  --primary-50: #f7bb00;
-  --primary-30: #fce18e;
-  --primary-10: #fffbed;
-  --tertiary-10: #ffffff;
-  --tertiary-20: #f7f8f9;
-  --tertiary-30: #d9dde3;
-  --tertiary-40: #c8ccd2;
-  --tertiary-60: #8c8f93;
-  --tertiary-70: #5c5e61;
-  --tertiary-80: #2e3032;
-  --tertiary-100: #151718;
-  --error-50: #dc2626;
-  --font: 'Source Sans 3', sans-serif;
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 24px;
+  /* Brand primary — warm yellow */
+  --primary:        #f7bb00;
+  --primary-10:     #fffbed;
+  --primary-20:     #fdeebe;
+  --primary-30:     #fce18e;
+  --primary-60:     #e0aa00;
+  --primary-70:     #d9a800;
+  --primary-on:           #151718;  /* text/icons on yellow surfaces — AAA 12:1 */
+  --primary-text:         #b45309;  /* yellow-flavored text on white — AA 5:1 */
+  --primary-text-strong:  #92400e;  /* heavier yellow text on white — AAA 7:1 */
+
+  /* Neutral / tertiary scale */
+  --tertiary-10:   #ffffff;
+  --tertiary-20:   #ebebeb;
+  --tertiary-30:   #d9dde3;
+  --tertiary-40:   #b0b5bc;
+  --tertiary-50:   #a0a4a9;
+  --tertiary-60:   #8c8f93;
+  --tertiary-70:   #5c5e61;
+  --tertiary-80:   #2e3032;
+  --tertiary-100:  #151718;
+
+  /* Surfaces */
+  --surface:            #f7f7f8;
+  --canvas:             #ffffff;
+  --canvas-soft:        #f7f7f8;
+  --canvas-softer:      #ebebeb;
+  --surface-pressed:    #d9dde3;
+  --hairline:           #d9dde3;
+
+  /* Text aliases */
+  --text-primary:  var(--tertiary-100);
+  --text-body:     var(--tertiary-70);
+  --text-muted:    var(--tertiary-60);
+  --text-on-ink:   var(--primary-on);
+
+  /* Semantic */
+  --success:        #16a34a;
+  --success-bg:     #dcfce7;
+  --success-tint:   #dcfce7;
+  --success-border: #bbf7d0;
+  --success-strong: #15803d;
+
+  --error:          #dc2626;
+  --error-bg:       #fee2e2;
+  --error-tint:     #fee2e2;
+  --error-border:   #fecaca;
+  --error-strong:   #b91c1c;
+
+  --warning:        #f59e0b;
+  --warning-tint:   #fef3c7;
+  --warning-strong: #b45309;
+
+  --info:           #3b82f6;
+  --info-tint:      #dbeafe;
+  --info-strong:    #1d4ed8;
+
+  --link:           #1d4ed8;
+
+  /* NPS / Opinion scale gradient */
+  --scale-low:  #ef4444;
+  --scale-mid:  #f59e0b;
+  --scale-high: #22c55e;
+
+  /* Typography — body=Source Sans 3, display=Nunito Sans (matches dashboard) */
+  --font:         "Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Nunito Sans", system-ui, sans-serif;
+
+  /* Conversion-anchor aliases — every component reads --ink as "the
+     primary surface color". With brand=yellow, ink IS yellow. */
+  --ink:           var(--primary);
+  --ink-elevated:  var(--primary-60);
+  --on-ink:        var(--primary-on);
+
+  /* Radii — matches dashboard spec sm/md/lg/xl/2xl */
+  --radius-sm:     4px;
+  --radius-input:  8px;
+  --radius-md:     8px;
+  --radius-lg:     12px;
+  --radius-option: 12px;
+  --radius-card:   16px;
+  --radius-xl:     16px;
+  --radius-2xl:    24px;
+  --radius-pill:   999px;
+  --radius-pill-tab: 36px;
+  --radius-full:   9999px;
+
+  /* Spacing 4-base */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* Shadows — dashboard spec */
+  --shadow-card:        0 1px 3px 0 rgba(0,0,0,0.10), 0 1px 2px -1px rgba(0,0,0,0.10);
+  --shadow-card-md:     0 4px 6px -1px rgba(0,0,0,0.10), 0 2px 4px -2px rgba(0,0,0,0.10);
+  --shadow-level-1:     0 1px 3px 0 rgba(0,0,0,0.10), 0 1px 2px -1px rgba(0,0,0,0.10);
+  --shadow-level-2:     0 4px 24px rgba(0,0,0,0.10);
+  --shadow-popover:     0 4px 24px rgba(0,0,0,0.10);
+  --shadow-pill-float:  0 2px 8px rgba(0,0,0,0.16);
+
+  /* Layout constants */
+  --topnav-height: 56px;
+  --sidebar-width: 312px;
+
+  /* Back-compat aliases — keep older selectors rendering during migration */
+  --primary-50: var(--primary);
+  --error-50:   var(--error);
 }
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; }
-body { font-family: var(--font); background: var(--tertiary-20); color: var(--tertiary-80); }
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--canvas);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: var(--tertiary-30); border-radius: var(--radius-full); }
+::-webkit-scrollbar-thumb:hover { background: var(--tertiary-40); }
+
+/* ── Type scale helpers ────────────────────────────────────────────────── */
+.display-xxl { font-family: var(--font-display); font-size: 44px; line-height: 52px; font-weight: 700; letter-spacing: -0.01em; }
+.display-xl  { font-family: var(--font-display); font-size: 36px; line-height: 44px; font-weight: 700; letter-spacing: -0.005em; }
+.display-lg  { font-family: var(--font-display); font-size: 32px; line-height: 40px; font-weight: 700; }
+.display-md  { font-family: var(--font-display); font-size: 24px; line-height: 32px; font-weight: 700; }
+.display-sm  { font-family: var(--font-display); font-size: 20px; line-height: 28px; font-weight: 700; }
+.body-lg     { font-size: 18px; line-height: 28px; font-weight: 400; }
+.body-md     { font-size: 16px; line-height: 24px; font-weight: 400; color: var(--text-body); }
+.body-md-strong { font-size: 16px; line-height: 24px; font-weight: 600; }
+.body-sm     { font-size: 14px; line-height: 20px; font-weight: 400; color: var(--text-body); }
+.body-sm-strong { font-size: 14px; line-height: 20px; font-weight: 600; }
+.caption     { font-size: 13px; line-height: 18px; font-weight: 400; color: var(--text-body); }
+.eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-body);
+}
+
+/* ── Pill buttons (yellow brand) ───────────────────────────────────────── */
+.btn-pill-primary,
+.btn-pill-secondary,
+.btn-pill-subtle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 24px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-pill-primary {
+  background: var(--primary);
+  color: var(--primary-on);
+}
+.btn-pill-primary:hover:not(:disabled) { background: var(--primary-60); }
+
+.btn-pill-secondary {
+  background: var(--canvas);
+  color: var(--tertiary-100);
+  border-color: var(--tertiary-100);
+}
+.btn-pill-secondary:hover:not(:disabled) { background: var(--surface); }
+
+.btn-pill-subtle {
+  background: var(--primary-10);
+  color: var(--primary-text-strong);
+}
+.btn-pill-subtle:hover:not(:disabled) { background: var(--primary-20); }
+
+.btn-pill-primary:disabled,
+.btn-pill-secondary:disabled,
+.btn-pill-subtle:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .btn-pill-primary:active:not(:disabled),
+  .btn-pill-secondary:active:not(:disabled),
+  .btn-pill-subtle:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+}
+
+/* ── Inputs ────────────────────────────────────────────────────────────── */
+.input-soft {
+  width: 100%;
+  height: 52px;
+  padding: 0 16px;
+  border: 1px solid var(--tertiary-30);
+  border-radius: var(--radius-input);
+  background: var(--canvas);
+  color: var(--tertiary-80);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.4;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input-soft::placeholder { color: var(--tertiary-60); }
+
+.input-soft:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-30);
+}
+
+/* ── Cards ──────────────────────────────────────────────────────────────
+   NOTE: there is intentionally NO global `.card` rule. Question cards inside
+   QuestionCard.svelte use a bare `.card` class as a flex container with no
+   chrome — adding global border/shadow here would bleed into them via
+   Svelte's scoping (which constrains but doesn't override less-specific
+   global selectors). Components that genuinely want elevated chrome
+   (SubmissionStatusCard, etc.) carry their own scoped rules. */
+.card-shell {
+  background: var(--canvas);
+  border: 1px solid var(--tertiary-30);
+  border-radius: var(--radius-card);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-card);
+}
+
+.card-soft {
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  padding: var(--space-6);
+}
+
+.card-elevated {
+  background: var(--canvas);
+  border: 1px solid var(--tertiary-30);
+  border-radius: var(--radius-card);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-card-md);
+}
+
+/* ── Focus ─────────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+button,
+[type='button'],
+[type='submit'] {
+  font-family: var(--font);
+}

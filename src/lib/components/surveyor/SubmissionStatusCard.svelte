@@ -120,9 +120,9 @@
     gap: 14px;
     align-items: flex-start;
     padding: 20px;
-    border-radius: var(--radius-xl);
-    border: 1px solid;
-    background: white;
+    border-radius: var(--radius-card);
+    border: 1px solid var(--canvas-soft);
+    background: var(--canvas);
   }
   .card .icon {
     flex-shrink: 0;
@@ -132,6 +132,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    background: var(--canvas-soft);
+    color: var(--tertiary-100);
   }
   .card .body {
     flex: 1;
@@ -142,59 +144,47 @@
   }
   .card h2 {
     margin: 0;
-    font-size: 17px;
-    font-weight: 800;
+    font-size: 18px;
+    font-weight: 700;
     line-height: 1.25;
+    color: var(--text-primary);
   }
   .card p {
     margin: 0;
-    font-size: 13.5px;
+    font-size: 14px;
     line-height: 1.5;
   }
-  .card .meta { color: var(--tertiary-70); }
+  .card .meta { color: var(--text-body); }
   .card .id {
     font-family: ui-monospace, SFMono-Regular, monospace;
-    font-size: 11.5px;
-    color: var(--tertiary-60, #6b7280);
+    font-size: 12px;
+    color: var(--text-muted);
   }
   .card .reason {
-    color: var(--tertiary-100);
-    font-weight: 600;
+    color: var(--text-primary);
+    font-weight: 500;
   }
 
-  .pending {
-    border-color: #fde68a;
-    background: #fffbeb;
-  }
-  .pending .icon { background: #fef3c7; color: #b45309; }
-  .pending h2 { color: #92400e; }
-
-  .sending {
-    border-color: #bfdbfe;
-    background: #eff6ff;
-  }
-  .sending .icon { background: #dbeafe; color: #1d4ed8; }
-  .sending h2 { color: #1e40af; }
-
+  .pending .icon { background: var(--warning-tint); color: var(--warning-strong); }
+  .sending .icon { background: var(--info-tint); color: var(--info-strong); }
   .sent {
-    border-color: #bbf7d0;
-    background: #f0fdf4;
+    border-color: var(--success-border);
+    background: var(--success-bg);
   }
-  .sent .icon { background: #dcfce7; color: #16a34a; }
+  .sent .icon { background: var(--success); color: var(--on-ink); }
   .sent h2 { color: #15803d; }
 
   .fail {
-    border-color: #fecaca;
-    background: #fef2f2;
+    border-color: var(--error-border);
+    background: var(--error-bg);
   }
-  .fail .icon { background: #fee2e2; color: #b91c1c; }
-  .fail h2 { color: #b91c1c; }
+  .fail .icon { background: var(--error); color: var(--on-ink); }
+  .fail h2 { color: var(--error); }
 
   .unknown {
-    border-color: var(--tertiary-30);
-    background: var(--tertiary-20);
+    background: var(--canvas-soft);
+    border-color: var(--canvas-soft);
   }
-  .unknown .icon { background: white; color: var(--tertiary-70); }
 
   .spinner {
     width: 22px;
@@ -211,24 +201,25 @@
   .btn {
     margin-top: 4px;
     align-self: flex-start;
-    min-height: 40px;
-    padding: 0 16px;
-    border-radius: var(--radius-lg);
+    min-height: 44px;
+    padding: 0 20px;
+    border-radius: var(--radius-pill);
     font-family: var(--font);
     font-size: 14px;
-    font-weight: 700;
+    font-weight: 500;
     cursor: pointer;
-    border: 2px solid transparent;
+    border: 1px solid transparent;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
   }
   .btn.primary {
-    background: var(--primary-50);
-    color: #221500;
+    background: var(--ink);
+    color: var(--on-ink);
   }
-  .btn.primary:hover { background: #e8ae00; }
+  .btn.primary:hover { background: var(--ink-elevated); }
   .btn.secondary {
-    background: white;
-    color: var(--tertiary-80);
-    border-color: var(--tertiary-30);
+    background: var(--canvas);
+    color: var(--tertiary-100);
+    border-color: var(--tertiary-100);
   }
-  .btn.secondary:hover { border-color: var(--primary-50); background: var(--primary-10); }
+  .btn.secondary:hover { background: var(--surface); }
 </style>

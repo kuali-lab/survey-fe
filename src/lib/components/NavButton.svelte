@@ -33,44 +33,43 @@
     align-items: center;
     gap: 8px;
     height: 48px;
-    padding: 0 28px;
-    border-radius: var(--radius-xl);
+    padding: 0 24px;
+    border-radius: var(--radius-pill);
     font-family: var(--font);
-    font-size: 15px;
-    font-weight: 700;
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1;
     cursor: pointer;
-    border: none;
-    transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.1s, opacity 0.2s;
+    border: 1px solid transparent;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   }
 
-  .btn:active:not(:disabled) {
-    transform: scale(0.97);
+  @media (prefers-reduced-motion: no-preference) {
+    .btn:active:not(:disabled) {
+      transform: scale(0.97);
+    }
   }
 
   .btn:disabled {
     cursor: not-allowed;
-    opacity: 0.6;
+    opacity: 0.4;
   }
 
   .btn.primary {
-    background: var(--primary-50);
-    color: #221500;
-    border: 2px solid transparent;
+    background: var(--ink);
+    color: var(--on-ink);
   }
-
   .btn.primary:hover:not(:disabled) {
-    background: #e8ae00;
+    background: var(--ink-elevated);
   }
 
   .btn.secondary {
-    background: white;
-    color: var(--tertiary-80);
-    border: 2px solid #d9dde3;
+    background: var(--canvas);
+    color: var(--tertiary-100);
+    border-color: var(--tertiary-100);
   }
-
   .btn.secondary:hover:not(:disabled) {
-    border-color: #f7bb00;
-    background: #fffbed;
+    background: var(--surface);
   }
 
   .spinner {

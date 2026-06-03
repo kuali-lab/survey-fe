@@ -5,33 +5,31 @@
     type === 'not_found'
       ? {
           code: '404',
-          heading: 'Survei Tidak Ditemukan',
+          heading: 'Survei tidak ditemukan',
           message: 'Tautan survei yang Anda masukkan tidak valid atau survei sudah dihapus.',
           icon: 'search'
         }
       : {
           code: '500',
-          heading: 'Terjadi Kesalahan',
+          heading: 'Terjadi kesalahan',
           message: 'Terjadi kesalahan pada server. Silakan coba lagi beberapa saat.',
           icon: 'error'
         }
   )
 </script>
 
-<div class="card">
-  <div class="illustration">
+<div class="error-page">
+  <div class="illustration" aria-hidden="true">
     {#if config.icon === 'search'}
-      <svg width="72" height="72" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="27" cy="27" r="16" stroke="#d9dde3" stroke-width="3" fill="#f7f8f9"/>
-        <path d="M39 39l10 10" stroke="#d9dde3" stroke-width="3.5" stroke-linecap="round"/>
-        <path d="M21 27h12M27 21v12" stroke="#c8ccd2" stroke-width="2.5" stroke-linecap="round"/>
-        <line x1="27" y1="23" x2="27" y2="31" stroke="#c8ccd2" stroke-width="2.5" stroke-linecap="round"/>
+      <svg width="72" height="72" viewBox="0 0 64 64" fill="none">
+        <circle cx="27" cy="27" r="16" stroke="var(--ink)" stroke-width="3" fill="var(--canvas-soft)"/>
+        <path d="M39 39l10 10" stroke="var(--ink)" stroke-width="3.5" stroke-linecap="round"/>
       </svg>
     {:else}
-      <svg width="72" height="72" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="32" cy="32" r="26" fill="#f7f8f9" stroke="#d9dde3" stroke-width="2.5"/>
-        <path d="M32 20v16" stroke="#c8ccd2" stroke-width="3" stroke-linecap="round"/>
-        <circle cx="32" cy="43" r="2.5" fill="#c8ccd2"/>
+      <svg width="72" height="72" viewBox="0 0 64 64" fill="none">
+        <circle cx="32" cy="32" r="26" fill="var(--canvas-soft)" stroke="var(--ink)" stroke-width="2.5"/>
+        <path d="M32 20v16" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="32" cy="43" r="2.5" fill="var(--ink)"/>
       </svg>
     {/if}
   </div>
@@ -42,81 +40,77 @@
     <p class="message">{config.message}</p>
 
     {#if type !== 'not_found'}
-      <button class="retry" onclick={() => window.location.reload()}>
-        Coba Lagi
+      <button class="retry" type="button" onclick={() => window.location.reload()}>
+        Coba lagi
       </button>
     {/if}
   </div>
 </div>
 
 <style>
-  .card {
-    background: white;
-    border-radius: var(--radius-xl);
+  .error-page {
+    background: var(--canvas);
     max-width: 480px;
     width: 100%;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
-    overflow: hidden;
-  }
-
-  .illustration {
-    width: 100%;
-    padding: 40px 0 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--tertiary-20);
-  }
-
-  .body {
-    padding: 32px;
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
-    gap: 10px;
+    gap: 20px;
+  }
+
+  .illustration {
+    padding: 16px 0 0;
+  }
+
+  .body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
   }
 
   .code {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
-    color: var(--tertiary-60);
+    color: var(--text-body);
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    background: var(--tertiary-20);
-    padding: 4px 10px;
-    border-radius: var(--radius-xl);
   }
 
   .heading {
-    font-size: 24px;
+    font-family: var(--font-display);
+    font-size: 26px;
+    line-height: 34px;
     font-weight: 700;
-    color: var(--tertiary-100);
-    line-height: 1.2;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
   }
 
   .message {
     font-size: 16px;
-    color: var(--tertiary-70);
-    line-height: 1.6;
+    line-height: 24px;
+    color: var(--text-body);
     max-width: 340px;
   }
 
   .retry {
     margin-top: 8px;
-    background: var(--primary-50);
-    color: #221500;
+    background: var(--ink);
+    color: var(--on-ink);
     font-family: var(--font);
-    font-size: 15px;
-    font-weight: 700;
+    font-size: 16px;
+    font-weight: 500;
     border: none;
-    border-radius: var(--radius-xl);
-    padding: 12px 28px;
+    border-radius: var(--radius-pill);
+    padding: 12px 24px;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: background 0.15s;
   }
 
-  .retry:hover {
-    background: #e8ae00;
+  .retry:hover { background: var(--ink-elevated); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .retry:active { transform: scale(0.97); }
   }
 </style>
