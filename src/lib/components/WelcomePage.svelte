@@ -1,5 +1,4 @@
 <script lang="ts">
-
   let {
     title,
     description,
@@ -22,50 +21,41 @@
   const isInline = $derived(layout === 'left' || layout === 'right')
 </script>
 
-<div class="welcome">
+<div class="welcome" class:layout-inline={isInline} class:layout-right={layout === 'right'}>
   <div class="logo-bar">
     <img src="/logo-logika-teta.svg" alt="Logika Statistik" class="logo-img" />
   </div>
 
-  {#if imageUrl && isInline}
-    <!-- Side-by-side: image beside title only -->
-    <div class="inline-header" class:inline-right={layout === 'right'}>
-      <div class="inline-img-wrap">
-        <img src={imageUrl} alt={title} class="inline-img" />
-      </div>
-      <h1 class="title">{title}</h1>
+  {#if imageUrl}
+    <div class="cover" class:cover-inline={isInline}>
+      <img src={imageUrl} alt={title} />
     </div>
-  {:else}
-    <!-- Center layout: image on top, then title -->
-    {#if imageUrl}
-      <div class="cover">
-        <img src={imageUrl} alt={title} />
+  {/if}
+
+  <div class="body">
+    <h1 class="title" class:center-text={layout === 'center'}>{title}</h1>
+    {#if description}
+      <p class="description">{description}</p>
+    {/if}
+
+    {#if error}
+      <div class="error-msg" role="alert">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <circle cx="12" cy="16" r="1" fill="currentColor"/>
+        </svg>
+        <span>{error}</span>
       </div>
     {/if}
-    <h1 class="title">{title}</h1>
-  {/if}
 
-  {#if description}
-    <p class="description">{description}</p>
-  {/if}
-
-  {#if error}
-    <div class="error-msg" role="alert">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/>
-        <line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-        <circle cx="12" cy="16" r="1" fill="currentColor"/>
+    <button class="cta" type="button" onclick={onStart} class:center-cta={layout === 'center'}>
+      {ctaText}
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <span>{error}</span>
-    </div>
-  {/if}
-
-  <button class="cta" type="button" onclick={onStart}>
-    {ctaText}
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-  </button>
+    </button>
+  </div>
 </div>
 
 <style>
@@ -75,7 +65,16 @@
     width: 100%;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 24px;
+  }
+
+  .welcome.layout-inline {
+    max-width: 760px;
+    flex-direction: row;
+    align-items: center;
+  }
+  .welcome.layout-right {
+    flex-direction: row-reverse;
   }
 
   .logo-bar {
@@ -93,47 +92,32 @@
     display: block;
   }
 
-  /* ── Center layout (image on top) ── */
   .cover {
     width: 100%;
     overflow: hidden;
     background: var(--canvas-soft);
     border-radius: var(--radius-card);
   }
+  .cover.cover-inline {
+    flex: 0 0 240px;
+    height: 240px;
+    background: transparent;
+  }
 
   .cover img {
     width: 100%;
-    display: block;
+    height: 100%;
     object-fit: contain;
+    display: block;
   }
 
-  /* ── Inline layout (left / right): image beside title ── */
-  .inline-header {
+  .body {
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     gap: 16px;
-    align-items: center;
+    flex: 1;
   }
 
-  .inline-header.inline-right {
-    flex-direction: row-reverse;
-  }
-
-  .inline-img-wrap {
-    flex: 0 0 140px;
-    border-radius: var(--radius-card);
-    overflow: hidden;
-    background: var(--canvas-soft);
-  }
-
-  .inline-img {
-    width: 140px;
-    height: 140px;
-    object-fit: contain;
-    display: block;
-  }
-
-  /* ── Shared text styles ── */
   .title {
     font-family: var(--font-display);
     font-size: 32px;
@@ -141,6 +125,9 @@
     font-weight: 700;
     color: var(--text-primary);
     letter-spacing: -0.01em;
+  }
+  .title.center-text {
+    text-align: center;
   }
 
   .description {
@@ -168,6 +155,9 @@
     transition: background 0.15s;
     margin-top: 4px;
   }
+  .cta.center-cta {
+    align-self: center;
+  }
 
   .cta:hover { background: var(--ink-elevated); }
 
@@ -188,19 +178,17 @@
     font-weight: 500;
   }
 
-  @media (max-width: 480px) {
-    .inline-header {
+  @media (max-width: 640px) {
+    .welcome.layout-inline {
       flex-direction: column;
     }
-    .inline-img-wrap,
-    .inline-img {
-      width: 100%;
+    .cover.cover-inline {
       flex: 0 0 auto;
-      height: auto;
-      max-height: 200px;
+      height: 200px;
     }
-    .inline-img {
-      object-fit: contain;
+    .title, .cta {
+      align-self: center;
+      text-align: center;
     }
   }
 
