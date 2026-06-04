@@ -14,7 +14,7 @@
 
 <div class="closing">
   <div class="logo-bar">
-    <Logo height={28} />
+    <Logo height={36} />
   </div>
 
   <div class="check-icon" aria-hidden="true">
@@ -53,9 +53,11 @@
   }
 
   .logo-bar {
+    position: absolute;
+    top: 32px;
+    left: 32px;
     display: flex;
     align-items: center;
-    align-self: flex-start;
   }
 
   .check-icon {
