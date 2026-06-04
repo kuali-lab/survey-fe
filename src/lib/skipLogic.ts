@@ -45,6 +45,19 @@ function matchesOperator(
   }
 }
 
+// Yes/No answers are stored canonically as 'yes'/'no' by the respondent widget, but
+// older saved rules (and the builder, pre-fix) used the Indonesian 'ya'/'tidak'.
+// Canonicalize BOTH sides for a yes_no source so the comparison is robust to either
+// form. Scoped to yes_no ONLY — it must never remap a free-text answer that happens to
+// equal "ya"/"no". Keeps already-saved (previously dead) yes/no rules working.
+function canonYesNo(v: unknown): unknown {
+  if (typeof v !== 'string') return v
+  const s = v.trim().toLowerCase()
+  if (s === 'ya' || s === 'yes') return 'yes'
+  if (s === 'tidak' || s === 'no') return 'no'
+  return v
+}
+
 /** Returns the ID of next question, 'END' to submit now, or null to advance normally */
 export function evaluateNext(
   currentQuestionId: string,
@@ -56,7 +69,14 @@ export function evaluateNext(
   if (rules.length === 0) return null
 
   const checkRule = (r: SkipRule) => {
-    return matchesOperator(answers[r.sourceQuestionId], r.operator, r.value ?? '')
+    const srcType = questions.find(q => q.id === r.sourceQuestionId)?.type
+    let answer: unknown = answers[r.sourceQuestionId]
+    let value = r.value ?? ''
+    if (srcType === 'yes_no') {
+      answer = canonYesNo(answer)
+      value = String(canonYesNo(value))
+    }
+    return matchesOperator(answer, r.operator, value)
   }
 
   const groupMap = new Map<string, SkipRule[]>()
