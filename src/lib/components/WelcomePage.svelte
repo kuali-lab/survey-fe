@@ -20,7 +20,7 @@
 
 <div class="welcome">
   <div class="logo-bar">
-    <Logo height={28} />
+    <Logo height={36} />
   </div>
 
   {#if imageUrl}
@@ -66,6 +66,9 @@
   }
 
   .logo-bar {
+    position: absolute;
+    top: 32px;
+    left: 32px;
     display: flex;
     align-items: center;
   }
@@ -105,6 +108,7 @@
     line-height: 24px;
     color: var(--text-body);
     white-space: pre-wrap;
+    text-align: center;
   }
 
   .cta {
