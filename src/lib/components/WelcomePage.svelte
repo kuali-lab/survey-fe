@@ -48,8 +48,6 @@
         <span>{error}</span>
       </div>
     {/if}
-    <h1 class="title">{title}</h1>
-  {/if}
 
     <button class="cta" type="button" onclick={onStart} class:center-cta={layout === 'center'}>
       {ctaText}
@@ -67,7 +65,7 @@
     width: 100%;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 24px;
   }
 
   .welcome.layout-inline {
