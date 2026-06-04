@@ -561,6 +561,7 @@
           title={welcomeQuestion?.title || survey?.title || ''}
           description={welcomeQuestion?.description ?? null}
           imageUrl={welcomeQuestion?.imageUrl ?? null}
+          imageLayout={welcomeQuestion?.imageLayout ?? 'center'}
           ctaText={'Mulai Survei'}
           onStart={handleStart}
           error={validationError}
@@ -724,6 +725,7 @@
         title={closingQuestion?.title ?? 'Terima Kasih!'}
         description={closingQuestion?.description ?? null}
         imageUrl={closingQuestion?.imageUrl ?? null}
+        imageLayout={closingQuestion?.imageLayout ?? 'center'}
       />
     </div>
   {/if}
