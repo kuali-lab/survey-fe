@@ -28,69 +28,44 @@
   </div>
 
   {#if imageUrl && isInline}
-    <!-- Side-by-side layout (left / right) -->
-    <div class="inline-wrap" class:inline-right={layout === 'right'}>
+    <!-- Side-by-side: image beside title only -->
+    <div class="inline-header" class:inline-right={layout === 'right'}>
       <div class="inline-img-wrap">
         <img src={imageUrl} alt={title} class="inline-img" />
       </div>
-      <div class="inline-body">
-        <h1 class="title">{title}</h1>
-        {#if description}
-          <p class="description">{description}</p>
-        {/if}
-
-        {#if error}
-          <div class="error-msg" role="alert">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/>
-              <line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              <circle cx="12" cy="16" r="1" fill="currentColor"/>
-            </svg>
-            <span>{error}</span>
-          </div>
-        {/if}
-
-        <button class="cta" type="button" onclick={onStart}>
-          {ctaText}
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-      </div>
+      <h1 class="title">{title}</h1>
     </div>
   {:else}
-    <!-- Center layout (default): image on top -->
+    <!-- Center layout: image on top, then title -->
     {#if imageUrl}
       <div class="cover">
         <img src={imageUrl} alt={title} />
       </div>
     {/if}
+    <h1 class="title">{title}</h1>
+  {/if}
 
-    <div class="body">
-      <h1 class="title">{title}</h1>
-      {#if description}
-        <p class="description">{description}</p>
-      {/if}
+  {#if description}
+    <p class="description">{description}</p>
+  {/if}
 
-      {#if error}
-        <div class="error-msg" role="alert">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/>
-            <line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            <circle cx="12" cy="16" r="1" fill="currentColor"/>
-          </svg>
-          <span>{error}</span>
-        </div>
-      {/if}
-
-      <button class="cta" type="button" onclick={onStart}>
-        {ctaText}
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </button>
+  {#if error}
+    <div class="error-msg" role="alert">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/>
+        <line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <circle cx="12" cy="16" r="1" fill="currentColor"/>
+      </svg>
+      <span>{error}</span>
     </div>
   {/if}
+
+  <button class="cta" type="button" onclick={onStart}>
+    {ctaText}
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </button>
 </div>
 
 <style>
@@ -100,7 +75,7 @@
     width: 100%;
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 16px;
   }
 
   .logo-bar {
@@ -132,47 +107,33 @@
     object-fit: contain;
   }
 
-  /* ── Inline layout (left / right) ── */
-  .inline-wrap {
+  /* ── Inline layout (left / right): image beside title ── */
+  .inline-header {
     display: flex;
     flex-direction: row;
-    gap: 20px;
-    align-items: flex-start;
+    gap: 16px;
+    align-items: center;
   }
 
-  .inline-right {
+  .inline-header.inline-right {
     flex-direction: row-reverse;
   }
 
   .inline-img-wrap {
-    flex: 0 0 160px;
+    flex: 0 0 140px;
     border-radius: var(--radius-card);
     overflow: hidden;
     background: var(--canvas-soft);
   }
 
   .inline-img {
-    width: 160px;
-    height: 160px;
+    width: 140px;
+    height: 140px;
     object-fit: contain;
     display: block;
   }
 
-  .inline-body {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
   /* ── Shared text styles ── */
-  .body {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
   .title {
     font-family: var(--font-display);
     font-size: 32px;
@@ -228,7 +189,7 @@
   }
 
   @media (max-width: 480px) {
-    .inline-wrap {
+    .inline-header {
       flex-direction: column;
     }
     .inline-img-wrap,
@@ -236,7 +197,7 @@
       width: 100%;
       flex: 0 0 auto;
       height: auto;
-      max-height: 220px;
+      max-height: 200px;
     }
     .inline-img {
       object-fit: contain;
