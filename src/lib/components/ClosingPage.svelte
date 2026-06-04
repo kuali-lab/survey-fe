@@ -1,5 +1,4 @@
 <script lang="ts">
-
   let {
     title,
     description,
@@ -16,41 +15,42 @@
   const isInline = $derived(layout === 'left' || layout === 'right')
 </script>
 
-<div class="closing">
+<div class="closing" class:layout-inline={isInline} class:layout-right={layout === 'right'}>
   <div class="logo-bar">
     <img src="/logo-logika-teta.svg" alt="Logika Statistik" class="logo-img" />
   </div>
 
-  <div class="check-icon" aria-hidden="true">
-    <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="10" fill="var(--ink)"/>
-      <path d="M7 12.5l3.5 3.5 6.5-7" stroke="var(--on-ink)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-  </div>
-
-  {#if imageUrl && isInline}
-    <!-- Side-by-side: image beside title only -->
-    <div class="inline-header" class:inline-right={layout === 'right'}>
-      <div class="inline-img-wrap">
-        <img src={imageUrl} alt={title} class="inline-img" />
-      </div>
-      <h1 class="title">{title}</h1>
+  {#if layout === 'center'}
+    <div class="check-icon" aria-hidden="true">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10" fill="var(--ink)"/>
+        <path d="M7 12.5l3.5 3.5 6.5-7" stroke="var(--on-ink)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
     </div>
-  {:else}
-    <!-- Center layout: image on top, then title -->
-    {#if imageUrl}
-      <div class="cover">
-        <img src={imageUrl} alt={title} />
+  {/if}
+
+  {#if imageUrl}
+    <div class="cover" class:cover-inline={isInline}>
+      <img src={imageUrl} alt={title} />
+    </div>
+  {/if}
+
+  <div class="body">
+    {#if isInline}
+      <div class="check-icon" aria-hidden="true">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" fill="var(--ink)"/>
+          <path d="M7 12.5l3.5 3.5 6.5-7" stroke="var(--on-ink)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
       </div>
     {/if}
-    <h1 class="title">{title}</h1>
-  {/if}
-
-  {#if description}
-    <p class="description">{description}</p>
-  {:else}
-    <p class="description">Terima kasih telah mengisi survei ini. Jawaban Anda telah berhasil disimpan.</p>
-  {/if}
+    <h1 class="title" class:center-text={layout === 'center'}>{title}</h1>
+    {#if description}
+      <p class="description">{description}</p>
+    {:else}
+      <p class="description">Terima kasih telah mengisi survei ini. Jawaban Anda telah berhasil disimpan.</p>
+    {/if}
+  </div>
 </div>
 
 <style>
@@ -61,8 +61,17 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    text-align: center;
-    gap: 16px;
+    gap: 20px;
+  }
+
+  .closing.layout-inline {
+    max-width: 760px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+  }
+  .closing.layout-right {
+    flex-direction: row-reverse;
   }
 
   .logo-bar {
@@ -84,49 +93,36 @@
     margin-top: 8px;
   }
 
-  /* ── Center layout (image on top) ── */
   .cover {
     width: 100%;
     overflow: hidden;
     background: var(--canvas-soft);
     border-radius: var(--radius-card);
   }
+  .cover.cover-inline {
+    flex: 0 0 240px;
+    height: 240px;
+    background: transparent;
+  }
 
   .cover img {
     width: 100%;
-    display: block;
+    height: 100%;
     object-fit: contain;
+    display: block;
   }
 
-  /* ── Inline layout (left / right): image beside title ── */
-  .inline-header {
+  .body {
     display: flex;
-    flex-direction: row;
-    gap: 16px;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1;
+  }
+
+  .closing:not(.layout-inline) .body {
     align-items: center;
-    text-align: left;
   }
 
-  .inline-header.inline-right {
-    flex-direction: row-reverse;
-    text-align: right;
-  }
-
-  .inline-img-wrap {
-    flex: 0 0 140px;
-    border-radius: var(--radius-card);
-    overflow: hidden;
-    background: var(--canvas-soft);
-  }
-
-  .inline-img {
-    width: 140px;
-    height: 140px;
-    object-fit: contain;
-    display: block;
-  }
-
-  /* ── Shared text styles ── */
   .title {
     font-family: var(--font-display);
     font-size: 28px;
@@ -135,6 +131,9 @@
     color: var(--text-primary);
     letter-spacing: -0.01em;
   }
+  .title.center-text {
+    text-align: center;
+  }
 
   .description {
     font-size: 16px;
@@ -142,21 +141,20 @@
     color: var(--text-body);
     max-width: 440px;
     white-space: pre-wrap;
+    text-align: center;
   }
 
-  @media (max-width: 480px) {
-    .inline-header {
+  @media (max-width: 640px) {
+    .closing.layout-inline {
       flex-direction: column;
     }
-    .inline-img-wrap,
-    .inline-img {
-      width: 100%;
+    .cover.cover-inline {
       flex: 0 0 auto;
-      height: auto;
-      max-height: 200px;
+      height: 200px;
     }
-    .inline-img {
-      object-fit: contain;
+    .body {
+      align-items: center;
+      text-align: center;
     }
   }
 
