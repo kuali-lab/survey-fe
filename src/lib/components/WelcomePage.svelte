@@ -96,7 +96,7 @@
     width: 100%;
     max-height: 320px;
     overflow: hidden;
-    background: var(--canvas-soft);
+    background: transparent;
     border-radius: var(--radius-card);
   }
   .cover.cover-inline {
