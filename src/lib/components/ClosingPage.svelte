@@ -108,9 +108,14 @@
 
   .cover img {
     width: 100%;
-    height: 100%;
+    height: auto;
+    max-height: 320px;
     object-fit: contain;
     display: block;
+  }
+  .cover.cover-inline img {
+    height: 100%;
+    max-height: none;
   }
 
   .body {
