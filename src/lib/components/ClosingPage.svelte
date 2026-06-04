@@ -95,6 +95,7 @@
 
   .cover {
     width: 100%;
+    max-height: 320px;
     overflow: hidden;
     background: var(--canvas-soft);
     border-radius: var(--radius-card);
