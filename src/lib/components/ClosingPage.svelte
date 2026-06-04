@@ -29,36 +29,27 @@
   </div>
 
   {#if imageUrl && isInline}
-    <!-- Side-by-side layout (left / right) -->
-    <div class="inline-wrap" class:inline-right={layout === 'right'}>
+    <!-- Side-by-side: image beside title only -->
+    <div class="inline-header" class:inline-right={layout === 'right'}>
       <div class="inline-img-wrap">
         <img src={imageUrl} alt={title} class="inline-img" />
       </div>
-      <div class="inline-body">
-        <h1 class="title">{title}</h1>
-        {#if description}
-          <p class="description">{description}</p>
-        {:else}
-          <p class="description">Terima kasih telah mengisi survei ini. Jawaban Anda telah berhasil disimpan.</p>
-        {/if}
-      </div>
+      <h1 class="title">{title}</h1>
     </div>
   {:else}
-    <!-- Center layout (default): image on top -->
+    <!-- Center layout: image on top, then title -->
     {#if imageUrl}
       <div class="cover">
         <img src={imageUrl} alt={title} />
       </div>
     {/if}
+    <h1 class="title">{title}</h1>
+  {/if}
 
-    <div class="body">
-      <h1 class="title">{title}</h1>
-      {#if description}
-        <p class="description">{description}</p>
-      {:else}
-        <p class="description">Terima kasih telah mengisi survei ini. Jawaban Anda telah berhasil disimpan.</p>
-      {/if}
-    </div>
+  {#if description}
+    <p class="description">{description}</p>
+  {:else}
+    <p class="description">Terima kasih telah mengisi survei ini. Jawaban Anda telah berhasil disimpan.</p>
   {/if}
 </div>
 
@@ -71,7 +62,7 @@
     flex-direction: column;
     align-items: center;
     text-align: center;
-    gap: 20px;
+    gap: 16px;
   }
 
   .logo-bar {
@@ -107,17 +98,18 @@
     object-fit: contain;
   }
 
-  /* ── Inline layout (left / right) ── */
-  .inline-wrap {
+  /* ── Inline layout (left / right): image beside title ── */
+  .inline-header {
     display: flex;
     flex-direction: row;
-    gap: 20px;
-    align-items: flex-start;
+    gap: 16px;
+    align-items: center;
     text-align: left;
   }
 
-  .inline-right {
+  .inline-header.inline-right {
     flex-direction: row-reverse;
+    text-align: right;
   }
 
   .inline-img-wrap {
@@ -134,21 +126,7 @@
     display: block;
   }
 
-  .inline-body {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
   /* ── Shared text styles ── */
-  .body {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
   .title {
     font-family: var(--font-display);
     font-size: 28px;
@@ -167,7 +145,7 @@
   }
 
   @media (max-width: 480px) {
-    .inline-wrap {
+    .inline-header {
       flex-direction: column;
     }
     .inline-img-wrap,
