@@ -93,22 +93,18 @@
     align-items: center;
     gap: 10px;
     padding: 10px 12px 10px 14px;
-    border-radius: 999px;
-    font-size: 13.5px;
-    font-weight: 600;
-    border: 1px solid;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+    border-radius: var(--radius-pill);
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: var(--shadow-level-2);
     max-width: 90vw;
+    background: var(--ink);
+    color: var(--on-ink);
   }
-  .toast.success {
-    background: #f0fdf4;
-    color: #15803d;
-    border-color: #bbf7d0;
-  }
+  .toast.success { background: var(--ink); color: var(--on-ink); }
   .toast.error {
-    background: #fef2f2;
-    color: #b91c1c;
-    border-color: #fecaca;
+    background: var(--error);
+    color: var(--on-ink);
   }
   .close {
     background: transparent;

@@ -26,7 +26,7 @@
     <div class="number-row">
       <span class="number">{questionNumber}</span>
       <svg class="number-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </div>
   {/if}
@@ -84,7 +84,7 @@
 
   {#if validationError}
     <div class="error" role="alert">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
         <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
         <path d="M12 8v5M12 16v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       </svg>
@@ -104,11 +104,11 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    color: var(--primary-60, #c89800);
+    color: var(--text-body);
     font-size: 14px;
-    font-weight: 700;
+    font-weight: 500;
     align-self: flex-start;
-    letter-spacing: 0.02em;
+    letter-spacing: 0;
   }
 
   .number {
@@ -117,6 +117,7 @@
 
   .number-arrow {
     flex-shrink: 0;
+    color: var(--ink);
     margin-top: 1px;
   }
 
@@ -128,40 +129,43 @@
     outline: none;
   }
 
+  /* Programmatic focus is announced by AT; no visible ring needed and the
+     yellow box around every question title reads as a UI bug. */
   .question-title:focus-visible {
-    outline: 2px solid #f7bb00;
-    outline-offset: 4px;
-    border-radius: 4px;
+    outline: none;
   }
 
+  /* Survey questions read more naturally in the body face at semibold —
+     headlines feel announcement-y for what is meant to be a conversation. */
   .title-text {
-    font-size: 22px;
-    font-weight: 700;
-    color: var(--tertiary-100);
-    line-height: 1.3;
-    flex: 1;
+    font-family: var(--font);
+    font-size: 19px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 26px;
+    letter-spacing: 0;
   }
 
   .required {
-    color: var(--error-50);
-    font-size: 22px;
+    color: var(--error);
+    font-size: 19px;
     line-height: 1;
     flex-shrink: 0;
   }
 
   .description {
-    font-size: 15px;
-    color: var(--tertiary-70, #5a5a55);
-    line-height: 1.55;
+    font-size: 16px;
+    color: var(--text-body);
+    line-height: 24px;
     white-space: pre-wrap;
     margin: -4px 0 0;
   }
 
   .image-wrap {
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-card);
     overflow: hidden;
     max-height: 280px;
-    background: var(--tertiary-10);
+    background: var(--canvas-soft);
   }
 
   .image-wrap img {
@@ -186,9 +190,9 @@
 
   .inline-img-wrap {
     flex: 0 0 140px;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-card);
     overflow: hidden;
-    background: var(--tertiary-10);
+    background: var(--canvas-soft);
   }
 
   .inline-img {
@@ -207,12 +211,11 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    color: var(--error-50);
+    color: var(--error);
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 500;
   }
 
-  /* Stack inline image on small screens */
   @media (max-width: 480px) {
     .card-inline-wrap {
       flex-direction: column;
@@ -231,20 +234,17 @@
 
   @media (min-width: 768px) {
     .card {
-      gap: 18px;
+      gap: 16px;
     }
     .title-text {
-      font-size: 28px;
-      line-height: 1.25;
+      font-size: 21px;
+      line-height: 28px;
     }
     .required {
-      font-size: 28px;
-    }
-    .description {
-      font-size: 16px;
+      font-size: 21px;
     }
     .number-row {
-      font-size: 15px;
+      font-size: 14px;
     }
     .image-wrap {
       max-height: 320px;

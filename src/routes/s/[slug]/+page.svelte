@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { PageData } from './$types.js'
   import type { ViewState, Answers } from '$lib/types.js'
-  import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress } from '$lib/api.js'
+  import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress, getInvitationStatus } from '$lib/api.js'
   import { computeFingerprint } from '$lib/fingerprint.js'
   import { getQuestionNumber } from '$lib/utils.js'
   import { page } from '$app/stores'
@@ -49,6 +49,8 @@
   // Invitation token captured from ?t= on first mount; null for anonymous fill.
   let invitationToken = $state<string | null>(null)
   let invitationStartedFired = false
+  // Item 4 — one-time link gate: 'done' (already completed) | 'expired' | null.
+  let inviteBlocked = $state<'done' | 'expired' | null>(null)
 
   const runner = new SurveyRunner({
     getSurvey: () => survey ?? null,
@@ -64,7 +66,16 @@
     savedAt: number
   }
   const STORAGE_TTL_MS = 30 * 24 * 3600 * 1000
-  const storageKey = (s: string) => `survey-fe:state:${s}`
+  // Draft state is scoped per invitation token (not just per survey slug). This is
+  // the fix for the reopen bug: a respondent who completed the survey and is then
+  // re-invited arrives with a NEW token, so there is no saved state under the new
+  // key → they start fresh instead of resuming the old (completed) fill at the
+  // wrong question. A genuinely interrupted fill resumes only under its own token.
+  // Anonymous fills (no token) share one per-slug key as before.
+  const storageKey = (s: string) => `survey-fe:state:${s}:${invitationToken ?? 'anon'}`
+  // Server-draft session key mirrors the same token scoping on top of the device
+  // fingerprint, so a new token never loads a previous token's server draft.
+  const draftSessionKey = (fp: string) => (invitationToken ? `${fp}:${invitationToken}` : fp)
 
   function loadSavedState(s: string): SavedState | null {
     if (typeof localStorage === 'undefined') return null
@@ -145,13 +156,26 @@
       } else if (fromSession) {
         invitationToken = fromSession
       }
+
+      // Item 4 — one-time link: block a token that was already completed (and not
+      // reopened) or has expired, so a reused old link shows a clear message
+      // instead of silently re-opening the form. Fail-open on any error.
+      if (invitationToken) {
+        getInvitationStatus(invitationToken).then((state) => {
+          if (state === 'completed') {
+            inviteBlocked = 'done'
+          } else if (state === 'expired') {
+            inviteBlocked = 'expired'
+          }
+        })
+      }
     }
 
     computeFingerprint().then(async (fp) => {
       fingerprintHash = fp
       if (!resumePrompt && fp && data.slug && !data.error) {
         try {
-          const serverDraft = await getDraft(data.slug, fp)
+          const serverDraft = await getDraft(data.slug, draftSessionKey(fp))
           if (serverDraft && serverDraft.currentPageIndex > 0 && Object.keys(serverDraft.answers).length > 0) {
             resumePrompt = { answers: serverDraft.answers, currentIndex: serverDraft.currentPageIndex, accumulatedTimeMs: 0 }
           }
@@ -228,7 +252,7 @@
     const s   = untrack(() => slug)
     if (vs !== 'question') return
     if (_draftInitialSkip) { _draftInitialSkip = false; return }
-    if (fp && s) saveDraft(s, fp, ans, idx).catch(() => {})
+    if (fp && s) saveDraft(s, draftSessionKey(fp), ans, idx).catch(() => {})
   })
 
   let questionErrors = $derived(runner.questionErrors)
@@ -239,7 +263,7 @@
   const closingQuestion = $derived(
     survey?.questions.find((q) => q.type === 'closing_page') ?? null,
   )
-  const settings = $derived(survey?.settings ?? { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true })
+  const settings = $derived(survey?.settings ?? { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' as const })
 
   async function handleStart() {
     validationError = null
@@ -363,7 +387,7 @@
       await submitSurveyAnswers(slug, runner.answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie, undefined, undefined, invitationToken)
 
       clearSavedState()
-      if (fingerprintHash && slug) deleteDraft(slug, fingerprintHash).catch(() => {})
+      if (fingerprintHash && slug) deleteDraft(slug, draftSessionKey(fingerprintHash)).catch(() => {})
       if (invitationToken) reportInvitationProgress(invitationToken, 'completed')
       viewState = 'closing'
     } catch (err) {
@@ -493,7 +517,19 @@
 />
 
 <div class="page" class:page-question={viewState === 'question'}>
-  {#if viewState === 'error'}
+  {#if inviteBlocked}
+    <div class="centered-wrap">
+      <div class="resume-card" role="region" aria-label="Status undangan">
+        <h2 class="resume-title">{inviteBlocked === 'done' ? 'Survei sudah selesai' : 'Tautan kedaluwarsa'}</h2>
+        <p class="resume-description">
+          {inviteBlocked === 'done'
+            ? 'Anda sudah menyelesaikan survei ini. Terima kasih atas partisipasi Anda. Jika perlu mengisi ulang, mintalah undangan baru dari penyelenggara.'
+            : 'Tautan undangan ini sudah tidak berlaku. Silakan minta undangan terbaru dari penyelenggara survei.'}
+        </p>
+      </div>
+    </div>
+
+  {:else if viewState === 'error'}
     <div class="centered-wrap">
       <ErrorPage type={errorType} />
     </div>
@@ -595,9 +631,33 @@
       <main class="content">
         <div
           class="question-stage"
-          class:single-question={runner.currentPage?.questions.length === 1 && settings.displayMode !== 'scroll'}
+          class:single-question={runner.currentPage?.questions.length === 1 && !runner.isScrollMode}
         >
-          {#if runner.currentPage}
+          {#if runner.isScrollMode}
+            <!-- Scroll mode: render every group as its own section so the
+                 respondent view matches the builder (groups don't disappear). -->
+            {#each runner.scrollSections as section (section.id)}
+              <div class="stage-slide">
+                {#if section.title}
+                  <SectionHeader
+                    title={section.title}
+                    description={section.description ?? null}
+                  />
+                {/if}
+                {#each section.questions as q (q.id)}
+                  <QuestionCard
+                    question={q}
+                    questionNumber={settings.showNumbers ? getQuestionNumber(q, runner.questions) : ''}
+                    answer={runner.answers[q.id] ?? null}
+                    validationError={questionErrors[q.id] ?? null}
+                    onAnswer={(val) => runner.handleAnswer(q.id, val)}
+                    onBlur={() => runner.handleBlur(q.id)}
+                    {slug}
+                  />
+                {/each}
+              </div>
+            {/each}
+          {:else if runner.currentPage}
             {#key runner.currentPage.id}
               <div
                 class="stage-slide"
@@ -672,12 +732,12 @@
 <style>
   .page {
     min-height: 100vh;
-    background: var(--tertiary-20);
+    background: var(--canvas);
     transition: background-color 0.2s ease;
   }
 
   .page.page-question {
-    background: white;
+    background: var(--canvas);
   }
 
   .centered-wrap {
@@ -686,44 +746,43 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 16px;
+    padding: 24px 16px;
     gap: 12px;
   }
 
   .step-indicator {
-    font-size: 12.5px;
+    font-size: 12px;
     font-weight: 700;
-    color: var(--tertiary-80, #4a4a45);
-    background: white;
-    border: 1px solid var(--tertiary-20, #ececea);
-    border-radius: 999px;
+    color: var(--text-primary);
+    background: var(--canvas-soft);
+    border-radius: var(--radius-pill);
     padding: 6px 14px;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
   }
 
   .submitting-card {
-    background: white;
-    border-radius: var(--radius-xl);
+    background: var(--canvas);
+    border-radius: var(--radius-card);
     padding: 40px 48px;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 18px;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
   }
 
   .submitting-card p {
     font-size: 15px;
-    font-weight: 600;
-    color: var(--tertiary-90, #2a2a25);
+    font-weight: 500;
+    color: var(--text-primary);
     margin: 0;
   }
 
   .big-spinner {
     width: 32px;
     height: 32px;
-    border: 3px solid var(--tertiary-30, #d8d8d2);
-    border-top-color: var(--primary-50, #f7bb00);
+    border: 3px solid var(--canvas-soft);
+    border-top-color: var(--ink);
     border-radius: 50%;
     animation: submit-spin 0.8s linear infinite;
   }
@@ -753,10 +812,20 @@
     display: flex;
     flex-direction: column;
     padding: 16px 0;
+    /* Outer gap between scroll-mode section blocks. Without card chrome the
+       questions are visually flat; a moderate gap keeps grouping legible
+       without making the page feel sparse. In one_per_page mode there's only
+       one .stage-slide child so the gap is inert. */
+    gap: 32px;
   }
 
-  .question-stage.single-question {
-    justify-content: center;
+  /* On desktop, vertically center the single question for a Typeform-like
+     focus. On mobile, top-anchor — centering creates a floating-in-space feel
+     because the viewport is tall and the question alone can't fill it. */
+  @media (min-width: 768px) {
+    .question-stage.single-question {
+      justify-content: center;
+    }
   }
 
   .stage-slide {
@@ -766,7 +835,14 @@
   }
 
   .question-stage:not(.single-question) .stage-slide {
-    gap: 28px;
+    /* Inner gap between questions within a single section. */
+    gap: 24px;
+  }
+
+  @media (min-width: 768px) {
+    .question-stage {
+      gap: 40px;
+    }
   }
 
   .nav {
@@ -786,20 +862,20 @@
     .nav {
       position: sticky;
       bottom: 0;
-      background: white;
+      background: var(--canvas);
       margin: 12px -20px 0;
       padding: 12px 20px;
       padding-bottom: max(12px, env(safe-area-inset-bottom));
-      border-top: 1px solid var(--tertiary-20, #ececea);
+      border-top: 1px solid var(--canvas-soft);
       z-index: 5;
     }
   }
 
   .submit-error {
-    background: #fef2f2;
-    border: 1px solid #fecaca;
-    border-radius: var(--radius-md);
-    color: var(--error-50);
+    background: var(--error-bg);
+    border: 1px solid var(--error-border);
+    border-radius: var(--radius-input);
+    color: var(--error);
     padding: 12px 16px;
     font-size: 14px;
     margin-top: 8px;
@@ -810,8 +886,8 @@
     align-items: center;
     gap: 8px;
     font-size: 13px;
-    font-weight: 600;
-    color: var(--tertiary-70, #5a5a55);
+    font-weight: 500;
+    color: var(--text-body);
     margin: 8px 0 0;
     align-self: flex-start;
   }
@@ -819,8 +895,8 @@
   .auto-advance-spinner {
     width: 12px;
     height: 12px;
-    border: 2px solid #d9dde3;
-    border-top-color: #f7bb00;
+    border: 2px solid var(--canvas-soft);
+    border-top-color: var(--ink);
     border-radius: 50%;
     animation: auto-spin 0.6s linear infinite;
   }
@@ -830,28 +906,30 @@
   }
 
   .resume-card {
-    background: white;
-    border-radius: var(--radius-xl);
+    background: var(--canvas);
+    border-radius: var(--radius-card);
     max-width: 480px;
     width: 100%;
-    padding: 24px 24px;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
+    padding: 24px;
+    border: 1px solid var(--canvas-soft);
     display: flex;
     flex-direction: column;
     gap: 14px;
   }
 
   .resume-title {
-    font-size: 20px;
+    font-family: var(--font-display);
+    font-size: 22px;
     font-weight: 700;
-    color: var(--tertiary-100);
+    color: var(--text-primary);
     margin: 0;
-    line-height: 1.3;
+    line-height: 30px;
+    letter-spacing: -0.01em;
   }
 
   .resume-description {
-    font-size: 14px;
-    color: var(--tertiary-70, #5a5a55);
+    font-size: 15px;
+    color: var(--text-body);
     line-height: 1.55;
     margin: 0;
   }
@@ -867,49 +945,49 @@
     flex: 1;
     min-width: 140px;
     height: 48px;
-    padding: 0 20px;
-    border-radius: var(--radius-xl);
+    padding: 0 24px;
+    border-radius: var(--radius-pill);
     font-family: var(--font);
-    font-size: 15px;
-    font-weight: 700;
+    font-size: 16px;
+    font-weight: 500;
     cursor: pointer;
-    transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.1s;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    border: 1px solid transparent;
   }
 
-  .resume-btn:active {
-    transform: scale(0.97);
+  @media (prefers-reduced-motion: no-preference) {
+    .resume-btn:active { transform: scale(0.97); }
   }
 
   .resume-btn.primary {
-    background: var(--primary-50);
-    color: #221500;
-    border: 2px solid transparent;
+    background: var(--ink);
+    color: var(--on-ink);
   }
 
   .resume-btn.primary:hover {
-    background: #e8ae00;
+    background: var(--ink-elevated);
   }
 
   .resume-btn.secondary {
-    background: white;
-    color: var(--tertiary-80);
-    border: 2px solid #d9dde3;
+    background: var(--canvas);
+    color: var(--tertiary-100);
+    border-color: var(--tertiary-100);
   }
 
   .resume-btn.secondary:hover {
-    border-color: #f7bb00;
-    background: #fffbed;
+    background: var(--surface);
   }
 
   @media (min-width: 768px) {
     .resume-card {
-      padding: 32px 32px;
+      padding: 32px;
     }
     .resume-title {
-      font-size: 22px;
+      font-size: 26px;
+      line-height: 34px;
     }
     .resume-description {
-      font-size: 15px;
+      font-size: 16px;
     }
   }
 

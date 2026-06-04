@@ -72,30 +72,32 @@
   .box {
     width: 48px;
     height: 56px;
-    border-radius: var(--radius-md);
-    border: 2px solid var(--tertiary-30);
-    background: white;
+    border-radius: var(--radius-input);
+    border: 1px solid transparent;
+    background: var(--canvas-soft);
     font-family: var(--font);
     font-size: 22px;
     font-weight: 700;
     line-height: 1;
-    color: var(--tertiary-100);
+    color: var(--text-primary);
     text-align: center;
     outline: none;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    transition: background 0.15s, border-color 0.15s;
   }
 
   .box.filled {
-    border-color: var(--primary-50);
+    background: var(--canvas);
+    border-color: var(--ink);
   }
 
   .box:focus {
-    border-color: var(--primary-50);
-    box-shadow: 0 0 0 3px rgba(247, 187, 0, 0.18);
+    background: var(--canvas);
+    border-color: var(--ink);
+    border-width: 2px;
   }
 
   .box:disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: not-allowed;
   }
 

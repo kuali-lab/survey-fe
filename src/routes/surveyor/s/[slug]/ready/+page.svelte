@@ -111,7 +111,7 @@
 <style>
   .wrap {
     min-height: calc(100dvh - 56px);
-    background: var(--tertiary-20);
+    background: var(--canvas);
     display: flex;
     align-items: flex-start;
     justify-content: center;
@@ -119,55 +119,58 @@
   }
 
   .card {
-    background: white;
-    border-radius: var(--radius-xl);
+    background: var(--canvas);
     max-width: 520px;
     width: 100%;
-    padding: 32px;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
+    padding: 8px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 24px;
   }
 
   .hi {
-    font-size: 24px;
-    font-weight: 800;
-    color: var(--tertiary-100);
-    line-height: 1.2;
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 36px;
     margin: 0;
+    letter-spacing: -0.01em;
   }
 
   .welcome {
-    font-size: 15px;
-    color: var(--tertiary-70);
-    margin: -12px 0 0;
+    font-size: 16px;
+    color: var(--text-body);
+    margin: -16px 0 0;
   }
 
   .cta {
     width: 100%;
     min-height: 56px;
-    background: var(--primary-50);
-    color: #221500;
+    background: var(--ink);
+    color: var(--on-ink);
     font-family: var(--font);
-    font-size: 17px;
-    font-weight: 700;
+    font-size: 16px;
+    font-weight: 500;
     border: none;
-    border-radius: var(--radius-xl);
+    border-radius: var(--radius-pill);
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 10px;
-    padding: 18px 24px;
-    transition: background 0.2s, transform 0.1s;
+    padding: 16px 24px;
+    transition: background 0.15s;
   }
 
-  .cta:hover { background: #e8ae00; }
-  .cta:active { transform: scale(0.98); }
+  .cta:hover { background: var(--ink-elevated); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .cta:active { transform: scale(0.98); }
+  }
 
   .summary {
-    border-top: 1px solid var(--tertiary-30);
+    border-top: 1px solid var(--canvas-soft);
     padding-top: 16px;
     display: flex;
     flex-direction: column;
@@ -177,14 +180,14 @@
   .summary-title {
     font-size: 12px;
     font-weight: 700;
-    color: var(--tertiary-70);
+    color: var(--text-body);
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.08em;
     margin-bottom: 4px;
   }
 
   .summary-row {
     font-size: 14px;
-    color: var(--tertiary-80);
+    color: var(--text-primary);
   }
 </style>

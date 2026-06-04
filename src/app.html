@@ -21,20 +21,18 @@
     <!-- Browser chrome color -->
     <meta name="theme-color" content="#f7bb00" />
 
-    <!-- Default Open Graph (overridden per-page) -->
+    <!-- Default Open Graph (og:image + twitter:image injected in +layout.svelte from PUBLIC_SITE_URL) -->
     <meta property="og:site_name" content="Logika Statistik" />
     <meta property="og:locale" content="id_ID" />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://survey.logika-teta.web.id/logo-logika-teta.png" />
 
     <!-- Default Twitter Card (overridden per-page) -->
     <meta name="twitter:card" content="summary" />
-    <meta name="twitter:image" content="https://survey.logika-teta.web.id/logo-logika-teta.png" />
 
-    <!-- Fonts -->
+    <!-- Fonts — body=Source Sans 3, display=Nunito Sans (matches dashboard-fe) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
-    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@700&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
     %sveltekit.head%
   </head>

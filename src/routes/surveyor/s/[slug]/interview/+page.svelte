@@ -160,7 +160,7 @@
     goto(`/surveyor/s/${data.slug}/interview`, { replaceState: true })
   }
 
-  const settings = $derived(data.survey?.settings ?? { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true })
+  const settings = $derived(data.survey?.settings ?? { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' as const })
 
   function onKeydown(e: KeyboardEvent) {
     if (runner) runner.handleKeydown(e)
@@ -216,7 +216,7 @@
     <main class="content">
       <div
         class="question-stage"
-        class:single-question={runner.currentPage?.questions.length === 1 && settings.displayMode !== 'scroll'}
+        class:single-question={runner.currentPage?.questions.length === 1 && !runner.isScrollMode}
       >
         {#if runner.currentPage}
           {#key runner.currentPage.id}
@@ -268,7 +268,7 @@
 <style>
   .survey-wrap {
     min-height: calc(100dvh - 56px);
-    background: white;
+    background: var(--canvas);
     display: flex;
     flex-direction: column;
   }
@@ -279,8 +279,8 @@
     margin: 0 auto;
     padding: 6px 20px 0;
     font-size: 12px;
-    font-weight: 700;
-    color: var(--tertiary-70);
+    font-weight: 500;
+    color: var(--text-body);
     display: flex;
     justify-content: flex-end;
   }
@@ -333,11 +333,11 @@
     .nav {
       position: sticky;
       bottom: 0;
-      background: white;
+      background: var(--canvas);
       margin: 12px -20px 0;
       padding: 12px 20px;
       padding-bottom: max(12px, env(safe-area-inset-bottom));
-      border-top: 1px solid var(--tertiary-30);
+      border-top: 1px solid var(--canvas-soft);
       z-index: 5;
     }
   }
@@ -347,8 +347,8 @@
     align-items: center;
     gap: 8px;
     font-size: 13px;
-    font-weight: 600;
-    color: var(--tertiary-70);
+    font-weight: 500;
+    color: var(--text-body);
     margin: 8px 0 0;
     align-self: flex-start;
   }
@@ -356,8 +356,8 @@
   .auto-advance-spinner {
     width: 12px;
     height: 12px;
-    border: 2px solid #d9dde3;
-    border-top-color: var(--primary-50);
+    border: 2px solid var(--canvas-soft);
+    border-top-color: var(--ink);
     border-radius: 50%;
     animation: auto-spin 0.6s linear infinite;
   }

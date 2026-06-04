@@ -32,10 +32,9 @@
   .stat-row {
     display: flex;
     align-items: stretch;
-    background: var(--primary-10);
-    border: 1px solid var(--primary-30);
-    border-radius: var(--radius-lg);
-    padding: 16px 8px;
+    background: var(--canvas-soft);
+    border-radius: var(--radius-card);
+    padding: 20px 12px;
   }
 
   .stat {
@@ -43,25 +42,27 @@
     text-align: center;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
   }
 
   .stat-num {
-    font-size: 28px;
-    font-weight: 800;
-    color: var(--tertiary-100);
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text-primary);
     line-height: 1;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
   }
 
   .stat-label {
     font-size: 12px;
-    color: var(--tertiary-70);
-    font-weight: 600;
+    color: var(--text-body);
+    font-weight: 500;
   }
 
   .divider {
     width: 1px;
-    background: var(--primary-30);
+    background: var(--surface-pressed);
     margin: 4px 8px;
   }
 
@@ -69,29 +70,30 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    background: var(--primary-10);
-    color: #b45309;
-    border: 1px solid var(--primary-30);
-    border-radius: 999px;
-    padding: 3px 10px;
+    background: var(--canvas-soft);
+    color: var(--text-primary);
+    border-radius: var(--radius-pill);
+    padding: 6px 12px;
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 500;
     line-height: 1.2;
     white-space: nowrap;
   }
 
   .pill-num {
     font-size: 13px;
-    font-weight: 800;
+    font-weight: 700;
     color: var(--tertiary-100);
+    font-variant-numeric: tabular-nums;
   }
 
   .pill-sep {
-    opacity: 0.5;
+    color: var(--text-muted);
   }
 
   .pill-label {
     font-size: 11px;
     letter-spacing: 0.02em;
+    color: var(--text-body);
   }
 </style>
