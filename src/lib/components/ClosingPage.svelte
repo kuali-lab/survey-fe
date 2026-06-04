@@ -53,9 +53,12 @@
   }
 
   .logo-bar {
+    position: fixed;
+    top: 24px;
+    left: 24px;
     display: flex;
     align-items: center;
-    align-self: flex-start;
+    z-index: 10;
   }
 
   .check-icon {
