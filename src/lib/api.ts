@@ -1,6 +1,22 @@
 import { PUBLIC_API_BASE_URL } from '$env/static/public'
+import { env as publicEnv } from '$env/dynamic/public'
 import type { Survey, Question } from './types.js'
 import type { Answers } from './types.js'
+import { buildMockSurvey } from './mockSurvey.js'
+
+/**
+ * Mock gate — PUBLIC_USE_MOCK is the single master switch. It's read at runtime
+ * via $env/dynamic/public, so the SAME build behaves differently per deploy:
+ *   - dev / local:  PUBLIC_USE_MOCK=1  → every survey is served from the local
+ *                                        fixture (no logika-be needed)
+ *   - prod:         unset / "0"        → mock fully disabled; all requests,
+ *                                        including /s/mock, hit the real backend
+ * Keeping it env-only (no hardcoded slug bypass) is what makes prod safe: with
+ * the flag off there is no way to reach the fixture.
+ */
+function shouldUseMock(): boolean {
+  return publicEnv.PUBLIC_USE_MOCK === '1' || publicEnv.PUBLIC_USE_MOCK === 'true'
+}
 
 /**
  * Normalize a raw API question object into the typed Question shape used by
@@ -108,6 +124,7 @@ export async function getInvitationStatus(token: string): Promise<'ok' | 'comple
 }
 
 export async function fetchSurvey(slug: string, fetchFn: typeof fetch = fetch): Promise<Survey> {
+  if (shouldUseMock()) return buildMockSurvey(slug)
   try {
     const res = await fetchFn(`${PUBLIC_API_BASE_URL}/s/${slug}`)
     if (res.status === 404) throw new Error('not_found')
@@ -150,6 +167,10 @@ export async function submitSurveyAnswers(
   submissionId?: string,
   invitationToken?: string | null,
 ): Promise<void> {
+  // Dev mock: pretend the submission succeeded so the closing journey renders
+  // without a backend. Mirrors the fetchSurvey() gate.
+  if (shouldUseMock()) return
+
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (surveyorCode) headers['Authorization'] = `Bearer ${surveyorCode}`
   if (submissionId) headers['Idempotency-Key'] = submissionId

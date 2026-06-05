@@ -331,10 +331,7 @@
           <div class="image-option-footer">
             <span class="radio-indicator {strValue === opt.label ? 'selected' : ''}"></span>
             <span class="image-option-label">{opt.label}</span>
-            <span class="option-letter" aria-hidden="true">{String.fromCharCode(65 + idx)}</span>
           </div>
-        {:else}
-          <span class="image-option-corner-letter" aria-hidden="true">{String.fromCharCode(65 + idx)}</span>
         {/if}
       </button>
     {/each}
@@ -457,7 +454,6 @@
       >
         <span class="radio-indicator {strValue === opt.label ? 'selected' : ''}"></span>
         <span class="option-label">{opt.label}</span>
-        <span class="option-letter" aria-hidden="true">{String.fromCharCode(65 + i)}</span>
       </button>
     {/each}
     {#if otherOption}
@@ -469,7 +465,6 @@
       >
         <span class="radio-indicator {isOtherSelected ? 'selected' : ''}"></span>
         <span class="option-label">{otherOption.label}</span>
-        <span class="option-letter" aria-hidden="true">{String.fromCharCode(65 + otherIdx)}</span>
       </button>
       {#if isOtherSelected}
         <input
@@ -502,7 +497,6 @@
           {/if}
         </span>
         <span class="option-label">{opt.label}</span>
-        <span class="option-letter" aria-hidden="true">{String.fromCharCode(65 + i)}</span>
       </button>
     {/each}
     {#if otherOption}
@@ -522,7 +516,6 @@
           {/if}
         </span>
         <span class="option-label">{otherOption.label}</span>
-        <span class="option-letter" aria-hidden="true">{String.fromCharCode(65 + otherIdx)}</span>
       </button>
       {#if isOtherSelected}
         <input
@@ -585,7 +578,6 @@
         </svg>
         Ya
       </span>
-      <span class="option-letter" aria-hidden="true">Y</span>
     </button>
     <button
       class="yes-no-btn {strValue === 'no' ? 'selected' : ''}"
@@ -598,7 +590,6 @@
         </svg>
         Tidak
       </span>
-      <span class="option-letter" aria-hidden="true">T</span>
     </button>
   </div>
 
@@ -1076,33 +1067,6 @@
     flex: 1;
   }
 
-  /* Letter shortcut chip — visual on every viewport, hotkey on desktop. */
-  .option-letter {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    width: 22px;
-    height: 22px;
-    border-radius: 4px;
-    border: 1px solid var(--surface-pressed);
-    background: var(--canvas);
-    color: var(--text-body);
-    font-size: 11px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0;
-    margin-left: auto;
-    transition: border-color 0.15s, background 0.15s, color 0.15s;
-  }
-
-  .option-card.selected .option-letter,
-  .yes-no-btn.selected .option-letter {
-    border-color: transparent;
-    background: var(--on-ink);
-    color: var(--ink);
-  }
-
   /* ── Yes/No ── */
   .yes-no-wrap {
     display: flex;
@@ -1434,30 +1398,6 @@
   }
 
   .image-option-card.selected .image-option-label { color: var(--on-ink); }
-
-  .image-option-corner-letter {
-    position: absolute;
-    top: 8px;
-    left: 8px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.95);
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    color: var(--tertiary-100);
-    font-size: 11px;
-    font-weight: 700;
-    z-index: 1;
-  }
-
-  .image-option-card.selected .image-option-corner-letter {
-    background: var(--canvas);
-    color: var(--primary-on);
-    border-color: transparent;
-  }
 
   .image-option-img-wrap {
     width: 100%;
