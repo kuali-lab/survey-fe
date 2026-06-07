@@ -5,6 +5,7 @@
   import type { Action } from 'svelte/action'
   import flatpickr from 'flatpickr'
   import 'flatpickr/dist/flatpickr.css'
+  import RegionInput from './RegionInput.svelte'
 
   let {
     question,
@@ -807,6 +808,14 @@
       <p class="upload-error">{uploadError}</p>
     {/if}
   </div>
+
+{:else if question.type === 'region'}
+  <RegionInput
+    value={value}
+    regionDepth={question.regionDepth}
+    onChange={onChange}
+    {onBlur}
+  />
 
 {:else if question.type === 'statement'}
   {#if question.description}
