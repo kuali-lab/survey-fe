@@ -343,9 +343,13 @@
     type="text"
     placeholder={question.placeholder ?? ''}
     value={strValue}
+    maxlength={question.maxLength ?? undefined}
     oninput={(e) => onChange((e.currentTarget as HTMLInputElement).value)}
     onblur={() => onBlur?.()}
   />
+  {#if question.maxLength}
+    <div class="char-count">{strValue.length}/{question.maxLength}</div>
+  {/if}
 
 {:else if question.type === 'long_text'}
   <textarea
@@ -1589,6 +1593,14 @@
   @keyframes spin {
     from { transform: rotate(0deg); }
     to   { transform: rotate(360deg); }
+  }
+
+  .char-count {
+    font-size: 12px;
+    color: var(--tertiary-60);
+    text-align: right;
+    margin-top: 4px;
+    padding-right: 4px;
   }
 </style>
 
