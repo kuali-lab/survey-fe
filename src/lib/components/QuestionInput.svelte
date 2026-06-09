@@ -349,8 +349,10 @@
     oninput={(e) => onChange((e.currentTarget as HTMLInputElement).value)}
     onblur={() => onBlur?.()}
   />
-  {#if question.maxLength}
-    <div class="char-count">{strValue.length}/{question.maxLength}</div>
+  {#if question.maxLength || question.minLength}
+    <div class="char-count" style="text-align: right; margin-top: 6px; font-size: 0.85rem; color: var(--text-body);">
+      {strValue.length}{question.maxLength ? '/' + question.maxLength : ''}
+    </div>
   {/if}
 
 {:else if question.type === 'long_text'}
@@ -359,10 +361,16 @@
     rows="4"
     placeholder={question.placeholder ?? ''}
     value={strValue}
+    maxlength={question.maxLength ?? undefined}
     oninput={(e) => onChange((e.currentTarget as HTMLTextAreaElement).value)}
     onblur={() => onBlur?.()}
     use:autoExpand
   ></textarea>
+  {#if question.maxLength || question.minLength}
+    <div class="char-count" style="text-align: right; margin-top: 6px; font-size: 0.85rem; color: var(--text-body);">
+      {strValue.length}{question.maxLength ? '/' + question.maxLength : ''}
+    </div>
+  {/if}
 
 {:else if question.type === 'email'}
   <input
@@ -406,18 +414,31 @@
     max={question.maxValue}
     value={numValue !== null ? numValue : ''}
     oninput={(e) => {
-      const v = (e.currentTarget as HTMLInputElement).value
+      let v = (e.currentTarget as HTMLInputElement).value
+      if (question.maxLength && v.length > question.maxLength) {
+        v = v.slice(0, question.maxLength)
+        e.currentTarget.value = v
+      }
       onChange(v === '' ? null : Number(v))
     }}
     onblur={() => onBlur?.()}
   />
-  {#if question.minValue !== undefined && question.minValue !== null && question.maxValue !== undefined && question.maxValue !== null}
-    <p class="number-hint">Antara {question.minValue} dan {question.maxValue}.</p>
-  {:else if question.minValue !== undefined && question.minValue !== null}
-    <p class="number-hint">Minimal {question.minValue}.</p>
-  {:else if question.maxValue !== undefined && question.maxValue !== null}
-    <p class="number-hint">Maksimal {question.maxValue}.</p>
-  {/if}
+  <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+    <div>
+      {#if question.minValue !== undefined && question.minValue !== null && question.maxValue !== undefined && question.maxValue !== null}
+        <p class="number-hint" style="margin-top: 6px;">Antara {question.minValue} dan {question.maxValue}.</p>
+      {:else if question.minValue !== undefined && question.minValue !== null}
+        <p class="number-hint" style="margin-top: 6px;">Minimal {question.minValue}.</p>
+      {:else if question.maxValue !== undefined && question.maxValue !== null}
+        <p class="number-hint" style="margin-top: 6px;">Maksimal {question.maxValue}.</p>
+      {/if}
+    </div>
+    {#if question.maxLength || question.minLength}
+      <div class="char-count" style="text-align: right; margin-top: 6px; font-size: 0.85rem; color: var(--text-body);">
+        {strValue.length}{question.maxLength ? '/' + question.maxLength : ''}
+      </div>
+    {/if}
+  </div>
 
 {:else if question.type === 'date'}
   <!-- Calendar picker (no manual typing). Value stored as canonical ISO so

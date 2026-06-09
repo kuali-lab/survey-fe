@@ -32,7 +32,7 @@
   {/if}
 
   <h2 class="question-title" data-question-heading tabindex="-1">
-    <span class="title-text">{@html question.title}</span>
+    <div class="title-text">{@html question.title}</div>
     {#if question.required}
       <span class="required" aria-label="wajib diisi">*</span>
     {/if}
@@ -138,13 +138,30 @@
   /* Survey questions read more naturally in the body face at semibold —
      headlines feel announcement-y for what is meant to be a conversation. */
   .title-text {
+    flex: 1;
     font-family: var(--font);
     font-size: 19px;
-    font-weight: 600;
+    font-weight: 400; /* unbold by default to allow rich text control */
     color: var(--text-primary);
     line-height: 26px;
     letter-spacing: 0;
   }
+
+  /* Rich-text formatting from builder's RichTextEditor (b/i/u and alignment).
+     :global is needed because the tags are injected via {@html} at runtime and
+     Svelte's scoped CSS would otherwise ignore them. */
+  .title-text :global(b),
+  .title-text :global(strong) { font-weight: 700; }
+  .title-text :global(i),
+  .title-text :global(em) { font-style: italic; }
+  .title-text :global(u) { text-decoration: underline; }
+  .title-text :global(div) { /* alignment divs from execCommand */ width: 100%; }
+
+  .description :global(b),
+  .description :global(strong) { font-weight: 700; }
+  .description :global(i),
+  .description :global(em) { font-style: italic; }
+  .description :global(u) { text-decoration: underline; }
 
   .required {
     color: var(--error);

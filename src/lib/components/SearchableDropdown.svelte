@@ -2,7 +2,7 @@
   import { onMount, tick } from 'svelte';
   import { fade } from 'svelte/transition';
 
-  import { fetchAsyncOptions } from '/api';
+  import { fetchAsyncOptions } from '$lib/api';
 
   let { options = [], value = '', onChange, placeholder = '-- Pilih salah satu --', hasAsyncOptions = false, questionId = '', slug = '' } = $props<{
     options?: { label: string, isOther?: boolean }[];
