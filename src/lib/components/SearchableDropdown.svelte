@@ -176,6 +176,9 @@
   .dropdown-wrapper {
     position: relative;
     width: 100%;
+    /* Breathing room below so a dropdown that is the last question is not flush
+       against the bottom of the screen. */
+    margin-bottom: 24px;
   }
   .dropdown-trigger {
     width: 100%;
@@ -186,7 +189,8 @@
     gap: 8px;
     padding: 0 16px;
     background: var(--canvas-soft);
-    border: 1px solid transparent;
+    /* Thin outline to separate the control from the page background. */
+    border: 1px solid var(--hairline);
     border-radius: var(--radius-input);
     color: var(--text-primary);
     font-family: var(--font);
