@@ -44,6 +44,7 @@ export interface Question {
   minValue?: number
   maxValue?: number
   maxSelections?: number
+  maxLength?: number
   minLabel?: string
   maxLabel?: string
   midLabel?: string
@@ -54,6 +55,7 @@ export interface Question {
   regionDepth?: number
 
   // Relational config
+  hasAsyncOptions?: boolean
   options?: QuestionOption[]
   // Flat array of image URLs for image_choice options, parallel to options[].
   // Derived from options[].imageUrl when normalized from the API response.

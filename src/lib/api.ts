@@ -153,6 +153,24 @@ export async function fetchRegions(parent?: string, q?: string, limit = 50): Pro
   }
 }
 
+export async function fetchAsyncOptions(slug: string, questionId: string, q: string, limit = 50): Promise<{ label: string, isOther?: boolean }[]> {
+  try {
+    const params = new URLSearchParams()
+    if (q) params.set('q', q)
+    params.set('limit', String(limit))
+    const res = await fetch(`${PUBLIC_API_BASE_URL}/s/${slug}/questions/${questionId}/options?${params.toString()}`)
+    if (!res.ok) return []
+    const data = await res.json()
+    const rows = (data?.data as Array<Record<string, unknown>> | undefined) ?? []
+    return rows.map((r) => ({
+      label: String(r.label ?? ''),
+      isOther: Boolean(r.isOther),
+    }))
+  } catch {
+    return []
+  }
+}
+
 export async function fetchSurvey(slug: string, fetchFn: typeof fetch = fetch): Promise<Survey> {
   if (shouldUseMock()) return buildMockSurvey(slug)
   try {
