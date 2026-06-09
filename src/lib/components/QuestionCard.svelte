@@ -46,7 +46,7 @@
     {#if question.imageLayout === 'left' || question.imageLayout === 'right'}
       <div class="card-inline-wrap card-inline-{question.imageLayout}">
         <div class="inline-img-wrap">
-          <img src={question.imageUrl} alt={question.title} class="inline-img" />
+          <img src={question.imageUrl} alt={question.titlePlain ?? ''} class="inline-img" />
         </div>
         <div class="inline-input-wrap">
           <QuestionInput
@@ -60,7 +60,7 @@
       </div>
     {:else}
       <div class="image-wrap">
-        <img src={question.imageUrl} alt={question.title} />
+        <img src={question.imageUrl} alt={question.titlePlain ?? ''} />
       </div>
       <div class="input-wrap">
         <QuestionInput

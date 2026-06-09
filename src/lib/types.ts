@@ -33,6 +33,11 @@ export interface Question {
   type: QuestionType
   title: string
   description: string | null
+  // Plain-text variants from the backend (HTML stripped). Use for alt text, SEO
+  // meta (rendered server-side), and any non-display label. title/description stay
+  // HTML for rich display via {@html}.
+  titlePlain?: string
+  descriptionPlain?: string | null
   required: boolean
   sortOrder: number
   groupId: string | null

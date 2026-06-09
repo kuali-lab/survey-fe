@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { Question, Answers, AnswerValue, QuestionOption, ContactInfo } from '$lib/types.js'
-  import { stripHtml } from '$lib/stripHtml'
 
   type Props = {
     questions: Question[]
@@ -93,7 +92,7 @@
     <div class="row" role="listitem">
       <div class="qhead">
         <span class="qnum">{i + 1}.</span>
-        <span class="qtitle">{stripHtml(q.title)}</span>
+        <span class="qtitle">{q.titlePlain ?? q.title}</span>
         <button class="edit-btn" type="button" onclick={() => onEdit(q.id)} aria-label="Edit pertanyaan ini">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 20h9" />
