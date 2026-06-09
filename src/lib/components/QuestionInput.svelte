@@ -1439,6 +1439,11 @@
     line-height: 1.6;
     white-space: pre-wrap;
   }
+  /* Rich-text markup from the builder. */
+  .statement-body :global(b), .statement-body :global(strong) { font-weight: 700; }
+  .statement-body :global(i), .statement-body :global(em) { font-style: italic; }
+  .statement-body :global(u) { text-decoration: underline; }
+  .statement-body :global(div) { margin: 0; }
 
   /* ── Image Choice ── */
   .image-choice-grid {

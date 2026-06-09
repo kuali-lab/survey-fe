@@ -1,6 +1,7 @@
 <script lang="ts">
   let {
     title,
+    titlePlain = '',
     description,
     imageUrl,
     imageLayout = 'center',
@@ -9,6 +10,7 @@
     error = null
   }: {
     title: string
+    titlePlain?: string
     description: string | null
     imageUrl: string | null
     imageLayout?: string | null
@@ -28,7 +30,7 @@
 
   {#if imageUrl}
     <div class="cover" class:cover-inline={isInline}>
-      <img src={imageUrl} alt={title} />
+      <img src={imageUrl} alt={titlePlain} />
     </div>
   {/if}
 
