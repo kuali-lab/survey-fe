@@ -32,14 +32,14 @@
   {/if}
 
   <h2 class="question-title" data-question-heading tabindex="-1">
-    <span class="title-text">{question.title}</span>
+    <span class="title-text">{@html question.title}</span>
     {#if question.required}
       <span class="required" aria-label="wajib diisi">*</span>
     {/if}
   </h2>
 
   {#if question.description && question.type !== 'statement'}
-    <p class="description">{question.description}</p>
+    <div class="description">{@html question.description}</div>
   {/if}
 
   {#if question.imageUrl}

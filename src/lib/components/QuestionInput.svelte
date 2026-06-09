@@ -6,6 +6,7 @@
   import flatpickr from 'flatpickr'
   import 'flatpickr/dist/flatpickr.css'
   import RegionInput from './RegionInput.svelte'
+  import SearchableDropdown from './SearchableDropdown.svelte'
 
   let {
     question,
@@ -539,26 +540,43 @@
 
 {:else if question.type === 'dropdown'}
   <div class="options-list">
-    <select
-      class="select-input"
-      value={isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue}
-      onchange={(e) => {
-        const val = (e.currentTarget as HTMLSelectElement).value;
-        if (otherOption && val === otherOption.label) {
-          onChange(otherText || otherOption.label);
-        } else {
-          onChange(val);
-        }
-      }}
-    >
-      <option value="">-- Pilih salah satu --</option>
-      {#each options.filter(o => !o.isOther) as opt}
-        <option value={opt.label}>{opt.label}</option>
-      {/each}
-      {#if otherOption}
-        <option value={otherOption.label}>{otherOption.label}</option>
+      {#if options.length > 10}
+        <SearchableDropdown
+          options={options}
+          value={isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue}
+          onChange={(val) => {
+            if (otherOption && val === otherOption.label) {
+              onChange(otherText || otherOption.label);
+            } else {
+              onChange(val);
+            }
+          }}
+          hasAsyncOptions={question.hasAsyncOptions}
+          questionId={question.id}
+          slug={slug}
+        />
+      {:else}
+        <select
+          class="select-input"
+          value={isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue}
+          onchange={(e) => {
+            const val = (e.currentTarget as HTMLSelectElement).value;
+            if (otherOption && val === otherOption.label) {
+              onChange(otherText || otherOption.label);
+            } else {
+              onChange(val);
+            }
+          }}
+        >
+          <option value="">-- Pilih salah satu --</option>
+          {#each options.filter(o => !o.isOther) as opt}
+            <option value={opt.label}>{opt.label}</option>
+          {/each}
+          {#if otherOption}
+            <option value={otherOption.label}>{otherOption.label}</option>
+          {/if}
+        </select>
       {/if}
-    </select>
     {#if isOtherSelected}
       <input
         class="text-input other-text-input"
@@ -824,7 +842,7 @@
 {:else if question.type === 'statement'}
   {#if question.description}
     <div class="statement-body">
-      <p>{question.description}</p>
+      <p>{@html question.description}</p>
     </div>
   {/if}
 
@@ -1612,5 +1630,6 @@
     padding-right: 4px;
   }
 </style>
+
 
 
