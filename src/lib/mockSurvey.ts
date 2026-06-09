@@ -125,6 +125,7 @@ export function buildMockSurvey(slug: string): Survey {
 
       q({ id: 'contact-1', type: 'contact_info', title: 'Data kontak Anda' }),
       q({ id: 'file-1', type: 'file_upload', title: 'Unggah berkas pendukung (opsional)' }),
+      q({ id: 'region-1', type: 'region', title: 'Di mana wilayah tempat tinggal Anda?', regionDepth: 3 }),
 
       q({
         id: 'closing',
