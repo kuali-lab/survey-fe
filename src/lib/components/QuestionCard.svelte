@@ -141,7 +141,7 @@
     flex: 1;
     font-family: var(--font);
     font-size: 19px;
-    font-weight: 400; /* unbold by default to allow rich text control */
+    font-weight: 600;
     color: var(--text-primary);
     line-height: 26px;
     letter-spacing: 0;
