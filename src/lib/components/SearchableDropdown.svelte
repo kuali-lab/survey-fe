@@ -46,7 +46,7 @@
       ? asyncOptions
       : (debouncedSearch === '' 
         ? (options || [])
-        : (options || []).filter(o => o.label.toLowerCase().includes(debouncedSearch)))
+        : (options || []).filter((o: { label: string, isOther?: boolean }) => o.label.toLowerCase().includes(debouncedSearch)))
   );
 
   // Virtual scrolling

@@ -33,9 +33,9 @@
   {/if}
 
   <div class="body">
-    <h1 class="title" class:center-text={layout === 'center'}>{title}</h1>
+    <h1 class="title" class:center-text={layout === 'center'}>{@html title}</h1>
     {#if description}
-      <p class="description">{description}</p>
+      <p class="description">{@html description}</p>
     {/if}
 
     {#if error}

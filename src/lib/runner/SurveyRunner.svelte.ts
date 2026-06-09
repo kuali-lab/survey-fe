@@ -188,6 +188,18 @@ export class SurveyRunner {
       (Array.isArray(answer) && answer.length === 0)
     if (!q.required && isEmpty && q.type !== 'file_upload') return null
 
+    if (!isEmpty) {
+      let strVal = ''
+      if (typeof answer === 'string') strVal = answer.trim()
+      else if (typeof answer === 'number') strVal = String(answer)
+      
+      if (strVal !== '') {
+        const len = strVal.length
+        if (q.minLength && len < q.minLength) return `Minimal ${q.minLength} karakter.`
+        if (q.maxLength && len > q.maxLength) return `Maksimal ${q.maxLength} karakter.`
+      }
+    }
+
     if (q.type === 'number') {
       let answerNum: unknown = answer
       if (typeof answer === 'string' && answer.trim() !== '') answerNum = Number(answer)

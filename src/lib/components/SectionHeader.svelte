@@ -3,9 +3,9 @@
 </script>
 
 <div class="section-header">
-  <h2 class="title">{title}</h2>
+  <h2 class="title">{@html title}</h2>
   {#if description}
-    <p class="description">{description}</p>
+    <p class="description">{@html description}</p>
   {/if}
 </div>
 

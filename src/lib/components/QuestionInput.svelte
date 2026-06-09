@@ -346,6 +346,7 @@
     placeholder={question.placeholder ?? ''}
     value={strValue}
     maxlength={question.maxLength ?? undefined}
+    minlength={question.minLength ?? undefined}
     oninput={(e) => onChange((e.currentTarget as HTMLInputElement).value)}
     onblur={() => onBlur?.()}
   />
@@ -362,6 +363,7 @@
     placeholder={question.placeholder ?? ''}
     value={strValue}
     maxlength={question.maxLength ?? undefined}
+    minlength={question.minLength ?? undefined}
     oninput={(e) => onChange((e.currentTarget as HTMLTextAreaElement).value)}
     onblur={() => onBlur?.()}
     use:autoExpand
@@ -561,7 +563,7 @@
 
 {:else if question.type === 'dropdown'}
   <div class="options-list">
-      {#if options.length > 10}
+      {#if question.hasAsyncOptions || options.length > 10}
         <SearchableDropdown
           options={options}
           value={isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue}

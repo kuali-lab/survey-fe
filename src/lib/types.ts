@@ -45,6 +45,7 @@ export interface Question {
   maxValue?: number
   maxSelections?: number
   maxLength?: number
+  minLength?: number
   minLabel?: string
   maxLabel?: string
   midLabel?: string
