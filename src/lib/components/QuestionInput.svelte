@@ -417,13 +417,29 @@
     value={numValue !== null ? numValue : ''}
     oninput={(e) => {
       let v = (e.currentTarget as HTMLInputElement).value
+      // Limit digit count (maxLength). type=number ignores native maxlength.
       if (question.maxLength && v.length > question.maxLength) {
         v = v.slice(0, question.maxLength)
-        e.currentTarget.value = v
       }
-      onChange(v === '' ? null : Number(v))
+      let num = v === '' ? null : Number(v)
+      // Hard-cap the value at maxValue while typing (native max only validates).
+      if (num !== null && question.maxValue != null && num > question.maxValue) {
+        num = question.maxValue
+        v = String(num)
+      }
+      e.currentTarget.value = v
+      onChange(num)
     }}
-    onblur={() => onBlur?.()}
+    onblur={(e) => {
+      // Clamp up to minValue on blur (clamping min while typing would block
+      // entering any digit below it).
+      if (numValue !== null && question.minValue != null && numValue < question.minValue) {
+        const clamped = question.minValue
+        ;(e.currentTarget as HTMLInputElement).value = String(clamped)
+        onChange(clamped)
+      }
+      onBlur?.()
+    }}
   />
   <div style="display: flex; justify-content: space-between; align-items: flex-start;">
     <div>
