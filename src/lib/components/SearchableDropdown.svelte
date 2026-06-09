@@ -23,10 +23,25 @@
   let timeoutId: number;
   
   $effect(() => {
+    const q = searchQuery.toLowerCase();
+    // Local options filter instantly (realtime); only async fetches are debounced.
+    if (!hasAsyncOptions) {
+      debouncedSearch = q;
+      return;
+    }
     clearTimeout(timeoutId);
     timeoutId = setTimeout(() => {
-      debouncedSearch = searchQuery.toLowerCase();
+      debouncedSearch = q;
     }, 150) as unknown as number;
+  });
+
+  // Reset the virtual-scroll window whenever the search changes — a stale
+  // startIndex left over from prior scrolling would otherwise render an empty
+  // slice and make it look like search "isn't working".
+  $effect(() => {
+    debouncedSearch;
+    startIndex = 0;
+    if (scrollContainer) scrollContainer.scrollTop = 0;
   });
 
   let asyncOptions = $state<{label: string, isOther?: boolean}[]>([]);
@@ -205,13 +220,14 @@
   }
   .search-box {
     padding: 0.75rem;
-    border-bottom: 1px solid var(--canvas-soft);
+    background: var(--primary-10);
+    border-bottom: 2px solid var(--primary);
     display: flex;
     align-items: center;
     gap: 0.5rem;
   }
   .search-icon {
-    color: var(--text-muted);
+    color: var(--primary-text);
     flex-shrink: 0;
   }
   .search-box input {
@@ -219,6 +235,7 @@
     background: transparent;
     border: none;
     color: var(--text-primary);
+    caret-color: var(--primary);
     font-family: var(--font);
     font-size: 0.9375rem;
     outline: none;
@@ -255,11 +272,11 @@
     align-items: center;
   }
   .option-item:hover {
-    background: var(--canvas-soft);
+    background: var(--primary-10);
   }
   .option-item.selected {
-    background: var(--canvas-soft);
-    color: var(--ink);
+    background: var(--primary-20);
+    color: var(--primary-text);
     font-weight: 600;
   }
   .empty-state {
