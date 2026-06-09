@@ -145,7 +145,7 @@
         </div>
       {/if}
       <div class="footer">
-        Menampilkan {filteredOptions.length > 50 ? '50+' : filteredOptions.length} hasil {hasAsyncOptions ? '' : dari ' + (options?.length || 0)}
+        Menampilkan {filteredOptions.length > 50 ? '50+' : filteredOptions.length} hasil {hasAsyncOptions ? '' : ' dari ' + (options?.length || 0)}
         {#if isFetching}
           <span class="ml-2 animate-pulse">Memuat...</span>
         {/if}
