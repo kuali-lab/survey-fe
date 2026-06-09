@@ -155,27 +155,35 @@
 </div>
 
 <style>
+  /* Styled to match the light survey theme (.select-input / .text-input).
+     Previously hardcoded dark colors made the control invisible on the white
+     survey canvas. */
   .dropdown-wrapper {
     position: relative;
     width: 100%;
   }
   .dropdown-trigger {
     width: 100%;
+    height: 52px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.75rem 1rem;
-    background-color: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 0.5rem;
-    color: white;
-    font-size: 1rem;
+    gap: 8px;
+    padding: 0 16px;
+    background: var(--canvas-soft);
+    border: 1px solid transparent;
+    border-radius: var(--radius-input);
+    color: var(--text-primary);
+    font-family: var(--font);
+    font-size: 16px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background-color 0.15s, border-color 0.15s;
   }
+  .dropdown-trigger svg { color: var(--text-body); flex-shrink: 0; }
   .dropdown-trigger:focus, .dropdown-trigger:hover {
-    border-color: rgba(255, 255, 255, 0.3);
     outline: none;
+    background: var(--canvas);
+    border-color: var(--ink);
   }
   .truncate {
     white-space: nowrap;
@@ -188,31 +196,34 @@
     top: calc(100% + 0.5rem);
     left: 0;
     right: 0;
-    background-color: #1a1a1a;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 0.5rem;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+    background: var(--canvas);
+    border: 1px solid var(--canvas-soft);
+    border-radius: var(--radius-input);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
     z-index: 50;
     overflow: hidden;
   }
   .search-box {
     padding: 0.75rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--canvas-soft);
     display: flex;
     align-items: center;
     gap: 0.5rem;
   }
   .search-icon {
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--text-muted);
+    flex-shrink: 0;
   }
   .search-box input {
     width: 100%;
     background: transparent;
     border: none;
-    color: white;
-    font-size: 0.875rem;
+    color: var(--text-primary);
+    font-family: var(--font);
+    font-size: 0.9375rem;
     outline: none;
   }
+  .search-box input::placeholder { color: var(--text-muted); }
   .options-container {
     max-height: 240px;
     overflow-y: auto;
@@ -233,36 +244,38 @@
     width: 100%;
     text-align: left;
     padding: 0 1rem;
-    color: rgba(255, 255, 255, 0.8);
+    color: var(--text-body);
     background: transparent;
     border: none;
     cursor: pointer;
-    font-size: 0.875rem;
+    font-family: var(--font);
+    font-size: 0.9375rem;
     height: 40px;
     display: flex;
     align-items: center;
   }
   .option-item:hover {
-    background-color: rgba(255, 255, 255, 0.05);
+    background: var(--canvas-soft);
   }
   .option-item.selected {
-    background-color: rgba(59, 130, 246, 0.2);
-    color: #60a5fa;
+    background: var(--canvas-soft);
+    color: var(--ink);
+    font-weight: 600;
   }
   .empty-state {
     padding: 1rem;
     text-align: center;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--text-muted);
     font-size: 0.875rem;
   }
   .footer {
     padding: 0.5rem 1rem;
-    background-color: rgba(0, 0, 0, 0.2);
+    background: var(--canvas-soft);
     font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--text-muted);
     text-align: right;
   }
-  
+
   .options-container::-webkit-scrollbar {
     width: 8px;
   }
@@ -270,7 +283,7 @@
     background: transparent;
   }
   .options-container::-webkit-scrollbar-thumb {
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: rgba(0, 0, 0, 0.2);
     border-radius: 4px;
   }
 </style>

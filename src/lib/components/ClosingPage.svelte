@@ -150,6 +150,16 @@
     text-align: center;
   }
 
+  /* Rich-text markup from the builder (bold / italic / underline / alignment). */
+  .title :global(b), .title :global(strong) { font-weight: 700; }
+  .title :global(i), .title :global(em) { font-style: italic; }
+  .title :global(u) { text-decoration: underline; }
+  .title :global(p), .title :global(div) { margin: 0; }
+  .description :global(b), .description :global(strong) { font-weight: 700; }
+  .description :global(i), .description :global(em) { font-style: italic; }
+  .description :global(u) { text-decoration: underline; }
+  .description :global(p), .description :global(div) { margin: 0; }
+
   @media (max-width: 640px) {
     .closing.layout-inline {
       flex-direction: column;
