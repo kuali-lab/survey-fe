@@ -161,7 +161,8 @@ export async function fetchAsyncOptions(slug: string, questionId: string, q: str
     const res = await fetch(`${PUBLIC_API_BASE_URL}/s/${slug}/questions/${questionId}/options?${params.toString()}`)
     if (!res.ok) return []
     const data = await res.json()
-    const rows = (data?.data as Array<Record<string, unknown>> | undefined) ?? []
+    // The options endpoint returns a raw JSON array; tolerate a {data:[...]} wrapper too.
+    const rows = (Array.isArray(data) ? data : data?.data ?? []) as Array<Record<string, unknown>>
     return rows.map((r) => ({
       label: String(r.label ?? ''),
       isOther: Boolean(r.isOther),
