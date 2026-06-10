@@ -579,43 +579,22 @@
 
 {:else if question.type === 'dropdown'}
   <div class="options-list">
-      {#if question.hasAsyncOptions || options.length > 10}
-        <SearchableDropdown
-          options={options}
-          value={isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue}
-          onChange={(val) => {
-            if (otherOption && val === otherOption.label) {
-              onChange(otherText || otherOption.label);
-            } else {
-              onChange(val);
-            }
-          }}
-          hasAsyncOptions={question.hasAsyncOptions}
-          questionId={question.id}
-          slug={slug}
-        />
-      {:else}
-        <select
-          class="select-input"
-          value={isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue}
-          onchange={(e) => {
-            const val = (e.currentTarget as HTMLSelectElement).value;
-            if (otherOption && val === otherOption.label) {
-              onChange(otherText || otherOption.label);
-            } else {
-              onChange(val);
-            }
-          }}
-        >
-          <option value="">-- Pilih salah satu --</option>
-          {#each options.filter(o => !o.isOther) as opt}
-            <option value={opt.label}>{opt.label}</option>
-          {/each}
-          {#if otherOption}
-            <option value={otherOption.label}>{otherOption.label}</option>
-          {/if}
-        </select>
-      {/if}
+      <!-- Always use the styled SearchableDropdown so small (manual) dropdowns look
+           identical to large/async ones — no more native/unstyled <select>. -->
+      <SearchableDropdown
+        options={options}
+        value={isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue}
+        onChange={(val) => {
+          if (otherOption && val === otherOption.label) {
+            onChange(otherText || otherOption.label);
+          } else {
+            onChange(val);
+          }
+        }}
+        hasAsyncOptions={question.hasAsyncOptions}
+        questionId={question.id}
+        slug={slug}
+      />
     {#if isOtherSelected}
       <input
         class="text-input other-text-input"
@@ -1028,30 +1007,6 @@
     color: var(--text-primary);
     background: transparent;
     outline: none;
-  }
-
-  /* ── Select ── */
-  .select-input {
-    width: 100%;
-    height: 52px;
-    border: 1px solid transparent;
-    border-radius: var(--radius-input);
-    padding: 0 40px 0 16px;
-    font-family: var(--font);
-    font-size: 16px;
-    color: var(--text-primary);
-    background: var(--canvas-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9l6 6 6-6' stroke='%23000000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 16px center;
-    appearance: none;
-    -webkit-appearance: none;
-    cursor: pointer;
-    transition: background-color 0.15s, border-color 0.15s;
-  }
-
-  .select-input:focus {
-    outline: none;
-    background-color: var(--canvas);
-    border-color: var(--ink);
-    border-width: 2px;
   }
 
   /* ── Option cards ── */
