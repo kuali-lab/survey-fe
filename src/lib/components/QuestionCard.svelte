@@ -32,21 +32,21 @@
   {/if}
 
   <h2 class="question-title" data-question-heading tabindex="-1">
-    <span class="title-text">{question.title}</span>
+    <div class="title-text">{@html question.title}</div>
     {#if question.required}
       <span class="required" aria-label="wajib diisi">*</span>
     {/if}
   </h2>
 
   {#if question.description && question.type !== 'statement'}
-    <p class="description">{question.description}</p>
+    <div class="description">{@html question.description}</div>
   {/if}
 
   {#if question.imageUrl}
     {#if question.imageLayout === 'left' || question.imageLayout === 'right'}
       <div class="card-inline-wrap card-inline-{question.imageLayout}">
         <div class="inline-img-wrap">
-          <img src={question.imageUrl} alt={question.title} class="inline-img" />
+          <img src={question.imageUrl} alt={question.titlePlain ?? ''} class="inline-img" />
         </div>
         <div class="inline-input-wrap">
           <QuestionInput
@@ -60,7 +60,7 @@
       </div>
     {:else}
       <div class="image-wrap">
-        <img src={question.imageUrl} alt={question.title} />
+        <img src={question.imageUrl} alt={question.titlePlain ?? ''} />
       </div>
       <div class="input-wrap">
         <QuestionInput
@@ -138,6 +138,7 @@
   /* Survey questions read more naturally in the body face at semibold —
      headlines feel announcement-y for what is meant to be a conversation. */
   .title-text {
+    flex: 1;
     font-family: var(--font);
     font-size: 19px;
     font-weight: 600;
@@ -145,6 +146,22 @@
     line-height: 26px;
     letter-spacing: 0;
   }
+
+  /* Rich-text formatting from builder's RichTextEditor (b/i/u and alignment).
+     :global is needed because the tags are injected via {@html} at runtime and
+     Svelte's scoped CSS would otherwise ignore them. */
+  .title-text :global(b),
+  .title-text :global(strong) { font-weight: 700; }
+  .title-text :global(i),
+  .title-text :global(em) { font-style: italic; }
+  .title-text :global(u) { text-decoration: underline; }
+  .title-text :global(div) { /* alignment divs from execCommand */ width: 100%; }
+
+  .description :global(b),
+  .description :global(strong) { font-weight: 700; }
+  .description :global(i),
+  .description :global(em) { font-style: italic; }
+  .description :global(u) { text-decoration: underline; }
 
   .required {
     color: var(--error);

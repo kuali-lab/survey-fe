@@ -1,6 +1,7 @@
 <script lang="ts">
   let {
     title,
+    titlePlain = '',
     description,
     imageUrl,
     imageLayout = 'center',
@@ -9,6 +10,7 @@
     error = null
   }: {
     title: string
+    titlePlain?: string
     description: string | null
     imageUrl: string | null
     imageLayout?: string | null
@@ -28,14 +30,14 @@
 
   {#if imageUrl}
     <div class="cover" class:cover-inline={isInline}>
-      <img src={imageUrl} alt={title} />
+      <img src={imageUrl} alt={titlePlain} />
     </div>
   {/if}
 
   <div class="body">
-    <h1 class="title" class:center-text={layout === 'center'}>{title}</h1>
+    <h1 class="title" class:center-text={layout === 'center'}>{@html title}</h1>
     {#if description}
-      <p class="description">{description}</p>
+      <p class="description">{@html description}</p>
     {/if}
 
     {#if error}
@@ -143,6 +145,17 @@
     white-space: pre-wrap;
     text-align: center;
   }
+
+  /* Rich-text markup from the builder (bold / italic / underline / alignment).
+     execCommand wraps aligned content in <div>/<p>; strip their default margins. */
+  .title :global(b), .title :global(strong) { font-weight: 700; }
+  .title :global(i), .title :global(em) { font-style: italic; }
+  .title :global(u) { text-decoration: underline; }
+  .title :global(p), .title :global(div) { margin: 0; }
+  .description :global(b), .description :global(strong) { font-weight: 700; }
+  .description :global(i), .description :global(em) { font-style: italic; }
+  .description :global(u) { text-decoration: underline; }
+  .description :global(p), .description :global(div) { margin: 0; }
 
   .cta {
     align-self: flex-start;

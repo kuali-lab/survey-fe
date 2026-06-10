@@ -5,6 +5,8 @@
   import type { Action } from 'svelte/action'
   import flatpickr from 'flatpickr'
   import 'flatpickr/dist/flatpickr.css'
+  import RegionInput from './RegionInput.svelte'
+  import SearchableDropdown from './SearchableDropdown.svelte'
 
   let {
     question,
@@ -343,9 +345,16 @@
     type="text"
     placeholder={question.placeholder ?? ''}
     value={strValue}
+    maxlength={question.maxLength ?? undefined}
+    minlength={question.minLength ?? undefined}
     oninput={(e) => onChange((e.currentTarget as HTMLInputElement).value)}
     onblur={() => onBlur?.()}
   />
+  {#if question.maxLength || question.minLength}
+    <div class="char-count" style="text-align: right; margin-top: 6px; font-size: 0.85rem; color: var(--text-body);">
+      {strValue.length}{question.maxLength ? '/' + question.maxLength : ''}
+    </div>
+  {/if}
 
 {:else if question.type === 'long_text'}
   <textarea
@@ -353,10 +362,17 @@
     rows="4"
     placeholder={question.placeholder ?? ''}
     value={strValue}
+    maxlength={question.maxLength ?? undefined}
+    minlength={question.minLength ?? undefined}
     oninput={(e) => onChange((e.currentTarget as HTMLTextAreaElement).value)}
     onblur={() => onBlur?.()}
     use:autoExpand
   ></textarea>
+  {#if question.maxLength || question.minLength}
+    <div class="char-count" style="text-align: right; margin-top: 6px; font-size: 0.85rem; color: var(--text-body);">
+      {strValue.length}{question.maxLength ? '/' + question.maxLength : ''}
+    </div>
+  {/if}
 
 {:else if question.type === 'email'}
   <input
@@ -400,18 +416,47 @@
     max={question.maxValue}
     value={numValue !== null ? numValue : ''}
     oninput={(e) => {
-      const v = (e.currentTarget as HTMLInputElement).value
-      onChange(v === '' ? null : Number(v))
+      let v = (e.currentTarget as HTMLInputElement).value
+      // Limit digit count (maxLength). type=number ignores native maxlength.
+      if (question.maxLength && v.length > question.maxLength) {
+        v = v.slice(0, question.maxLength)
+      }
+      let num = v === '' ? null : Number(v)
+      // Hard-cap the value at maxValue while typing (native max only validates).
+      if (num !== null && question.maxValue != null && num > question.maxValue) {
+        num = question.maxValue
+        v = String(num)
+      }
+      e.currentTarget.value = v
+      onChange(num)
     }}
-    onblur={() => onBlur?.()}
+    onblur={(e) => {
+      // Clamp up to minValue on blur (clamping min while typing would block
+      // entering any digit below it).
+      if (numValue !== null && question.minValue != null && numValue < question.minValue) {
+        const clamped = question.minValue
+        ;(e.currentTarget as HTMLInputElement).value = String(clamped)
+        onChange(clamped)
+      }
+      onBlur?.()
+    }}
   />
-  {#if question.minValue !== undefined && question.minValue !== null && question.maxValue !== undefined && question.maxValue !== null}
-    <p class="number-hint">Antara {question.minValue} dan {question.maxValue}.</p>
-  {:else if question.minValue !== undefined && question.minValue !== null}
-    <p class="number-hint">Minimal {question.minValue}.</p>
-  {:else if question.maxValue !== undefined && question.maxValue !== null}
-    <p class="number-hint">Maksimal {question.maxValue}.</p>
-  {/if}
+  <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+    <div>
+      {#if question.minValue !== undefined && question.minValue !== null && question.maxValue !== undefined && question.maxValue !== null}
+        <p class="number-hint" style="margin-top: 6px;">Antara {question.minValue} dan {question.maxValue}.</p>
+      {:else if question.minValue !== undefined && question.minValue !== null}
+        <p class="number-hint" style="margin-top: 6px;">Minimal {question.minValue}.</p>
+      {:else if question.maxValue !== undefined && question.maxValue !== null}
+        <p class="number-hint" style="margin-top: 6px;">Maksimal {question.maxValue}.</p>
+      {/if}
+    </div>
+    {#if question.maxLength || question.minLength}
+      <div class="char-count" style="text-align: right; margin-top: 6px; font-size: 0.85rem; color: var(--text-body);">
+        {strValue.length}{question.maxLength ? '/' + question.maxLength : ''}
+      </div>
+    {/if}
+  </div>
 
 {:else if question.type === 'date'}
   <!-- Calendar picker (no manual typing). Value stored as canonical ISO so
@@ -534,26 +579,43 @@
 
 {:else if question.type === 'dropdown'}
   <div class="options-list">
-    <select
-      class="select-input"
-      value={isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue}
-      onchange={(e) => {
-        const val = (e.currentTarget as HTMLSelectElement).value;
-        if (otherOption && val === otherOption.label) {
-          onChange(otherText || otherOption.label);
-        } else {
-          onChange(val);
-        }
-      }}
-    >
-      <option value="">-- Pilih salah satu --</option>
-      {#each options.filter(o => !o.isOther) as opt}
-        <option value={opt.label}>{opt.label}</option>
-      {/each}
-      {#if otherOption}
-        <option value={otherOption.label}>{otherOption.label}</option>
+      {#if question.hasAsyncOptions || options.length > 10}
+        <SearchableDropdown
+          options={options}
+          value={isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue}
+          onChange={(val) => {
+            if (otherOption && val === otherOption.label) {
+              onChange(otherText || otherOption.label);
+            } else {
+              onChange(val);
+            }
+          }}
+          hasAsyncOptions={question.hasAsyncOptions}
+          questionId={question.id}
+          slug={slug}
+        />
+      {:else}
+        <select
+          class="select-input"
+          value={isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue}
+          onchange={(e) => {
+            const val = (e.currentTarget as HTMLSelectElement).value;
+            if (otherOption && val === otherOption.label) {
+              onChange(otherText || otherOption.label);
+            } else {
+              onChange(val);
+            }
+          }}
+        >
+          <option value="">-- Pilih salah satu --</option>
+          {#each options.filter(o => !o.isOther) as opt}
+            <option value={opt.label}>{opt.label}</option>
+          {/each}
+          {#if otherOption}
+            <option value={otherOption.label}>{otherOption.label}</option>
+          {/if}
+        </select>
       {/if}
-    </select>
     {#if isOtherSelected}
       <input
         class="text-input other-text-input"
@@ -808,10 +870,18 @@
     {/if}
   </div>
 
+{:else if question.type === 'region'}
+  <RegionInput
+    value={value}
+    regionDepth={question.regionDepth}
+    onChange={onChange}
+    {onBlur}
+  />
+
 {:else if question.type === 'statement'}
   {#if question.description}
     <div class="statement-body">
-      <p>{question.description}</p>
+      <p>{@html question.description}</p>
     </div>
   {/if}
 
@@ -1369,6 +1439,11 @@
     line-height: 1.6;
     white-space: pre-wrap;
   }
+  /* Rich-text markup from the builder. */
+  .statement-body :global(b), .statement-body :global(strong) { font-weight: 700; }
+  .statement-body :global(i), .statement-body :global(em) { font-style: italic; }
+  .statement-body :global(u) { text-decoration: underline; }
+  .statement-body :global(div) { margin: 0; }
 
   /* ── Image Choice ── */
   .image-choice-grid {
@@ -1590,6 +1665,15 @@
     from { transform: rotate(0deg); }
     to   { transform: rotate(360deg); }
   }
+
+  .char-count {
+    font-size: 12px;
+    color: var(--tertiary-60);
+    text-align: right;
+    margin-top: 4px;
+    padding-right: 4px;
+  }
 </style>
+
 
 

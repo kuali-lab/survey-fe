@@ -457,7 +457,7 @@
     survey ? `${survey.title} | Logika Statistik` : 'Logika Statistik Survey',
   )
   const metaDescription = $derived(
-    (welcomeQuestion?.description ?? survey?.title ?? 'Isi survei dari Logika Statistik — platform riset dan analisis statistik.').slice(0, 160),
+    (welcomeQuestion?.descriptionPlain ?? survey?.title ?? 'Isi survei dari Logika Statistik — platform riset dan analisis statistik.').slice(0, 160),
   )
   const ogImage = $derived(
     welcomeQuestion?.imageUrl ?? `${$page.url.origin}/logo-logika-teta.png`,
@@ -559,6 +559,7 @@
       {:else}
         <WelcomePage
           title={welcomeQuestion?.title || survey?.title || ''}
+          titlePlain={welcomeQuestion?.titlePlain || survey?.title || ''}
           description={welcomeQuestion?.description ?? null}
           imageUrl={welcomeQuestion?.imageUrl ?? null}
           imageLayout={welcomeQuestion?.imageLayout ?? 'center'}
@@ -723,6 +724,7 @@
     <div class="centered-wrap">
       <ClosingPage
         title={closingQuestion?.title ?? 'Terima Kasih!'}
+        titlePlain={closingQuestion?.titlePlain ?? 'Terima Kasih!'}
         description={closingQuestion?.description ?? null}
         imageUrl={closingQuestion?.imageUrl ?? null}
         imageLayout={closingQuestion?.imageLayout ?? 'center'}

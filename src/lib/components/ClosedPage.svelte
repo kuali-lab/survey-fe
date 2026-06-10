@@ -34,7 +34,7 @@
     {/if}
     <h1 class="heading">Pengumpulan jawaban telah ditutup</h1>
     {#if message}
-      <p class="message">{message}</p>
+      <p class="message">{@html message}</p>
     {:else}
       <p class="message">Survei ini sudah tidak menerima jawaban baru. Terima kasih atas minat Anda.</p>
     {/if}

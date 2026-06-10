@@ -1,11 +1,13 @@
 <script lang="ts">
   let {
     title,
+    titlePlain = '',
     description,
     imageUrl,
     imageLayout = 'center'
   }: {
     title: string
+    titlePlain?: string
     description: string | null
     imageUrl: string | null
     imageLayout?: string | null
@@ -31,7 +33,7 @@
 
   {#if imageUrl}
     <div class="cover" class:cover-inline={isInline}>
-      <img src={imageUrl} alt={title} />
+      <img src={imageUrl} alt={titlePlain} />
     </div>
   {/if}
 
@@ -44,9 +46,9 @@
         </svg>
       </div>
     {/if}
-    <h1 class="title" class:center-text={layout === 'center'}>{title}</h1>
+    <h1 class="title" class:center-text={layout === 'center'}>{@html title}</h1>
     {#if description}
-      <p class="description">{description}</p>
+      <p class="description">{@html description}</p>
     {:else}
       <p class="description">Terima kasih telah mengisi survei ini. Jawaban Anda telah berhasil disimpan.</p>
     {/if}
@@ -149,6 +151,16 @@
     white-space: pre-wrap;
     text-align: center;
   }
+
+  /* Rich-text markup from the builder (bold / italic / underline / alignment). */
+  .title :global(b), .title :global(strong) { font-weight: 700; }
+  .title :global(i), .title :global(em) { font-style: italic; }
+  .title :global(u) { text-decoration: underline; }
+  .title :global(p), .title :global(div) { margin: 0; }
+  .description :global(b), .description :global(strong) { font-weight: 700; }
+  .description :global(i), .description :global(em) { font-style: italic; }
+  .description :global(u) { text-decoration: underline; }
+  .description :global(p), .description :global(div) { margin: 0; }
 
   @media (max-width: 640px) {
     .closing.layout-inline {

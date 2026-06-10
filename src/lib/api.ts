@@ -123,6 +123,54 @@ export async function getInvitationStatus(token: string): Promise<'ok' | 'comple
   }
 }
 
+// ─── Region lookup (public, no auth) ─────────────────────────────────────────
+// Backs the cascading "Wilayah" (region) question. BPS codes are dot-prefix
+// hierarchical ("32" > "32.73" > "32.73.01" > "32.73.01.2001").
+//   - omit `parent`        → top-level provinces
+//   - parent=<code>        → that region's direct children
+//   - q=<search>           → name search within that level
+// Default limit 50. Returns [] on any failure so the UI degrades gracefully
+// (an empty select rather than a crash).
+export type RegionOption = { code: string; name: string; level: number }
+
+export async function fetchRegions(parent?: string, q?: string, limit = 50): Promise<RegionOption[]> {
+  try {
+    const params = new URLSearchParams()
+    if (parent) params.set('parent', parent)
+    if (q) params.set('q', q)
+    params.set('limit', String(limit))
+    const res = await fetch(`${PUBLIC_API_BASE_URL}/regions?${params.toString()}`)
+    if (!res.ok) return []
+    const data = await res.json()
+    const rows = (data?.data as Array<Record<string, unknown>> | undefined) ?? []
+    return rows.map((r) => ({
+      code: String(r.code ?? ''),
+      name: String(r.name ?? ''),
+      level: typeof r.level === 'number' ? r.level : Number(r.level ?? 0),
+    }))
+  } catch {
+    return []
+  }
+}
+
+export async function fetchAsyncOptions(slug: string, questionId: string, q: string, limit = 50): Promise<{ label: string, isOther?: boolean }[]> {
+  try {
+    const params = new URLSearchParams()
+    if (q) params.set('q', q)
+    params.set('limit', String(limit))
+    const res = await fetch(`${PUBLIC_API_BASE_URL}/s/${slug}/questions/${questionId}/options?${params.toString()}`)
+    if (!res.ok) return []
+    const data = await res.json()
+    const rows = (data?.data as Array<Record<string, unknown>> | undefined) ?? []
+    return rows.map((r) => ({
+      label: String(r.label ?? ''),
+      isOther: Boolean(r.isOther),
+    }))
+  } catch {
+    return []
+  }
+}
+
 export async function fetchSurvey(slug: string, fetchFn: typeof fetch = fetch): Promise<Survey> {
   if (shouldUseMock()) return buildMockSurvey(slug)
   try {

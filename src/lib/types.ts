@@ -4,7 +4,7 @@ export type QuestionType =
   | 'phone' | 'email' | 'website' | 'number' | 'date'
   | 'single_choice' | 'checkbox' | 'dropdown' | 'yes_no' | 'image_choice'
   | 'nps' | 'opinion_scale' | 'rating' | 'matrix'
-  | 'contact_info' | 'file_upload'
+  | 'contact_info' | 'file_upload' | 'region'
 
 export interface QuestionOption {
   id: string
@@ -33,6 +33,11 @@ export interface Question {
   type: QuestionType
   title: string
   description: string | null
+  // Plain-text variants from the backend (HTML stripped). Use for alt text, SEO
+  // meta (rendered server-side), and any non-display label. title/description stay
+  // HTML for rich display via {@html}.
+  titlePlain?: string
+  descriptionPlain?: string | null
   required: boolean
   sortOrder: number
   groupId: string | null
@@ -44,13 +49,19 @@ export interface Question {
   minValue?: number
   maxValue?: number
   maxSelections?: number
+  maxLength?: number
+  minLength?: number
   minLabel?: string
   maxLabel?: string
   midLabel?: string
   placeholder?: string
   dateFormat?: string
+  // Region ("Wilayah") question: how many administrative levels to ask for.
+  // 1=Provinsi, 2=+Kabupaten/Kota, 3=+Kecamatan, 4=+Desa. Undefined → treat as 2.
+  regionDepth?: number
 
   // Relational config
+  hasAsyncOptions?: boolean
   options?: QuestionOption[]
   // Flat array of image URLs for image_choice options, parallel to options[].
   // Derived from options[].imageUrl when normalized from the API response.
