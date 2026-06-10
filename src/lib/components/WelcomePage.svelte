@@ -94,6 +94,21 @@
     display: block;
   }
 
+  /* On small screens the fixed logo overlaps the cover/card. Pull it back into the
+     normal flow (top of the card) and scale it down so it reads cleanly and never
+     covers content. */
+  @media (max-width: 640px) {
+    .logo-bar {
+      position: static;
+      top: auto;
+      left: auto;
+      margin-bottom: 4px;
+    }
+    .logo-img {
+      height: 26px;
+    }
+  }
+
   .cover {
     width: 100%;
     max-height: 320px;
