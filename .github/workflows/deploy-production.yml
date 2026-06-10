@@ -131,4 +131,4 @@ jobs:
               -o UserKnownHostsFile=~/.ssh/known_hosts \
               -o IdentitiesOnly=yes \
               ${{ secrets.LXC_APP_USER }}@${{ secrets.LXC_APP_HOST }} \
-              "docker image prune -f --filter 'until=168h' || true"
+              "docker image prune -af --filter 'until=24h' || true"
