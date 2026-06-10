@@ -153,11 +153,12 @@ export async function fetchRegions(parent?: string, q?: string, limit = 50): Pro
   }
 }
 
-export async function fetchAsyncOptions(slug: string, questionId: string, q: string, limit = 50): Promise<{ label: string, isOther?: boolean }[]> {
+export async function fetchAsyncOptions(slug: string, questionId: string, q: string, limit = 50, offset = 0): Promise<{ label: string, isOther?: boolean }[]> {
   try {
     const params = new URLSearchParams()
     if (q) params.set('q', q)
     params.set('limit', String(limit))
+    if (offset > 0) params.set('offset', String(offset))
     const res = await fetch(`${PUBLIC_API_BASE_URL}/s/${slug}/questions/${questionId}/options?${params.toString()}`)
     if (!res.ok) return []
     const data = await res.json()

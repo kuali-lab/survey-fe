@@ -46,15 +46,34 @@
 
   let asyncOptions = $state<{label: string, isOther?: boolean}[]>([]);
   let isFetching = $state(false);
+  let asyncOffset = $state(0);
+  let asyncHasMore = $state(false);
+  const ASYNC_LIMIT = 50;
 
+  // First page: (re)load whenever the (debounced) search or question identity
+  // changes. Accumulates further pages via loadMoreAsync() on scroll.
   $effect(() => {
     if (!hasAsyncOptions || !slug || !questionId) return;
+    const q = debouncedSearch;
+    asyncOffset = 0;
     isFetching = true;
-    fetchAsyncOptions(slug, questionId, debouncedSearch).then(opts => {
+    fetchAsyncOptions(slug, questionId, q, ASYNC_LIMIT, 0).then(opts => {
       asyncOptions = opts;
+      asyncHasMore = opts.length === ASYNC_LIMIT;
       isFetching = false;
     });
   });
+
+  async function loadMoreAsync() {
+    if (!hasAsyncOptions || isFetching || !asyncHasMore) return;
+    isFetching = true;
+    const next = asyncOffset + ASYNC_LIMIT;
+    const opts = await fetchAsyncOptions(slug, questionId, debouncedSearch, ASYNC_LIMIT, next);
+    asyncOffset = next;
+    asyncOptions = [...asyncOptions, ...opts];
+    asyncHasMore = opts.length === ASYNC_LIMIT;
+    isFetching = false;
+  }
 
   let filteredOptions = $derived(
     hasAsyncOptions
@@ -77,6 +96,10 @@
     const scrollTop = scrollContainer.scrollTop;
     const itemHeight = 40;
     startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - 5);
+    // Infinite scroll for async sets: pull the next page as the user nears the end.
+    if (hasAsyncOptions && scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - itemHeight * 3) {
+      loadMoreAsync();
+    }
   }
 
   function selectOption(label: string) {
@@ -160,7 +183,7 @@
         </div>
       {/if}
       <div class="footer">
-        Menampilkan {filteredOptions.length > 50 ? '50+' : filteredOptions.length} hasil {hasAsyncOptions ? '' : ' dari ' + (options?.length || 0)}
+        Menampilkan {filteredOptions.length}{hasAsyncOptions && asyncHasMore ? '+' : ''} hasil {hasAsyncOptions ? '' : ' dari ' + (options?.length || 0)}
         {#if isFetching}
           <span class="ml-2 animate-pulse">Memuat...</span>
         {/if}
