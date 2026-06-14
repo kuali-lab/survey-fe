@@ -55,6 +55,9 @@
   const runner = new SurveyRunner({
     getSurvey: () => survey ?? null,
     onFinish: () => handleFinish(),
+    // Never auto-submit — the respondent must press "Kirim Jawaban" so they can
+    // review their answers first (covers the last page and skip-to-END rules).
+    autoSubmit: false,
   })
 
   // Persisted respondent state, keyed per survey slug. Selfie/location are
