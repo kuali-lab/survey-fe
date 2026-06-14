@@ -80,12 +80,12 @@ jobs:
           printf '%s\n' "${{ secrets.LXC_APP_HOST_KEY }}" > ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
-      - name: Transfer image + .env to lxc-app
+      - name: Transfer image + .env + compose to lxc-app
         run: |
           scp -i ~/.ssh/deploy_key \
               -o UserKnownHostsFile=~/.ssh/known_hosts \
               -o IdentitiesOnly=yes \
-              /tmp/survey-fe.tar.gz /tmp/survey-fe.env \
+              /tmp/survey-fe.tar.gz /tmp/survey-fe.env docker-compose.yml \
               ${{ secrets.LXC_APP_USER }}@${{ secrets.LXC_APP_HOST }}:/tmp/
 
       - name: Deploy on lxc-app
@@ -101,6 +101,9 @@ jobs:
                echo '== install .env (chmod 600) =='
                install -m 600 /tmp/survey-fe.env /opt/survey-fe/.env
                rm /tmp/survey-fe.env
+               echo '== install compose (version-controlled; ulimits etc.) =='
+               install -m 644 /tmp/docker-compose.yml /opt/survey-fe/docker-compose.yml
+               rm /tmp/docker-compose.yml
                echo '== compose up =='
                cd /opt/survey-fe
                docker compose up -d
