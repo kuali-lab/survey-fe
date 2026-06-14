@@ -61,13 +61,15 @@ export type RunnerOptions = {
    */
   lastButtonLabel?: string
   /**
-   * Whether the last page may auto-advance (which fires onFinish). Defaults to
-   * true. The respondent flow passes false so the final question never
-   * auto-submits — the respondent must press "Kirim Jawaban" and gets a chance
-   * to review. Surveyor mode keeps it true: auto-advance there only jumps to
-   * /recap (a review screen), not a submit.
+   * Whether auto-advance is allowed to finish the survey (fire onFinish) — i.e.
+   * advancing off the last page, or following a skip rule that resolves to END.
+   * Defaults to true. The respondent flow passes false so the survey never
+   * auto-submits: the respondent must press "Kirim Jawaban" and gets a chance
+   * to review. Surveyor mode keeps it true — its onFinish only jumps to /recap
+   * (a review screen), not a submit. Auto-advance between non-final questions is
+   * unaffected.
    */
-  autoAdvanceLastPage?: boolean
+  autoSubmit?: boolean
 }
 
 export class SurveyRunner {
@@ -91,12 +93,12 @@ export class SurveyRunner {
   private _getSurvey!: () => Survey | null
   private _onFinish!: () => void | Promise<void>
   private _lastButtonLabel!: string | undefined
-  private _autoAdvanceLastPage = true
+  private _autoSubmit = true
 
   constructor(opts: RunnerOptions) {
     this._getSurvey = opts.getSurvey
     this._onFinish = opts.onFinish
-    this._autoAdvanceLastPage = opts.autoAdvanceLastPage ?? true
+    this._autoSubmit = opts.autoSubmit ?? true
     this._lastButtonLabel = opts.lastButtonLabel
   }
 
@@ -350,7 +352,11 @@ export class SurveyRunner {
       this.currentPage.questions[0].id === qid
     ) {
       this.cancelAutoAdvance()
-      if (this.shouldAutoAdvance(this.currentPage.questions[0], value)) {
+      // When auto-submit is off (respondent flow), never let auto-advance finish
+      // the survey — neither off the last page nor via a skip-to-END rule. The
+      // respondent must press "Kirim Jawaban" so they can review first.
+      const wouldFinish = !this._autoSubmit && this.autoAdvanceWouldFinish()
+      if (!wouldFinish && this.shouldAutoAdvance(this.currentPage.questions[0], value)) {
         this.autoAdvancing = true
         this.autoAdvanceTimer = setTimeout(() => {
           this.autoAdvanceTimer = null
@@ -361,13 +367,28 @@ export class SurveyRunner {
     }
   }
 
+  // Mirrors handleNext's branch selection to predict whether advancing from the
+  // current page would finish the survey (fire onFinish) rather than move to a
+  // later page. Used to suppress auto-submit when autoSubmit is off.
+  private autoAdvanceWouldFinish(): boolean {
+    if (!this.currentPage) return false
+    let next: string | null | 'END' = null
+    for (const q of this.currentPage.questions) {
+      const skipDest = evaluateNext(q.id, this.answers, this.questions, this.skipRules)
+      if (skipDest) {
+        next = skipDest
+        break
+      }
+    }
+    if (next === 'END') return true
+    if (next !== null) {
+      const targetPageIdx = this.surveyPages.findIndex((p) => p.questions.some((q) => q.id === next))
+      if (targetPageIdx > this.currentIndex) return false
+    }
+    return this.currentIndex >= this.surveyPages.length - 1
+  }
+
   private shouldAutoAdvance(q: Question, v: AnswerValue): boolean {
-    // Don't auto-advance off the last page when the host opted out (respondent
-    // flow). There onFinish() submits the survey, so auto-advancing would
-    // submit without an explicit "Kirim Jawaban" press and deny the respondent
-    // a chance to review. Surveyor mode keeps it on — its onFinish only jumps
-    // to /recap (a review screen), not a submit.
-    if (this.isLastQuestion && !this._autoAdvanceLastPage) return false
     if (!AUTO_ADVANCE_TYPES.has(q.type)) return false
     if (v === null || v === undefined) return false
     if (typeof v === 'string' && v === '') return false
