@@ -767,7 +767,7 @@
         >
           <h2 id="confirm-title" class="confirm-title">Kirim jawaban Anda?</h2>
           <p id="confirm-desc" class="confirm-desc">
-            Setelah dikirim, jawaban tidak dapat diubah lagi. Pastikan semua jawaban sudah benar.
+            Jawaban yang sudah dikirim tidak bisa diubah lagi. Pastikan jawaban sudah benar.
           </p>
           <div class="confirm-actions">
             <button
@@ -781,7 +781,7 @@
               type="button"
               onclick={confirmSubmit}
               disabled={submitting}
-            >Ya, Kirim</button>
+            >Ya, kirim</button>
           </div>
         </div>
       </div>
