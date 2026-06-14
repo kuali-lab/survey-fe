@@ -60,6 +60,14 @@ export type RunnerOptions = {
    * Surveyor mode passes "Tinjau Jawaban" (it routes to /recap instead).
    */
   lastButtonLabel?: string
+  /**
+   * Whether the last page may auto-advance (which fires onFinish). Defaults to
+   * true. The respondent flow passes false so the final question never
+   * auto-submits — the respondent must press "Kirim Jawaban" and gets a chance
+   * to review. Surveyor mode keeps it true: auto-advance there only jumps to
+   * /recap (a review screen), not a submit.
+   */
+  autoAdvanceLastPage?: boolean
 }
 
 export class SurveyRunner {
@@ -83,10 +91,12 @@ export class SurveyRunner {
   private _getSurvey!: () => Survey | null
   private _onFinish!: () => void | Promise<void>
   private _lastButtonLabel!: string | undefined
+  private _autoAdvanceLastPage = true
 
   constructor(opts: RunnerOptions) {
     this._getSurvey = opts.getSurvey
     this._onFinish = opts.onFinish
+    this._autoAdvanceLastPage = opts.autoAdvanceLastPage ?? true
     this._lastButtonLabel = opts.lastButtonLabel
   }
 
@@ -352,12 +362,12 @@ export class SurveyRunner {
   }
 
   private shouldAutoAdvance(q: Question, v: AnswerValue): boolean {
-    // Never auto-advance off the last page. Auto-advance there would call
-    // onFinish() (respondent: submit; surveyor: jump to recap) without an
-    // explicit click, denying the respondent a chance to review their answers.
-    // The final step must always be an intentional "Kirim Jawaban" / "Tinjau
-    // Jawaban" press.
-    if (this.isLastQuestion) return false
+    // Don't auto-advance off the last page when the host opted out (respondent
+    // flow). There onFinish() submits the survey, so auto-advancing would
+    // submit without an explicit "Kirim Jawaban" press and deny the respondent
+    // a chance to review. Surveyor mode keeps it on — its onFinish only jumps
+    // to /recap (a review screen), not a submit.
+    if (this.isLastQuestion && !this._autoAdvanceLastPage) return false
     if (!AUTO_ADVANCE_TYPES.has(q.type)) return false
     if (v === null || v === undefined) return false
     if (typeof v === 'string' && v === '') return false
