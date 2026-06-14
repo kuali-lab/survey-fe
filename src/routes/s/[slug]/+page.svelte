@@ -51,10 +51,15 @@
   let invitationStartedFired = false
   // Item 4 — one-time link gate: 'done' (already completed) | 'expired' | null.
   let inviteBlocked = $state<'done' | 'expired' | null>(null)
+  // Final-step confirm modal: pressing "Kirim Jawaban" opens it instead of
+  // submitting straight away, so the respondent can review before committing.
+  let showSubmitConfirm = $state(false)
 
   const runner = new SurveyRunner({
     getSurvey: () => survey ?? null,
-    onFinish: () => handleFinish(),
+    // Pressing the last-page button opens the confirm modal rather than
+    // submitting directly. confirmSubmit() then runs the real gates + submit.
+    onFinish: () => { showSubmitConfirm = true },
     // Never auto-submit — the respondent must press "Kirim Jawaban" so they can
     // review their answers first (covers the last page and skip-to-END rules).
     autoSubmit: false,
@@ -277,6 +282,21 @@
   }
 
   // End-of-survey verification gate. Order: selfie first, then location.
+  function cancelSubmit() {
+    showSubmitConfirm = false
+  }
+
+  function confirmSubmit() {
+    showSubmitConfirm = false
+    void handleFinish()
+  }
+
+  // Move focus onto the element when it mounts (used to focus the modal's safe
+  // "Periksa lagi" button so keyboard focus is trapped inside the dialog).
+  function focusOnMount(node: HTMLElement) {
+    node.focus()
+  }
+
   async function handleFinish() {
     if (settings.requireSelfie && !selfie) {
       await runSelfieGate()
@@ -471,23 +491,31 @@
 
   // Event wiring — only react while on the question stage and not submitting.
   function onKeydown(e: KeyboardEvent) {
+    // While the confirm modal is open it owns the keyboard: Esc cancels and
+    // nothing reaches the runner's page-navigation keys. Enter is intentionally
+    // NOT a confirm shortcut — it falls through to natively activate the focused
+    // button (which is "Periksa lagi"), so a reflexive Enter never submits.
+    if (showSubmitConfirm) {
+      if (e.key === 'Escape') { e.preventDefault(); cancelSubmit() }
+      return
+    }
     if (viewState !== 'question' || submitting) return
     runner.handleKeydown(e)
   }
   function onFocusIn(e: FocusEvent) {
-    if (viewState !== 'question') return
+    if (viewState !== 'question' || showSubmitConfirm) return
     runner.handleFocusIn(e)
   }
   function onWheel(e: WheelEvent) {
-    if (viewState !== 'question' || submitting) return
+    if (viewState !== 'question' || submitting || showSubmitConfirm) return
     runner.handleWheel(e)
   }
   function onTouchStart(e: TouchEvent) {
-    if (viewState !== 'question') return
+    if (viewState !== 'question' || showSubmitConfirm) return
     runner.handleTouchStart(e)
   }
   function onTouchEnd(e: TouchEvent) {
-    if (viewState !== 'question' || submitting) return
+    if (viewState !== 'question' || submitting || showSubmitConfirm) return
     runner.handleTouchEnd(e)
   }
 </script>
@@ -722,6 +750,42 @@
         </div>
       </main>
     </div>
+
+    {#if showSubmitConfirm}
+      <div
+        class="confirm-backdrop"
+        role="presentation"
+        onclick={(e) => { if (e.target === e.currentTarget) cancelSubmit() }}
+      >
+        <div
+          class="confirm-modal"
+          role="dialog"
+          tabindex="-1"
+          aria-modal="true"
+          aria-labelledby="confirm-title"
+          aria-describedby="confirm-desc"
+        >
+          <h2 id="confirm-title" class="confirm-title">Kirim jawaban Anda?</h2>
+          <p id="confirm-desc" class="confirm-desc">
+            Setelah dikirim, jawaban tidak dapat diubah lagi. Pastikan semua jawaban sudah benar.
+          </p>
+          <div class="confirm-actions">
+            <button
+              class="confirm-btn secondary"
+              type="button"
+              onclick={cancelSubmit}
+              use:focusOnMount
+            >Periksa lagi</button>
+            <button
+              class="confirm-btn primary"
+              type="button"
+              onclick={confirmSubmit}
+              disabled={submitting}
+            >Ya, Kirim</button>
+          </div>
+        </div>
+      </div>
+    {/if}
 
   {:else if viewState === 'closing'}
     <div class="centered-wrap">
@@ -1005,5 +1069,94 @@
     .stage-slide {
       gap: 20px;
     }
+  }
+
+  .confirm-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .confirm-modal {
+    background: var(--canvas);
+    border-radius: var(--radius-card);
+    border: 1px solid var(--canvas-soft);
+    max-width: 420px;
+    width: 100%;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .confirm-title {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+  }
+
+  .confirm-desc {
+    font-size: 15px;
+    color: var(--text-body);
+    line-height: 1.55;
+    margin: 0;
+  }
+
+  .confirm-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+
+  .confirm-btn {
+    flex: 1;
+    min-width: 140px;
+    height: 48px;
+    padding: 0 24px;
+    border-radius: var(--radius-pill);
+    font-family: var(--font);
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    border: 1px solid transparent;
+  }
+
+  .confirm-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .confirm-btn:active { transform: scale(0.97); }
+  }
+
+  .confirm-btn.primary {
+    background: var(--ink);
+    color: var(--on-ink);
+  }
+
+  .confirm-btn.primary:hover {
+    background: var(--ink-elevated);
+  }
+
+  .confirm-btn.secondary {
+    background: var(--canvas);
+    color: var(--tertiary-100);
+    border-color: var(--tertiary-100);
+  }
+
+  .confirm-btn.secondary:hover {
+    background: var(--surface);
   }
 </style>
