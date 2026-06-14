@@ -352,6 +352,12 @@ export class SurveyRunner {
   }
 
   private shouldAutoAdvance(q: Question, v: AnswerValue): boolean {
+    // Never auto-advance off the last page. Auto-advance there would call
+    // onFinish() (respondent: submit; surveyor: jump to recap) without an
+    // explicit click, denying the respondent a chance to review their answers.
+    // The final step must always be an intentional "Kirim Jawaban" / "Tinjau
+    // Jawaban" press.
+    if (this.isLastQuestion) return false
     if (!AUTO_ADVANCE_TYPES.has(q.type)) return false
     if (v === null || v === undefined) return false
     if (typeof v === 'string' && v === '') return false
