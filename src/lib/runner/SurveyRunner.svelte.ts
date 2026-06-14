@@ -193,6 +193,25 @@ export class SurveyRunner {
       }
     }
 
+    // Matrix: a required matrix must have EVERY row answered. The generic
+    // required check above only catches a fully empty answer (null) — a matrix
+    // with some rows set is a non-empty object, so a partially filled matrix
+    // would otherwise pass. The value is Record<rowLabel, colLabel>.
+    if (q.type === 'matrix' && q.required) {
+      const rows = q.matrixRows ?? []
+      const val =
+        answer && typeof answer === 'object' && !Array.isArray(answer)
+          ? (answer as Record<string, string>)
+          : {}
+      const allAnswered =
+        rows.length > 0 &&
+        rows.every((r) => {
+          const cell = val[r.label]
+          return typeof cell === 'string' && cell.trim() !== ''
+        })
+      if (!allAnswered) return 'Mohon lengkapi semua baris.'
+    }
+
     const isEmpty =
       answer === null ||
       answer === undefined ||
