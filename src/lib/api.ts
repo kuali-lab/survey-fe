@@ -173,10 +173,14 @@ export async function fetchAsyncOptions(slug: string, questionId: string, q: str
   }
 }
 
-export async function fetchSurvey(slug: string, fetchFn: typeof fetch = fetch): Promise<Survey> {
+export async function fetchSurvey(
+  slug: string,
+  fetchFn: typeof fetch = fetch,
+  baseUrl: string = PUBLIC_API_BASE_URL,
+): Promise<Survey> {
   if (shouldUseMock()) return buildMockSurvey(slug)
   try {
-    const res = await fetchFn(`${PUBLIC_API_BASE_URL}/s/${slug}`)
+    const res = await fetchFn(`${baseUrl}/s/${slug}`)
     if (res.status === 404) throw new Error('not_found')
     
     if (res.status === 410) {
