@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { PageData } from './$types.js'
   import type { ViewState, Answers } from '$lib/types.js'
-  import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress, getInvitationStatus } from '$lib/api.js'
+  import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress, getInvitationStatus, getDeviceStatus } from '$lib/api.js'
   import { computeFingerprint } from '$lib/fingerprint.js'
   import { getQuestionNumber } from '$lib/utils.js'
   import { page } from '$app/stores'
@@ -50,7 +50,7 @@
   let invitationToken = $state<string | null>(null)
   let invitationStartedFired = false
   // Item 4 — one-time link gate: 'done' (already completed) | 'expired' | null.
-  let inviteBlocked = $state<'done' | 'expired' | null>(null)
+  let inviteBlocked = $state<'done' | 'expired' | 'device' | null>(null)
   // Final-step confirm modal: pressing "Kirim Jawaban" opens it instead of
   // submitting straight away, so the respondent can review before committing.
   let showSubmitConfirm = $state(false)
@@ -181,6 +181,16 @@
 
     computeFingerprint().then(async (fp) => {
       fingerprintHash = fp
+      // One-response-per-device: when the survey limits to one response per
+      // device, check this fingerprint up front so a returning respondent sees a
+      // clear message instead of filling the form then hitting a 409. Applies to
+      // both the plain link and blast links. Fail-open; the submit 409 is the
+      // authority. A reopened invite bypasses server-side.
+      if (fp && data.slug && settings.oneResponsePerDevice && !inviteBlocked) {
+        getDeviceStatus(data.slug, fp, invitationToken ?? undefined).then((st) => {
+          if (st === 'completed' && !inviteBlocked) inviteBlocked = 'device'
+        })
+      }
       if (!resumePrompt && fp && data.slug && !data.error) {
         try {
           const serverDraft = await getDraft(data.slug, draftSessionKey(fp))
@@ -551,10 +561,12 @@
   {#if inviteBlocked}
     <div class="centered-wrap">
       <div class="resume-card" role="region" aria-label="Status undangan">
-        <h2 class="resume-title">{inviteBlocked === 'done' ? 'Survei sudah selesai' : 'Tautan kedaluwarsa'}</h2>
+        <h2 class="resume-title">{inviteBlocked === 'done' ? 'Survei sudah selesai' : inviteBlocked === 'device' ? 'Sudah pernah mengisi' : 'Tautan kedaluwarsa'}</h2>
         <p class="resume-description">
           {inviteBlocked === 'done'
             ? 'Anda sudah menyelesaikan survei ini. Terima kasih atas partisipasi Anda. Jika perlu mengisi ulang, mintalah undangan baru dari penyelenggara.'
+            : inviteBlocked === 'device'
+            ? 'Anda sudah pernah mengisi survei ini dari perangkat ini. Setiap perangkat hanya dapat mengisi satu kali. Gunakan perangkat lain jika Anda ingin mengisi sebagai responden berbeda.'
             : 'Tautan undangan ini sudah tidak berlaku. Silakan minta undangan terbaru dari penyelenggara survei.'}
         </p>
       </div>
