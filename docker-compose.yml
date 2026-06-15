@@ -1,0 +1,25 @@
+# Production runtime compose for survey-fe on lxc-app.
+# Version-controlled and transferred to /opt/survey-fe/docker-compose.yml by the
+# deploy workflow, so runtime config (ulimits, host networking, healthcheck)
+# persists on every deploy with no manual box edits. Local dev uses `npm run dev`,
+# not this file.
+services:
+  survey-fe:
+    image: survey-fe:latest
+    container_name: survey-fe
+    restart: unless-stopped
+    # Raised from the 1024 default so the clustered Node workers + Traefik
+    # upstream connections never hit the FD ceiling under respondent load.
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    network_mode: host
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

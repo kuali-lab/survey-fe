@@ -25,6 +25,10 @@
   // Text helpers
   const strValue = $derived(typeof value === 'string' ? value : (value != null ? String(value) : ''))
   const numValue = $derived(typeof value === 'number' ? value : null)
+  // Live number-range warning (below min / capped at max). Shown red + shakes on
+  // each offending keystroke. shakeKey bumps to replay the shake animation.
+  let numberWarn = $state<string | null>(null)
+  let shakeKey = $state(0)
 
   // ── Date question ──────────────────────────────────────────────────────────
   // Native date/month picker: respondent picks from a calendar (no manual typing),
@@ -422,25 +426,46 @@
         v = v.slice(0, question.maxLength)
       }
       let num = v === '' ? null : Number(v)
-      // Hard-cap the value at maxValue while typing (native max only validates).
+      let warn: string | null = null
+      // Hard-cap at maxValue while typing (adding digits only increases). Warn so
+      // the cap isn't silent.
       if (num !== null && question.maxValue != null && num > question.maxValue) {
         num = question.maxValue
         v = String(num)
+        warn = `Nilai maksimal ${question.maxValue}.`
+      } else if (num !== null && question.minValue != null && num < question.minValue) {
+        // Below min: do NOT clamp while typing (would block multi-digit entry like
+        // "15" when min is 10). Surface a live red, shaking warning instead; the
+        // value is corrected up to min on blur.
+        warn = `Nilai minimal ${question.minValue}.`
       }
       e.currentTarget.value = v
+      if (warn) {
+        numberWarn = warn
+        shakeKey++
+      } else {
+        numberWarn = null
+      }
       onChange(num)
     }}
     onblur={(e) => {
       // Clamp up to minValue on blur (clamping min while typing would block
-      // entering any digit below it).
+      // entering any digit below it). The live warning above already informed the
+      // respondent, so this correction is not silent.
       if (numValue !== null && question.minValue != null && numValue < question.minValue) {
         const clamped = question.minValue
         ;(e.currentTarget as HTMLInputElement).value = String(clamped)
         onChange(clamped)
       }
+      numberWarn = null
       onBlur?.()
     }}
   />
+  {#if numberWarn}
+    {#key shakeKey}
+      <p class="number-warn" role="alert">{numberWarn}</p>
+    {/key}
+  {/if}
   <div style="display: flex; justify-content: space-between; align-items: flex-start;">
     <div>
       {#if question.minValue !== undefined && question.minValue !== null && question.maxValue !== undefined && question.maxValue !== null}
@@ -579,43 +604,22 @@
 
 {:else if question.type === 'dropdown'}
   <div class="options-list">
-      {#if question.hasAsyncOptions || options.length > 10}
-        <SearchableDropdown
-          options={options}
-          value={isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue}
-          onChange={(val) => {
-            if (otherOption && val === otherOption.label) {
-              onChange(otherText || otherOption.label);
-            } else {
-              onChange(val);
-            }
-          }}
-          hasAsyncOptions={question.hasAsyncOptions}
-          questionId={question.id}
-          slug={slug}
-        />
-      {:else}
-        <select
-          class="select-input"
-          value={isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue}
-          onchange={(e) => {
-            const val = (e.currentTarget as HTMLSelectElement).value;
-            if (otherOption && val === otherOption.label) {
-              onChange(otherText || otherOption.label);
-            } else {
-              onChange(val);
-            }
-          }}
-        >
-          <option value="">-- Pilih salah satu --</option>
-          {#each options.filter(o => !o.isOther) as opt}
-            <option value={opt.label}>{opt.label}</option>
-          {/each}
-          {#if otherOption}
-            <option value={otherOption.label}>{otherOption.label}</option>
-          {/if}
-        </select>
-      {/if}
+      <!-- Always use the styled SearchableDropdown so small (manual) dropdowns look
+           identical to large/async ones — no more native/unstyled <select>. -->
+      <SearchableDropdown
+        options={options}
+        value={isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue}
+        onChange={(val) => {
+          if (otherOption && val === otherOption.label) {
+            onChange(otherText || otherOption.label);
+          } else {
+            onChange(val);
+          }
+        }}
+        hasAsyncOptions={question.hasAsyncOptions}
+        questionId={question.id}
+        slug={slug}
+      />
     {#if isOtherSelected}
       <input
         class="text-input other-text-input"
@@ -988,6 +992,26 @@
     color: var(--text-body);
   }
 
+  .number-warn {
+    margin: 6px 4px 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--error);
+    animation: number-warn-shake 0.32s ease;
+  }
+
+  @keyframes number-warn-shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-5px); }
+    40% { transform: translateX(5px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(3px); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .number-warn { animation: none; }
+  }
+
   /* ── URL field ── */
   .url-field {
     display: flex;
@@ -1028,30 +1052,6 @@
     color: var(--text-primary);
     background: transparent;
     outline: none;
-  }
-
-  /* ── Select ── */
-  .select-input {
-    width: 100%;
-    height: 52px;
-    border: 1px solid transparent;
-    border-radius: var(--radius-input);
-    padding: 0 40px 0 16px;
-    font-family: var(--font);
-    font-size: 16px;
-    color: var(--text-primary);
-    background: var(--canvas-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9l6 6 6-6' stroke='%23000000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 16px center;
-    appearance: none;
-    -webkit-appearance: none;
-    cursor: pointer;
-    transition: background-color 0.15s, border-color 0.15s;
-  }
-
-  .select-input:focus {
-    outline: none;
-    background-color: var(--canvas);
-    border-color: var(--ink);
-    border-width: 2px;
   }
 
   /* ── Option cards ── */

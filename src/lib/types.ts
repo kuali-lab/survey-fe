@@ -91,6 +91,7 @@ export interface SurveySettings {
   showNumbers: boolean
   requireLocation?: boolean
   requireSelfie?: boolean
+  oneResponsePerDevice?: boolean
   displayMode: 'scroll' | 'one_per_page'
 }
 
