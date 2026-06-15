@@ -20,6 +20,7 @@
   import ClosingPage from '$lib/components/ClosingPage.svelte'
   import ClosedPage from '$lib/components/ClosedPage.svelte'
   import ErrorPage from '$lib/components/ErrorPage.svelte'
+  import InviteBlockedPage from '$lib/components/InviteBlockedPage.svelte'
   import QuestionCard from '$lib/components/QuestionCard.svelte'
   import NavButton from '$lib/components/NavButton.svelte'
   import { loadSurveyorSession } from '$lib/surveyorAuth.js'
@@ -560,16 +561,7 @@
 <div class="page" class:page-question={viewState === 'question'}>
   {#if inviteBlocked}
     <div class="centered-wrap">
-      <div class="resume-card" role="region" aria-label="Status undangan">
-        <h2 class="resume-title">{inviteBlocked === 'done' ? 'Survei sudah selesai' : inviteBlocked === 'device' ? 'Sudah pernah mengisi' : 'Tautan kedaluwarsa'}</h2>
-        <p class="resume-description">
-          {inviteBlocked === 'done'
-            ? 'Anda sudah menyelesaikan survei ini. Terima kasih atas partisipasi Anda. Jika perlu mengisi ulang, mintalah undangan baru dari penyelenggara.'
-            : inviteBlocked === 'device'
-            ? 'Anda sudah pernah mengisi survei ini dari perangkat ini. Setiap perangkat hanya dapat mengisi satu kali. Gunakan perangkat lain jika Anda ingin mengisi sebagai responden berbeda.'
-            : 'Tautan undangan ini sudah tidak berlaku. Silakan minta undangan terbaru dari penyelenggara survei.'}
-        </p>
-      </div>
+      <InviteBlockedPage state={inviteBlocked} title={survey?.title ?? ''} />
     </div>
 
   {:else if viewState === 'error'}
