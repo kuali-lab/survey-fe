@@ -123,6 +123,23 @@ export async function getInvitationStatus(token: string): Promise<'ok' | 'comple
   }
 }
 
+// One-response-per-device pre-check (public, no auth). Returns 'completed' when
+// this device fingerprint already has a response for the survey, so the runner
+// can show a block screen before the form. Fail-open ('ok') on any error — the
+// submit-time 409 is the authority.
+export async function getDeviceStatus(slug: string, fingerprintHash: string, token?: string): Promise<'ok' | 'completed'> {
+  try {
+    const params = new URLSearchParams({ fp: fingerprintHash })
+    if (token) params.set('t', token)
+    const res = await fetch(`${PUBLIC_API_BASE_URL}/s/${encodeURIComponent(slug)}/device-status?${params.toString()}`)
+    if (!res.ok) return 'ok'
+    const data = await res.json()
+    return data?.state === 'completed' ? 'completed' : 'ok'
+  } catch {
+    return 'ok'
+  }
+}
+
 // ─── Region lookup (public, no auth) ─────────────────────────────────────────
 // Backs the cascading "Wilayah" (region) question. BPS codes are dot-prefix
 // hierarchical ("32" > "32.73" > "32.73.01" > "32.73.01.2001").
