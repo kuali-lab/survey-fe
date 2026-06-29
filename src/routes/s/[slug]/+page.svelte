@@ -33,6 +33,10 @@
 
   function getInitialViewState(): ViewState {
     if (data.error === 'survey_closed' || survey?.status === 'closed') return 'closed'
+    // Transient SSR fetch failure: render a neutral loading state instead of a
+    // terminal 500. The universal load re-runs in the browser (public API URL)
+    // and resolves to the real survey or a real error — no 500 flash.
+    if (data.deferred) return 'loading'
     if (!survey || data.error) return 'error'
     return 'welcome'
   }
@@ -562,6 +566,14 @@
   {#if inviteBlocked}
     <div class="centered-wrap">
       <InviteBlockedPage state={inviteBlocked} title={survey?.title ?? ''} />
+    </div>
+
+  {:else if viewState === 'loading'}
+    <div class="centered-wrap">
+      <div class="submitting-card">
+        <span class="big-spinner" aria-hidden="true"></span>
+        <p>Memuat survei…</p>
+      </div>
     </div>
 
   {:else if viewState === 'error'}
