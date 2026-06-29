@@ -14,15 +14,22 @@ export const load: PageLoad = async ({ params, fetch }) => {
 
   try {
     const survey = await fetchSurvey(slug, fetch, browser ? undefined : SSR_API_BASE)
-    return { survey, slug, error: null }
+    return { survey, slug, error: null, deferred: false }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'unknown'
     if (message === 'not_found') {
-      return { survey: null as Survey | null, slug, error: 'not_found' as const }
+      return { survey: null as Survey | null, slug, error: 'not_found' as const, deferred: false }
     }
     if (message === 'survey_closed') {
-      return { survey: null as Survey | null, slug, error: 'survey_closed' as const }
+      return { survey: null as Survey | null, slug, error: 'survey_closed' as const, deferred: false }
     }
-    return { survey: null as Survey | null, slug, error: 'server_error' as const }
+    // Transient/server fetch error. On the SERVER this is almost always the
+    // SSR-only base-URL (localhost:8080) being unreachable, while the browser's
+    // public-URL fetch succeeds. Painting a terminal 500 here causes a visible
+    // flash that the client re-run then retracts. Instead defer the decision to
+    // the client re-run: render a neutral loading state during SSR and let the
+    // browser fetch resolve to the real survey (or a real error if it also fails).
+    // not_found / survey_closed stay terminal above — only generic errors defer.
+    return { survey: null as Survey | null, slug, error: 'server_error' as const, deferred: !browser }
   }
 }

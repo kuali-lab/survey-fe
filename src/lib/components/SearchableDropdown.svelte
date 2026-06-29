@@ -32,7 +32,7 @@
     clearTimeout(timeoutId);
     timeoutId = setTimeout(() => {
       debouncedSearch = q;
-    }, 150) as unknown as number;
+    }, 300) as unknown as number;
   });
 
   // Reset the virtual-scroll window whenever the search changes — a stale
@@ -49,12 +49,30 @@
   let asyncOffset = $state(0);
   let asyncHasMore = $state(false);
   const ASYNC_LIMIT = 50;
+  // Must match the server-side minSearchChars guard: a 1–2 char infix search on
+  // a huge option set (287k-row school lists) forces a full scan and saturates
+  // the DB, so we don't even fire the request for terms this short.
+  const MIN_SEARCH_CHARS = 3;
+
+  // True when the user typed a non-empty term below the minimum — we skip the
+  // fetch and show a hint instead (empty term still loads the first page).
+  let searchTooShort = $derived(
+    debouncedSearch.length > 0 && debouncedSearch.length < MIN_SEARCH_CHARS
+  );
 
   // First page: (re)load whenever the (debounced) search or question identity
   // changes. Accumulates further pages via loadMoreAsync() on scroll.
   $effect(() => {
     if (!hasAsyncOptions || !slug || !questionId) return;
     const q = debouncedSearch;
+    // Mirror the BE guard: keep too-short searches off the wire entirely.
+    if (q.length > 0 && q.length < MIN_SEARCH_CHARS) {
+      asyncOptions = [];
+      asyncHasMore = false;
+      asyncOffset = 0;
+      isFetching = false;
+      return;
+    }
     asyncOffset = 0;
     isFetching = true;
     fetchAsyncOptions(slug, questionId, q, ASYNC_LIMIT, 0).then(opts => {
@@ -158,7 +176,9 @@
         />
       </div>
 
-      {#if filteredOptions.length === 0}
+      {#if searchTooShort}
+        <div class="empty-state">Ketik minimal {MIN_SEARCH_CHARS} huruf untuk mencari.</div>
+      {:else if filteredOptions.length === 0}
         <div class="empty-state">Tidak ada pilihan yang cocok.</div>
       {:else}
         <div 
