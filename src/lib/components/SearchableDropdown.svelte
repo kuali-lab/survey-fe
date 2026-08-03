@@ -2,7 +2,7 @@
   import { onMount, tick } from 'svelte';
   import { fade } from 'svelte/transition';
 
-  import { fetchAsyncOptions } from '/api';
+  import { fetchAsyncOptions } from '$lib/api';
 
   let { options = [], value = '', onChange, placeholder = '-- Pilih salah satu --', hasAsyncOptions = false, questionId = '', slug = '' } = $props<{
     options?: { label: string, isOther?: boolean }[];
@@ -23,30 +23,82 @@
   let timeoutId: number;
   
   $effect(() => {
+    const q = searchQuery.toLowerCase();
+    // Local options filter instantly (realtime); only async fetches are debounced.
+    if (!hasAsyncOptions) {
+      debouncedSearch = q;
+      return;
+    }
     clearTimeout(timeoutId);
     timeoutId = setTimeout(() => {
-      debouncedSearch = searchQuery.toLowerCase();
-    }, 150) as unknown as number;
+      debouncedSearch = q;
+    }, 300) as unknown as number;
+  });
+
+  // Reset the virtual-scroll window whenever the search changes — a stale
+  // startIndex left over from prior scrolling would otherwise render an empty
+  // slice and make it look like search "isn't working".
+  $effect(() => {
+    debouncedSearch;
+    startIndex = 0;
+    if (scrollContainer) scrollContainer.scrollTop = 0;
   });
 
   let asyncOptions = $state<{label: string, isOther?: boolean}[]>([]);
   let isFetching = $state(false);
+  let asyncOffset = $state(0);
+  let asyncHasMore = $state(false);
+  const ASYNC_LIMIT = 50;
+  // Must match the server-side minSearchChars guard: a 1–2 char infix search on
+  // a huge option set (287k-row school lists) forces a full scan and saturates
+  // the DB, so we don't even fire the request for terms this short.
+  const MIN_SEARCH_CHARS = 3;
 
+  // True when the user typed a non-empty term below the minimum — we skip the
+  // fetch and show a hint instead (empty term still loads the first page).
+  let searchTooShort = $derived(
+    debouncedSearch.length > 0 && debouncedSearch.length < MIN_SEARCH_CHARS
+  );
+
+  // First page: (re)load whenever the (debounced) search or question identity
+  // changes. Accumulates further pages via loadMoreAsync() on scroll.
   $effect(() => {
     if (!hasAsyncOptions || !slug || !questionId) return;
+    const q = debouncedSearch;
+    // Mirror the BE guard: keep too-short searches off the wire entirely.
+    if (q.length > 0 && q.length < MIN_SEARCH_CHARS) {
+      asyncOptions = [];
+      asyncHasMore = false;
+      asyncOffset = 0;
+      isFetching = false;
+      return;
+    }
+    asyncOffset = 0;
     isFetching = true;
-    fetchAsyncOptions(slug, questionId, debouncedSearch).then(opts => {
+    fetchAsyncOptions(slug, questionId, q, ASYNC_LIMIT, 0).then(opts => {
       asyncOptions = opts;
+      asyncHasMore = opts.length === ASYNC_LIMIT;
       isFetching = false;
     });
   });
+
+  async function loadMoreAsync() {
+    if (!hasAsyncOptions || isFetching || !asyncHasMore) return;
+    isFetching = true;
+    const next = asyncOffset + ASYNC_LIMIT;
+    const opts = await fetchAsyncOptions(slug, questionId, debouncedSearch, ASYNC_LIMIT, next);
+    asyncOffset = next;
+    asyncOptions = [...asyncOptions, ...opts];
+    asyncHasMore = opts.length === ASYNC_LIMIT;
+    isFetching = false;
+  }
 
   let filteredOptions = $derived(
     hasAsyncOptions
       ? asyncOptions
       : (debouncedSearch === '' 
         ? (options || [])
-        : (options || []).filter(o => o.label.toLowerCase().includes(debouncedSearch)))
+        : (options || []).filter((o: { label: string, isOther?: boolean }) => o.label.toLowerCase().includes(debouncedSearch)))
   );
 
   // Virtual scrolling
@@ -62,6 +114,10 @@
     const scrollTop = scrollContainer.scrollTop;
     const itemHeight = 40;
     startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - 5);
+    // Infinite scroll for async sets: pull the next page as the user nears the end.
+    if (hasAsyncOptions && scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - itemHeight * 3) {
+      loadMoreAsync();
+    }
   }
 
   function selectOption(label: string) {
@@ -120,7 +176,9 @@
         />
       </div>
 
-      {#if filteredOptions.length === 0}
+      {#if searchTooShort}
+        <div class="empty-state">Ketik minimal {MIN_SEARCH_CHARS} huruf untuk mencari.</div>
+      {:else if filteredOptions.length === 0}
         <div class="empty-state">Tidak ada pilihan yang cocok.</div>
       {:else}
         <div 
@@ -145,7 +203,7 @@
         </div>
       {/if}
       <div class="footer">
-        Menampilkan {filteredOptions.length > 50 ? '50+' : filteredOptions.length} hasil {hasAsyncOptions ? '' : dari ' + (options?.length || 0)}
+        Menampilkan {filteredOptions.length}{hasAsyncOptions && asyncHasMore ? '+' : ''} hasil {hasAsyncOptions ? '' : ' dari ' + (options?.length || 0)}
         {#if isFetching}
           <span class="ml-2 animate-pulse">Memuat...</span>
         {/if}
@@ -155,27 +213,39 @@
 </div>
 
 <style>
+  /* Styled to match the light survey theme (.select-input / .text-input).
+     Previously hardcoded dark colors made the control invisible on the white
+     survey canvas. */
   .dropdown-wrapper {
     position: relative;
     width: 100%;
+    /* Breathing room below so a dropdown that is the last question is not flush
+       against the bottom of the screen. */
+    margin-bottom: 24px;
   }
   .dropdown-trigger {
     width: 100%;
+    height: 52px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.75rem 1rem;
-    background-color: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 0.5rem;
-    color: white;
-    font-size: 1rem;
+    gap: 8px;
+    padding: 0 16px;
+    background: var(--canvas-soft);
+    /* Thin outline to separate the control from the page background. */
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-input);
+    color: var(--text-primary);
+    font-family: var(--font);
+    font-size: 16px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background-color 0.15s, border-color 0.15s;
   }
+  .dropdown-trigger svg { color: var(--text-body); flex-shrink: 0; }
   .dropdown-trigger:focus, .dropdown-trigger:hover {
-    border-color: rgba(255, 255, 255, 0.3);
     outline: none;
+    background: var(--canvas);
+    border-color: var(--ink);
   }
   .truncate {
     white-space: nowrap;
@@ -188,31 +258,36 @@
     top: calc(100% + 0.5rem);
     left: 0;
     right: 0;
-    background-color: #1a1a1a;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 0.5rem;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+    background: var(--canvas);
+    border: 1px solid var(--canvas-soft);
+    border-radius: var(--radius-input);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
     z-index: 50;
     overflow: hidden;
   }
   .search-box {
     padding: 0.75rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--primary-10);
+    border-bottom: 2px solid var(--primary);
     display: flex;
     align-items: center;
     gap: 0.5rem;
   }
   .search-icon {
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--primary-text);
+    flex-shrink: 0;
   }
   .search-box input {
     width: 100%;
     background: transparent;
     border: none;
-    color: white;
-    font-size: 0.875rem;
+    color: var(--text-primary);
+    caret-color: var(--primary);
+    font-family: var(--font);
+    font-size: 0.9375rem;
     outline: none;
   }
+  .search-box input::placeholder { color: var(--text-muted); }
   .options-container {
     max-height: 240px;
     overflow-y: auto;
@@ -233,36 +308,38 @@
     width: 100%;
     text-align: left;
     padding: 0 1rem;
-    color: rgba(255, 255, 255, 0.8);
+    color: var(--text-body);
     background: transparent;
     border: none;
     cursor: pointer;
-    font-size: 0.875rem;
+    font-family: var(--font);
+    font-size: 0.9375rem;
     height: 40px;
     display: flex;
     align-items: center;
   }
   .option-item:hover {
-    background-color: rgba(255, 255, 255, 0.05);
+    background: var(--primary-10);
   }
   .option-item.selected {
-    background-color: rgba(59, 130, 246, 0.2);
-    color: #60a5fa;
+    background: var(--primary-20);
+    color: var(--primary-text);
+    font-weight: 600;
   }
   .empty-state {
     padding: 1rem;
     text-align: center;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--text-muted);
     font-size: 0.875rem;
   }
   .footer {
     padding: 0.5rem 1rem;
-    background-color: rgba(0, 0, 0, 0.2);
+    background: var(--canvas-soft);
     font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--text-muted);
     text-align: right;
   }
-  
+
   .options-container::-webkit-scrollbar {
     width: 8px;
   }
@@ -270,7 +347,7 @@
     background: transparent;
   }
   .options-container::-webkit-scrollbar-thumb {
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: rgba(0, 0, 0, 0.2);
     border-radius: 4px;
   }
 </style>

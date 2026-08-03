@@ -13,6 +13,7 @@
 import type { Survey, Question, Answers, AnswerValue, SurveySettings } from '$lib/types.js'
 import { getAnswerableQuestions } from '$lib/utils.js'
 import { evaluateNext } from '$lib/skipLogic.js'
+import { isValidPhoneFormat } from '$lib/phone.js'
 import { buildSurveySections, type SurveyPage } from './sections.js'
 
 export type { SurveyPage }
@@ -60,6 +61,16 @@ export type RunnerOptions = {
    * Surveyor mode passes "Tinjau Jawaban" (it routes to /recap instead).
    */
   lastButtonLabel?: string
+  /**
+   * Whether auto-advance is allowed to finish the survey (fire onFinish) — i.e.
+   * advancing off the last page, or following a skip rule that resolves to END.
+   * Defaults to true. The respondent flow passes false so the survey never
+   * auto-submits: the respondent must press "Kirim Jawaban" and gets a chance
+   * to review. Surveyor mode keeps it true — its onFinish only jumps to /recap
+   * (a review screen), not a submit. Auto-advance between non-final questions is
+   * unaffected.
+   */
+  autoSubmit?: boolean
 }
 
 export class SurveyRunner {
@@ -83,10 +94,12 @@ export class SurveyRunner {
   private _getSurvey!: () => Survey | null
   private _onFinish!: () => void | Promise<void>
   private _lastButtonLabel!: string | undefined
+  private _autoSubmit = true
 
   constructor(opts: RunnerOptions) {
     this._getSurvey = opts.getSurvey
     this._onFinish = opts.onFinish
+    this._autoSubmit = opts.autoSubmit ?? true
     this._lastButtonLabel = opts.lastButtonLabel
   }
 
@@ -181,12 +194,43 @@ export class SurveyRunner {
       }
     }
 
+    // Matrix: a required matrix must have EVERY row answered. The generic
+    // required check above only catches a fully empty answer (null) — a matrix
+    // with some rows set is a non-empty object, so a partially filled matrix
+    // would otherwise pass. The value is Record<rowLabel, colLabel>.
+    if (q.type === 'matrix' && q.required) {
+      const rows = q.matrixRows ?? []
+      const val =
+        answer && typeof answer === 'object' && !Array.isArray(answer)
+          ? (answer as Record<string, string>)
+          : {}
+      const allAnswered =
+        rows.length > 0 &&
+        rows.every((r) => {
+          const cell = val[r.label]
+          return typeof cell === 'string' && cell.trim() !== ''
+        })
+      if (!allAnswered) return 'Mohon lengkapi semua baris.'
+    }
+
     const isEmpty =
       answer === null ||
       answer === undefined ||
       (typeof answer === 'string' && answer.trim() === '') ||
       (Array.isArray(answer) && answer.length === 0)
     if (!q.required && isEmpty && q.type !== 'file_upload') return null
+
+    if (!isEmpty) {
+      let strVal = ''
+      if (typeof answer === 'string') strVal = answer.trim()
+      else if (typeof answer === 'number') strVal = String(answer)
+      
+      if (strVal !== '') {
+        const len = strVal.length
+        if (q.minLength && len < q.minLength) return `Minimal ${q.minLength} karakter.`
+        if (q.maxLength && len > q.maxLength) return `Maksimal ${q.maxLength} karakter.`
+      }
+    }
 
     if (q.type === 'number') {
       let answerNum: unknown = answer
@@ -204,8 +248,7 @@ export class SurveyRunner {
     }
 
     if (q.type === 'phone' && typeof answer === 'string' && answer.trim() !== '') {
-      const digits = answer.replace(/\D/g, '')
-      if (digits.length < 7 || digits.length > 15) return 'Format nomor telepon belum sesuai.'
+      if (!isValidPhoneFormat(answer)) return 'Format nomor telepon belum sesuai.'
     }
 
     if (q.type === 'file_upload' && typeof answer === 'string' && answer === '__uploading__') {
@@ -328,7 +371,11 @@ export class SurveyRunner {
       this.currentPage.questions[0].id === qid
     ) {
       this.cancelAutoAdvance()
-      if (this.shouldAutoAdvance(this.currentPage.questions[0], value)) {
+      // When auto-submit is off (respondent flow), never let auto-advance finish
+      // the survey — neither off the last page nor via a skip-to-END rule. The
+      // respondent must press "Kirim Jawaban" so they can review first.
+      const wouldFinish = !this._autoSubmit && this.autoAdvanceWouldFinish()
+      if (!wouldFinish && this.shouldAutoAdvance(this.currentPage.questions[0], value)) {
         this.autoAdvancing = true
         this.autoAdvanceTimer = setTimeout(() => {
           this.autoAdvanceTimer = null
@@ -337,6 +384,27 @@ export class SurveyRunner {
         }, 400)
       }
     }
+  }
+
+  // Mirrors handleNext's branch selection to predict whether advancing from the
+  // current page would finish the survey (fire onFinish) rather than move to a
+  // later page. Used to suppress auto-submit when autoSubmit is off.
+  private autoAdvanceWouldFinish(): boolean {
+    if (!this.currentPage) return false
+    let next: string | null | 'END' = null
+    for (const q of this.currentPage.questions) {
+      const skipDest = evaluateNext(q.id, this.answers, this.questions, this.skipRules)
+      if (skipDest) {
+        next = skipDest
+        break
+      }
+    }
+    if (next === 'END') return true
+    if (next !== null) {
+      const targetPageIdx = this.surveyPages.findIndex((p) => p.questions.some((q) => q.id === next))
+      if (targetPageIdx > this.currentIndex) return false
+    }
+    return this.currentIndex >= this.surveyPages.length - 1
   }
 
   private shouldAutoAdvance(q: Question, v: AnswerValue): boolean {

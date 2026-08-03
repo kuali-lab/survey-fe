@@ -33,6 +33,11 @@ export interface Question {
   type: QuestionType
   title: string
   description: string | null
+  // Plain-text variants from the backend (HTML stripped). Use for alt text, SEO
+  // meta (rendered server-side), and any non-display label. title/description stay
+  // HTML for rich display via {@html}.
+  titlePlain?: string
+  descriptionPlain?: string | null
   required: boolean
   sortOrder: number
   groupId: string | null
@@ -45,6 +50,7 @@ export interface Question {
   maxValue?: number
   maxSelections?: number
   maxLength?: number
+  minLength?: number
   minLabel?: string
   maxLabel?: string
   midLabel?: string
@@ -85,6 +91,7 @@ export interface SurveySettings {
   showNumbers: boolean
   requireLocation?: boolean
   requireSelfie?: boolean
+  oneResponsePerDevice?: boolean
   displayMode: 'scroll' | 'one_per_page'
 }
 
@@ -111,4 +118,4 @@ export type AnswerValue = string | number | string[] | Record<string, string> | 
 
 export type Answers = Record<string, AnswerValue>
 
-export type ViewState = 'welcome' | 'selfie_capture' | 'selfie_denied' | 'location_prompt' | 'location_denied' | 'question' | 'submitting' | 'closing' | 'closed' | 'error'
+export type ViewState = 'loading' | 'welcome' | 'selfie_capture' | 'selfie_denied' | 'location_prompt' | 'location_denied' | 'question' | 'submitting' | 'closing' | 'closed' | 'error'
