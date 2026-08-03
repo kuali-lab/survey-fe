@@ -13,6 +13,7 @@
 import type { Survey, Question, Answers, AnswerValue, SurveySettings } from '$lib/types.js'
 import { getAnswerableQuestions } from '$lib/utils.js'
 import { evaluateNext } from '$lib/skipLogic.js'
+import { isValidPhoneFormat } from '$lib/phone.js'
 import { buildSurveySections, type SurveyPage } from './sections.js'
 
 export type { SurveyPage }
@@ -247,8 +248,7 @@ export class SurveyRunner {
     }
 
     if (q.type === 'phone' && typeof answer === 'string' && answer.trim() !== '') {
-      const digits = answer.replace(/\D/g, '')
-      if (digits.length < 7 || digits.length > 15) return 'Format nomor telepon belum sesuai.'
+      if (!isValidPhoneFormat(answer)) return 'Format nomor telepon belum sesuai.'
     }
 
     if (q.type === 'file_upload' && typeof answer === 'string' && answer === '__uploading__') {

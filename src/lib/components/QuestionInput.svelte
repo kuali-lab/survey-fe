@@ -7,6 +7,7 @@
   import 'flatpickr/dist/flatpickr.css'
   import RegionInput from './RegionInput.svelte'
   import SearchableDropdown from './SearchableDropdown.svelte'
+  import { sanitizePhoneInput } from '$lib/phone.js'
 
   let {
     question,
@@ -392,9 +393,10 @@
   <input
     class="text-input"
     type="tel"
-    placeholder="+62 812 3456 7890"
+    inputmode="numeric"
+    placeholder="081234567890"
     value={strValue}
-    oninput={(e) => onChange((e.currentTarget as HTMLInputElement).value)}
+    oninput={(e) => onChange(sanitizePhoneInput((e.currentTarget as HTMLInputElement).value))}
     onblur={() => onBlur?.()}
   />
 
@@ -804,9 +806,10 @@
     <input
       class="text-input"
       type="tel"
+      inputmode="numeric"
       placeholder="Nomor Telepon"
       value={contactValue.phone}
-      oninput={(e) => updateContact('phone', (e.currentTarget as HTMLInputElement).value)}
+      oninput={(e) => updateContact('phone', sanitizePhoneInput((e.currentTarget as HTMLInputElement).value))}
     />
     <input
       class="text-input"
