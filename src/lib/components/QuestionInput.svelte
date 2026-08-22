@@ -8,6 +8,7 @@
   import RegionInput from './RegionInput.svelte'
   import SearchableDropdown from './SearchableDropdown.svelte'
   import { sanitizePhoneInput } from '$lib/phone.js'
+  import { applyNumberInput, numberInputText, numberInputCompare } from '$lib/numberInput.js'
 
   let {
     question,
@@ -25,7 +26,12 @@
 
   // Text helpers
   const strValue = $derived(typeof value === 'string' ? value : (value != null ? String(value) : ''))
-  const numValue = $derived(typeof value === 'number' ? value : null)
+  // `number` answers travel as the literal typed text so leading zeros survive
+  // (see numberInput.ts). Older drafts / outbox payloads still hold real numbers,
+  // so both shapes must render. numText is what the input shows; numCompare is
+  // the numeric view used only for the min/max blur correction.
+  const numText = $derived(numberInputText(value))
+  const numCompare = $derived(numberInputCompare(value))
   // Live number-range warning (below min / capped at max). Shown red + shakes on
   // each offending keystroke. shakeKey bumps to replay the shake animation.
   let numberWarn = $state<string | null>(null)
@@ -420,43 +426,31 @@
     inputmode="decimal"
     min={question.minValue}
     max={question.maxValue}
-    value={numValue !== null ? numValue : ''}
+    value={numText}
     oninput={(e) => {
-      let v = (e.currentTarget as HTMLInputElement).value
-      // Limit digit count (maxLength). type=number ignores native maxlength.
-      if (question.maxLength && v.length > question.maxLength) {
-        v = v.slice(0, question.maxLength)
-      }
-      let num = v === '' ? null : Number(v)
-      let warn: string | null = null
-      // Hard-cap at maxValue while typing (adding digits only increases). Warn so
-      // the cap isn't silent.
-      if (num !== null && question.maxValue != null && num > question.maxValue) {
-        num = question.maxValue
-        v = String(num)
-        warn = `Nilai maksimal ${question.maxValue}.`
-      } else if (num !== null && question.minValue != null && num < question.minValue) {
-        // Below min: do NOT clamp while typing (would block multi-digit entry like
-        // "15" when min is 10). Surface a live red, shaking warning instead; the
-        // value is corrected up to min on blur.
-        warn = `Nilai minimal ${question.minValue}.`
-      }
-      e.currentTarget.value = v
-      if (warn) {
-        numberWarn = warn
+      // Truncation, the maxValue hard cap and the minValue warning all live in
+      // applyNumberInput so they stay testable without a DOM.
+      const r = applyNumberInput((e.currentTarget as HTMLInputElement).value, {
+        maxLength: question.maxLength,
+        minValue: question.minValue,
+        maxValue: question.maxValue,
+      })
+      e.currentTarget.value = r.text
+      if (r.warn) {
+        numberWarn = r.warn
         shakeKey++
       } else {
         numberWarn = null
       }
-      onChange(num)
+      onChange(r.value)
     }}
     onblur={(e) => {
       // Clamp up to minValue on blur (clamping min while typing would block
       // entering any digit below it). The live warning above already informed the
       // respondent, so this correction is not silent.
-      if (numValue !== null && question.minValue != null && numValue < question.minValue) {
-        const clamped = question.minValue
-        ;(e.currentTarget as HTMLInputElement).value = String(clamped)
+      if (numCompare !== null && question.minValue != null && numCompare < question.minValue) {
+        const clamped = String(question.minValue)
+        ;(e.currentTarget as HTMLInputElement).value = clamped
         onChange(clamped)
       }
       numberWarn = null
