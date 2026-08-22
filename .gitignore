@@ -11,3 +11,6 @@ vite.config.ts.timestamp-*
 
 # Local-only preview screenshots from design reviews.
 /audit/
+
+# git worktrees (local only, never committed)
+.worktrees/

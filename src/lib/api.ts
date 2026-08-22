@@ -3,6 +3,7 @@ import { env as publicEnv } from '$env/dynamic/public'
 import type { Survey, Question } from './types.js'
 import type { Answers } from './types.js'
 import { buildMockSurvey } from './mockSurvey.js'
+import { submitErrorFromResponse } from './submitError.js'
 
 /**
  * Mock gate — PUBLIC_USE_MOCK is the single master switch. It's read at runtime
@@ -263,10 +264,11 @@ export async function submitSurveyAnswers(
       invitationToken: invitationToken ?? undefined,
     })
   })
-  if (res.status === 401) throw new Error('unauthorized')
-  if (res.status === 409) throw new Error('already_submitted')
-  if (res.status === 410) throw new Error('survey_closed')
-  if (!res.ok) throw new Error('submit_error')
+  // Status mapping lives in submitError.ts so the outbox drain and the
+  // respondent page classify the same failure the same way. A 400 / 422
+  // rejection arrives with a backend sentence attached as `serverMessage`.
+  const submitErr = await submitErrorFromResponse(res)
+  if (submitErr) throw submitErr
 }
 
 export async function saveDraft(

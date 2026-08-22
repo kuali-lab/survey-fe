@@ -3,6 +3,7 @@
   import type { ViewState, Answers } from '$lib/types.js'
   import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress, getInvitationStatus, getDeviceStatus } from '$lib/api.js'
   import { computeFingerprint } from '$lib/fingerprint.js'
+  import { serverMessageOf } from '$lib/submitError.js'
   import { getQuestionNumber } from '$lib/utils.js'
   import { page } from '$app/stores'
   import { goto } from '$app/navigation'
@@ -430,6 +431,8 @@
       viewState = 'closing'
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'submit_error'
+      // 400 / 422 arrive with a sentence the backend wrote for the respondent.
+      const serverMessage = serverMessageOf(err)
       if (msg === 'already_submitted') {
         submitError = 'Survei ini sudah pernah Anda isi sebelumnya.'
         viewState = 'question'
@@ -437,6 +440,13 @@
       } else if (msg === 'survey_closed') {
         viewState = 'closed'
         clearSavedState()
+      } else if (serverMessage) {
+        // Show it verbatim: the fix differs per case (correct an answer for
+        // a 422, reload the page for a 400), and 'silakan coba lagi' would
+        // send the respondent back into a submit that can never succeed.
+        // Stay on the question view so the answer can actually be corrected.
+        submitError = serverMessage
+        viewState = 'question'
       } else {
         submitError = 'Terjadi kesalahan saat mengirim jawaban. Silakan coba lagi.'
         viewState = 'question'
