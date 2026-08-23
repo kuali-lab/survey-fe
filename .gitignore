@@ -14,3 +14,6 @@ vite.config.ts.timestamp-*
 
 # git worktrees (local only, never committed)
 .worktrees/
+
+# keluaran graphify: dibangun ulang lokal, tidak pernah di-commit
+graphify-out/
