@@ -102,8 +102,15 @@
 
 <!-- Penanda yang SELALU terlihat, bukan cuma di layar pertama. Pengguna yang
      menggulir jauh ke dalam survei harus tetap tahu ia sedang melihat
-     pratinjau — kalau tidak, ia mengira sudah mengisi survei sungguhan. -->
-<div class="pita-pratinjau" role="status">
+     pratinjau — kalau tidak, ia mengira sudah mengisi survei sungguhan.
+
+     🔴 Pil MELAYANG di kanan atas, bukan pita selebar layar di puncak halaman
+     (dilaporkan user 26 Agustus 2026). `.logo-bar` survei berposisi `fixed`
+     pada `top: 24px`, jadi ia mengabaikan alur dokumen dan pita setinggi 31px
+     memotong tujuh piksel teratas logonya. Pil ini duduk sebaris dengan logo
+     di sisi seberang: nol tumpang tindih, dan halamannya tidak lagi perlu
+     mengurangi tinggi pita dari setiap panggung. -->
+<div class="pil-pratinjau" role="status">
   Pratinjau draf — jawaban tidak disimpan
 </div>
 
@@ -158,27 +165,46 @@
 </div>
 
 <style>
-  .pita-pratinjau {
-    position: sticky;
-    top: 0;
+  .pil-pratinjau {
+    position: fixed;
+    /* Sebaris dengan `.logo-bar` (fixed, top 24px) di sisi seberangnya. */
+    top: 24px;
+    right: 24px;
     z-index: 20;
-    text-align: center;
-    padding: 6px 12px;
-    font-size: 13px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 12px;
     font-weight: 600;
     background: var(--canvas-soft);
     color: var(--text-body);
-    border-bottom: 1px solid var(--canvas-soft);
+    border: 1px solid var(--canvas-soft);
+    /* Latar solid wajib: ia melayang di atas pertanyaan yang tergulir
+       lewat di bawahnya, dan pil tembus pandang berubah jadi teks bertumpuk. */
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
+    pointer-events: none;
+  }
+
+  /* Di panel sempit (pratinjau di dalam bingkai dashboard) pil selebar itu
+     memakan seperempat lebar. Teksnya dipendekkan lewat ukuran, bukan dibuang:
+     penanda yang hilang di layar sempit persis keadaan yang paling mudah
+     disalahpahami sebagai survei sungguhan. */
+  @media (max-width: 560px) {
+    .pil-pratinjau {
+      top: 12px;
+      right: 12px;
+      font-size: 11px;
+      padding: 4px 9px;
+    }
   }
 
   .isi {
-    /* Pitanya memakan tinggi; tanpa ini panggung setinggi 100dvh membuat
-       halaman punya penggulir sebesar tinggi pita di setiap pertanyaan. */
-    min-height: calc(100dvh - 30px);
+    /* Pil melayang, jadi ia tidak lagi memakan tinggi — panggung boleh
+       setinggi layar penuh. */
+    min-height: 100dvh;
   }
 
   .tengah {
-    min-height: calc(100dvh - 30px);
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
     align-items: center;
