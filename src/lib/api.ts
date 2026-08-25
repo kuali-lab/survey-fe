@@ -191,6 +191,36 @@ export async function fetchAsyncOptions(slug: string, questionId: string, q: str
   }
 }
 
+/**
+ * Ambil DRAF survei AI untuk dipratinjau, memakai token berumur pendek yang
+ * diterbitkan logika-be di balik auth dashboard.
+ *
+ * 🔴 Bentuk balasannya SAMA dengan `GET /s/:slug` — itulah alasan seluruh
+ * pratinjau bisa dirender komponen responden yang asli, tanpa perender kedua
+ * yang akan menyimpang.
+ *
+ * ⚠️ Nol cache, nol mode mock, dan nol fallback ke salinan lama. Draf berubah
+ * tiap kali pengguna mengoreksinya lewat percakapan; menampilkan salinan basi
+ * di sini berarti pengguna memeriksa pertanyaan yang sudah tidak ada, lalu
+ * menyimpan sesuatu yang lain.
+ *
+ * `preview_invalid` = token kedaluwarsa/palsu; `not_found` = drafnya tidak ada
+ * (atau bukan milik pemegang token — server sengaja tidak membedakannya).
+ */
+export async function fetchDrafPratinjau(
+  token: string,
+  fetchFn: typeof fetch = fetch,
+  baseUrl: string = PUBLIC_API_BASE_URL,
+): Promise<Survey> {
+  const res = await fetchFn(`${baseUrl}/ai-draft-preview?token=${encodeURIComponent(token)}`)
+  if (res.status === 401) throw new Error('preview_invalid')
+  if (res.status === 404) throw new Error('not_found')
+  if (!res.ok) throw new Error('server_error')
+  const data = await res.json()
+  return normalizeSurvey(data.survey as Record<string, unknown>)
+}
+
+
 export async function fetchSurvey(
   slug: string,
   fetchFn: typeof fetch = fetch,
