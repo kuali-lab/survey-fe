@@ -15,13 +15,19 @@
     value,
     onChange,
     onBlur,
-    slug = ''
+    slug = '',
+    // 🔴 Pratinjau: draf tidak punya slug, jadi unggahan akan menembak
+    // `/s//upload`. Itu permintaan keluar dari halaman yang seharusnya nol
+    // pengiriman — dimatikan di sini, dengan kalimat yang menjelaskan, bukan
+    // dibiarkan gagal sendiri sebagai "Tidak dapat mengunggah berkas".
+    pratinjau = false
   }: {
     question: Question
     value: AnswerValue
     onChange: (v: AnswerValue) => void
     onBlur?: () => void
     slug?: string
+    pratinjau?: boolean
   } = $props()
 
   // Text helpers
@@ -238,6 +244,11 @@
   const MAX_UPLOAD_BYTES = 10 * 1024 * 1024 // 10 MB — matches the UI hint
 
   async function processFile(file: File) {
+    if (pratinjau) {
+      uploadError = 'Unggah berkas tidak aktif di pratinjau.'
+      onChange(null)
+      return
+    }
     if (file.size > MAX_UPLOAD_BYTES) {
       uploadError = 'Ukuran berkas melebihi batas 10 MB.'
       onChange(null)

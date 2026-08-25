@@ -9,7 +9,9 @@
     validationError,
     onAnswer,
     onBlur,
-    slug = ''
+    slug = '',
+    // Diteruskan apa adanya ke QuestionInput — lihat alasannya di sana.
+    pratinjau = false
   }: {
     question: Question
     questionNumber: string
@@ -18,6 +20,7 @@
     onAnswer: (value: AnswerValue) => void
     onBlur?: () => void
     slug?: string
+    pratinjau?: boolean
   } = $props()
 </script>
 
@@ -55,6 +58,7 @@
             onChange={onAnswer}
             {onBlur}
             {slug}
+            {pratinjau}
           />
         </div>
       </div>
@@ -68,6 +72,7 @@
           value={answer}
           onChange={onAnswer}
           {slug}
+          {pratinjau}
         />
       </div>
     {/if}
@@ -78,6 +83,7 @@
         value={answer}
         onChange={onAnswer}
         {slug}
+        {pratinjau}
       />
     </div>
   {/if}
