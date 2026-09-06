@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Question, AnswerValue, ContactInfo } from '$lib/types.js'
+  import type { Question, AnswerValue, ContactInfo, Answers } from '$lib/types.js'
   import { PUBLIC_API_BASE_URL } from '$env/static/public'
   import { untrack } from 'svelte'
   import type { Action } from 'svelte/action'
@@ -8,20 +8,61 @@
   import RegionInput from './RegionInput.svelte'
   import SearchableDropdown from './SearchableDropdown.svelte'
   import { sanitizePhoneInput } from '$lib/phone.js'
+  import {
+    buildOptionFilter, hasOptionFilter, filterDisabledHint, filterEmptyMessage,
+  } from '$lib/optionFilter.js'
+  import { getRegionName, resolveRegionName } from '$lib/regionNames.js'
 
   let {
     question,
     value,
     onChange,
     onBlur,
-    slug = ''
+    slug = '',
+    answers = {},
+    questions = [],
   }: {
     question: Question
     value: AnswerValue
     onChange: (v: AnswerValue) => void
     onBlur?: () => void
     slug?: string
+    // Daftar Pilihan Bersaring: a filtered dropdown reads its source answers
+    // from the whole answer map. Only dropdowns with filterConfig use these.
+    answers?: Answers
+    questions?: Question[]
   } = $props()
+
+  // ── Filtered dropdown (contract §8) ─────────────────────────────────────────
+  const filterActive = $derived(question.type === 'dropdown' && hasOptionFilter(question))
+  // null while any source question is unanswered → dropdown disabled.
+  const optionFilter = $derived(filterActive ? buildOptionFilter(question, answers, questions) : null)
+  const filterHint = $derived(filterActive ? filterDisabledHint(question) : '')
+  // Selected source option LABELS (not values) for the empty-state wording.
+  const filterAttrLabels = $derived.by(() => {
+    if (!filterActive) return [] as string[]
+    return (question.filterConfig?.attrs ?? []).map((a) => {
+      const v = answers[a.sourceQuestionId]
+      return typeof v === 'string' ? v.trim() : ''
+    })
+  })
+  // Region name for the chosen code: RegionInput records what it lists/picks;
+  // a code restored from a draft may need one lookup.
+  const filterRegionCode = $derived(optionFilter?.regionCode ?? '')
+  let filterRegionName = $state('')
+  $effect(() => {
+    const code = filterRegionCode
+    if (!code) { filterRegionName = ''; return }
+    const known = getRegionName(code)
+    if (known) { filterRegionName = known; return }
+    filterRegionName = ''
+    void resolveRegionName(code).then((name) => {
+      if (code === filterRegionCode) filterRegionName = name
+    })
+  })
+  const filterEmptyText = $derived(
+    filterActive ? filterEmptyMessage(question, filterRegionName || filterRegionCode, filterAttrLabels) : '',
+  )
 
   // Text helpers
   const strValue = $derived(typeof value === 'string' ? value : (value != null ? String(value) : ''))
@@ -621,6 +662,10 @@
         hasAsyncOptions={question.hasAsyncOptions}
         questionId={question.id}
         slug={slug}
+        {filterActive}
+        filter={optionFilter}
+        {filterHint}
+        filterEmptyMessage={filterEmptyText}
       />
     {#if isOtherSelected}
       <input

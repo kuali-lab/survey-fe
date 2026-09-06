@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Question, AnswerValue } from '$lib/types.js'
+  import type { Question, AnswerValue, Answers } from '$lib/types.js'
   import QuestionInput from './QuestionInput.svelte'
 
   let {
@@ -9,7 +9,9 @@
     validationError,
     onAnswer,
     onBlur,
-    slug = ''
+    slug = '',
+    answers = {},
+    questions = [],
   }: {
     question: Question
     questionNumber: string
@@ -18,6 +20,10 @@
     onAnswer: (value: AnswerValue) => void
     onBlur?: () => void
     slug?: string
+    // Whole answer map + question list, needed by filtered dropdowns
+    // (Daftar Pilihan Bersaring) to read their source answers.
+    answers?: Answers
+    questions?: Question[]
   } = $props()
 </script>
 
@@ -55,7 +61,9 @@
             onChange={onAnswer}
             {onBlur}
             {slug}
-          />
+            {answers}
+            {questions}
+            />
         </div>
       </div>
     {:else}
@@ -68,7 +76,9 @@
           value={answer}
           onChange={onAnswer}
           {slug}
-        />
+          {answers}
+          {questions}
+          />
       </div>
     {/if}
   {:else}
@@ -78,7 +88,9 @@
         value={answer}
         onChange={onAnswer}
         {slug}
-      />
+        {answers}
+        {questions}
+        />
     </div>
   {/if}
 
