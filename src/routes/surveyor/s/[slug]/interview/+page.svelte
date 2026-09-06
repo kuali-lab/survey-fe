@@ -239,6 +239,8 @@
                   onAnswer={(val) => runner!.handleAnswer(q.id, val)}
                   onBlur={() => runner!.handleBlur(q.id)}
                   slug={data.slug}
+                  answers={runner.answers}
+                  questions={runner.questions}
                 />
               {/each}
             </div>

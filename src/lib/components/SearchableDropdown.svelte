@@ -3,8 +3,12 @@
   import { fade } from 'svelte/transition';
 
   import { fetchAsyncOptions } from '$lib/api';
+  import { optionFilterKey, type OptionFilter } from '$lib/optionFilter';
 
-  let { options = [], value = '', onChange, placeholder = '-- Pilih salah satu --', hasAsyncOptions = false, questionId = '', slug = '' } = $props<{
+  let {
+    options = [], value = '', onChange, placeholder = '-- Pilih salah satu --', hasAsyncOptions = false, questionId = '', slug = '',
+    filterActive = false, filter = null, filterHint = '', filterEmptyMessage = '',
+  } = $props<{
     options?: { label: string, isOther?: boolean }[];
     value: string;
     onChange: (val: string) => void;
@@ -12,7 +16,22 @@
     hasAsyncOptions?: boolean;
     questionId?: string;
     slug?: string;
+    // Daftar Pilihan Bersaring (contract §8). `filterActive` = the question
+    // carries a filterConfig; `filter` = the resolved params (null while any
+    // source question is unanswered → control disabled, `filterHint` shown);
+    // `filterEmptyMessage` replaces the generic empty state when the filtered
+    // first page comes back empty.
+    filterActive?: boolean;
+    filter?: OptionFilter | null;
+    filterHint?: string;
+    filterEmptyMessage?: string;
   }>();
+
+  // Disabled until every source answer is present. Only meaningful for async
+  // (catalog) dropdowns — a manual option list has nothing to filter.
+  let filterBlocked = $derived(filterActive && hasAsyncOptions && !filter);
+  // Stable identity so the fetch effect re-runs only when the params change.
+  let filterKey = $derived(optionFilterKey(filter));
 
   let isOpen = $state(false);
   let searchQuery = $state('');
@@ -56,17 +75,29 @@
 
   // True when the user typed a non-empty term below the minimum — we skip the
   // fetch and show a hint instead (empty term still loads the first page).
+  // A filtered request already narrows the scan (contract §3 lifts the server
+  // minimum too), so the guard applies only to unfiltered async searches.
   let searchTooShort = $derived(
-    debouncedSearch.length > 0 && debouncedSearch.length < MIN_SEARCH_CHARS
+    !filter && debouncedSearch.length > 0 && debouncedSearch.length < MIN_SEARCH_CHARS
   );
 
-  // First page: (re)load whenever the (debounced) search or question identity
-  // changes. Accumulates further pages via loadMoreAsync() on scroll.
+  // First page: (re)load whenever the (debounced) search, question identity or
+  // filter params change. Accumulates further pages via loadMoreAsync() on
+  // scroll. A stale response (filter changed mid-flight) is discarded.
   $effect(() => {
     if (!hasAsyncOptions || !slug || !questionId) return;
     const q = debouncedSearch;
+    const key = filterKey;
+    const f = filter;
+    if (filterBlocked) {
+      asyncOptions = [];
+      asyncHasMore = false;
+      asyncOffset = 0;
+      isFetching = false;
+      return;
+    }
     // Mirror the BE guard: keep too-short searches off the wire entirely.
-    if (q.length > 0 && q.length < MIN_SEARCH_CHARS) {
+    if (!f && q.length > 0 && q.length < MIN_SEARCH_CHARS) {
       asyncOptions = [];
       asyncHasMore = false;
       asyncOffset = 0;
@@ -75,7 +106,8 @@
     }
     asyncOffset = 0;
     isFetching = true;
-    fetchAsyncOptions(slug, questionId, q, ASYNC_LIMIT, 0).then(opts => {
+    fetchAsyncOptions(slug, questionId, q, ASYNC_LIMIT, 0, f).then(opts => {
+      if (key !== filterKey || q !== debouncedSearch) return;
       asyncOptions = opts;
       asyncHasMore = opts.length === ASYNC_LIMIT;
       isFetching = false;
@@ -86,7 +118,7 @@
     if (!hasAsyncOptions || isFetching || !asyncHasMore) return;
     isFetching = true;
     const next = asyncOffset + ASYNC_LIMIT;
-    const opts = await fetchAsyncOptions(slug, questionId, debouncedSearch, ASYNC_LIMIT, next);
+    const opts = await fetchAsyncOptions(slug, questionId, debouncedSearch, ASYNC_LIMIT, next, filter);
     asyncOffset = next;
     asyncOptions = [...asyncOptions, ...opts];
     asyncHasMore = opts.length === ASYNC_LIMIT;
@@ -127,6 +159,7 @@
   }
 
   async function toggleOpen() {
+    if (filterBlocked) return;
     isOpen = !isOpen;
     if (isOpen) {
       searchQuery = '';
@@ -153,9 +186,12 @@
 <svelte:window onclick={handleWindowClick} />
 
 <div class="dropdown-wrapper" onkeydown={handleKeydown}>
-  <button 
-    type="button" 
-    class="dropdown-trigger" 
+  <button
+    type="button"
+    class="dropdown-trigger"
+    class:disabled={filterBlocked}
+    disabled={filterBlocked}
+    aria-disabled={filterBlocked}
     onclick={toggleOpen}
   >
     <span class="truncate">{value || placeholder}</span>
@@ -178,6 +214,10 @@
 
       {#if searchTooShort}
         <div class="empty-state">Ketik minimal {MIN_SEARCH_CHARS} huruf untuk mencari.</div>
+      {:else if filteredOptions.length === 0 && isFetching}
+        <div class="empty-state">Memuat...</div>
+      {:else if filteredOptions.length === 0 && filter && filterEmptyMessage && debouncedSearch === ''}
+        <div class="empty-state filter-empty">{filterEmptyMessage}</div>
       {:else if filteredOptions.length === 0}
         <div class="empty-state">Tidak ada pilihan yang cocok.</div>
       {:else}
@@ -209,6 +249,10 @@
         {/if}
       </div>
     </div>
+  {/if}
+
+  {#if filterBlocked && filterHint}
+    <p class="filter-hint">{filterHint}</p>
   {/if}
 </div>
 
@@ -242,6 +286,26 @@
     transition: background-color 0.15s, border-color 0.15s;
   }
   .dropdown-trigger svg { color: var(--text-body); flex-shrink: 0; }
+  /* Mirrors RegionInput's disabled trigger: waiting on the source questions. */
+  .dropdown-trigger.disabled,
+  .dropdown-trigger:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  .dropdown-trigger:disabled:hover {
+    background: var(--canvas-soft);
+    border-color: var(--hairline);
+  }
+  .filter-hint {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .empty-state.filter-empty {
+    color: var(--text-body);
+    line-height: 1.5;
+    white-space: normal;
+  }
   .dropdown-trigger:focus, .dropdown-trigger:hover {
     outline: none;
     background: var(--canvas);

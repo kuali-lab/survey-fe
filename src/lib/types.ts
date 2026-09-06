@@ -28,6 +28,28 @@ export interface MatrixCol {
   sortOrder: number
 }
 
+/**
+ * Catalog-backed dropdown whose options are narrowed by the answers of earlier
+ * questions ("Daftar Pilihan Bersaring"). `region` points at a Wilayah question
+ * (its BPS code answer becomes `regionCode=`); each `attrs[]` entry points at a
+ * single_choice/dropdown question whose selected option `value` (or label)
+ * becomes `attr[<key>]=`. Present in the public payload only when the
+ * question has filter rows.
+ */
+export interface FilterSource {
+  sourceQuestionId: string
+}
+
+export interface FilterAttr {
+  key: string
+  sourceQuestionId: string
+}
+
+export interface FilterConfig {
+  region?: FilterSource
+  attrs?: FilterAttr[]
+}
+
 export interface Question {
   id: string
   type: QuestionType
@@ -62,6 +84,7 @@ export interface Question {
 
   // Relational config
   hasAsyncOptions?: boolean
+  filterConfig?: FilterConfig
   options?: QuestionOption[]
   // Flat array of image URLs for image_choice options, parallel to options[].
   // Derived from options[].imageUrl when normalized from the API response.

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { PageData } from './$types.js'
   import type { ViewState, Answers } from '$lib/types.js'
-  import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress, getInvitationStatus, getDeviceStatus } from '$lib/api.js'
+  import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress, getInvitationStatus, getDeviceStatus, OptionOutOfFilterError } from '$lib/api.js'
   import { computeFingerprint } from '$lib/fingerprint.js'
   import { getQuestionNumber } from '$lib/utils.js'
   import { page } from '$app/stores'
@@ -68,6 +68,15 @@
     // Never auto-submit — the respondent must press "Kirim Jawaban" so they can
     // review their answers first (covers the last page and skip-to-END rules).
     autoSubmit: false,
+    // A filtered dropdown was wiped because its source answer changed: push the
+    // trimmed answer map to the server draft now (it is otherwise only written
+    // on page change), so a resume never brings the stale pick back. The local
+    // draft follows runner.answers reactively (see saveCurrentState effect).
+    onDependentsCleared: () => {
+      if (fingerprintHash && slug && viewState === 'question') {
+        saveDraft(slug, draftSessionKey(fingerprintHash), runner.answers, runner.currentIndex).catch(() => {})
+      }
+    },
   })
 
   // Persisted respondent state, keyed per survey slug. Selfie/location are
@@ -430,7 +439,22 @@
       viewState = 'closing'
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'submit_error'
-      if (msg === 'already_submitted') {
+      if (err instanceof OptionOutOfFilterError) {
+        // A filtered dropdown answer no longer matches its source answers:
+        // return to the form, jump to the offending question and show the
+        // server's message inline (works in scroll mode too — jumpTo lands on
+        // the single page and the `.error` scroll below finds the card).
+        viewState = 'question'
+        submitError = err.detail
+        await tick()
+        if (err.questionId) {
+          runner.jumpTo(err.questionId)
+          runner.questionErrors = { [err.questionId]: err.detail }
+          setTimeout(() => {
+            document.querySelector('.error')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }, 300)
+        }
+      } else if (msg === 'already_submitted') {
         submitError = 'Survei ini sudah pernah Anda isi sebelumnya.'
         viewState = 'question'
         clearSavedState()
@@ -702,6 +726,8 @@
                     onAnswer={(val) => runner.handleAnswer(q.id, val)}
                     onBlur={() => runner.handleBlur(q.id)}
                     {slug}
+                    answers={runner.answers}
+                    questions={runner.questions}
                   />
                 {/each}
               </div>
@@ -727,6 +753,8 @@
                     onAnswer={(val) => runner.handleAnswer(q.id, val)}
                     onBlur={() => runner.handleBlur(q.id)}
                     {slug}
+                    answers={runner.answers}
+                    questions={runner.questions}
                   />
                 {/each}
               </div>
