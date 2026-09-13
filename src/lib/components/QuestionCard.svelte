@@ -12,6 +12,8 @@
     slug = '',
     answers = {},
     questions = [],
+    // Diteruskan apa adanya ke QuestionInput — lihat alasannya di sana.
+    pratinjau = false
   }: {
     question: Question
     questionNumber: string
@@ -24,6 +26,7 @@
     // (Daftar Pilihan Bersaring) to read their source answers.
     answers?: Answers
     questions?: Question[]
+    pratinjau?: boolean
   } = $props()
 </script>
 
@@ -63,7 +66,8 @@
             {slug}
             {answers}
             {questions}
-            />
+            {pratinjau}
+          />
         </div>
       </div>
     {:else}
@@ -78,7 +82,8 @@
           {slug}
           {answers}
           {questions}
-          />
+          {pratinjau}
+        />
       </div>
     {/if}
   {:else}
@@ -90,7 +95,8 @@
         {slug}
         {answers}
         {questions}
-        />
+        {pratinjau}
+      />
     </div>
   {/if}
 

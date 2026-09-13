@@ -4,20 +4,11 @@ import type { Survey, Question } from './types.js'
 import type { Answers } from './types.js'
 import type { OptionFilter } from './optionFilter.js'
 import { buildMockSurvey } from './mockSurvey.js'
-
-/**
- * Submit rejected with 422 `OPTION_OUT_OF_FILTER`: a filtered dropdown answer
- * no longer matches its source answers (contract §6). `questionId` is the
- * offending catalog question so the page can jump to it; `detail` is the
- * server's human-readable message.
- */
-export class OptionOutOfFilterError extends Error {
-  readonly code = 'OPTION_OUT_OF_FILTER'
-  constructor(readonly questionId: string, readonly detail: string) {
-    super('option_out_of_filter')
-    this.name = 'OptionOutOfFilterError'
-  }
-}
+import { submitErrorFromResponse, OptionOutOfFilterError } from './submitError.js'
+// Re-export: klasifikasi kegagalan submit hidup di `submitError.ts` (satu
+// tempat untuk outbox dan halaman responden), tapi pemakainya mengimpor dari
+// sini sejak awal. Memindah kelasnya tanpa re-export akan memutus mereka.
+export { OptionOutOfFilterError }
 
 /**
  * Mock gate — PUBLIC_USE_MOCK is the single master switch. It's read at runtime
@@ -227,6 +218,36 @@ export async function fetchAsyncOptions(
   }
 }
 
+/**
+ * Ambil DRAF survei AI untuk dipratinjau, memakai token berumur pendek yang
+ * diterbitkan logika-be di balik auth dashboard.
+ *
+ * 🔴 Bentuk balasannya SAMA dengan `GET /s/:slug` — itulah alasan seluruh
+ * pratinjau bisa dirender komponen responden yang asli, tanpa perender kedua
+ * yang akan menyimpang.
+ *
+ * ⚠️ Nol cache, nol mode mock, dan nol fallback ke salinan lama. Draf berubah
+ * tiap kali pengguna mengoreksinya lewat percakapan; menampilkan salinan basi
+ * di sini berarti pengguna memeriksa pertanyaan yang sudah tidak ada, lalu
+ * menyimpan sesuatu yang lain.
+ *
+ * `preview_invalid` = token kedaluwarsa/palsu; `not_found` = drafnya tidak ada
+ * (atau bukan milik pemegang token — server sengaja tidak membedakannya).
+ */
+export async function fetchDrafPratinjau(
+  token: string,
+  fetchFn: typeof fetch = fetch,
+  baseUrl: string = PUBLIC_API_BASE_URL,
+): Promise<Survey> {
+  const res = await fetchFn(`${baseUrl}/ai-draft-preview?token=${encodeURIComponent(token)}`)
+  if (res.status === 401) throw new Error('preview_invalid')
+  if (res.status === 404) throw new Error('not_found')
+  if (!res.ok) throw new Error('server_error')
+  const data = await res.json()
+  return normalizeSurvey(data.survey as Record<string, unknown>)
+}
+
+
 export async function fetchSurvey(
   slug: string,
   fetchFn: typeof fetch = fetch,
@@ -300,22 +321,11 @@ export async function submitSurveyAnswers(
       invitationToken: invitationToken ?? undefined,
     })
   })
-  if (res.status === 401) throw new Error('unauthorized')
-  if (res.status === 409) throw new Error('already_submitted')
-  if (res.status === 410) throw new Error('survey_closed')
-  if (res.status === 422) {
-    // Body: { error: { code, message, status }, questionId } — see contract §6.
-    let body: Record<string, unknown> | null = null
-    try { body = await res.json() } catch { /* fall through to generic */ }
-    const errObj = body?.error as Record<string, unknown> | undefined
-    if (errObj?.code === 'OPTION_OUT_OF_FILTER') {
-      throw new OptionOutOfFilterError(
-        String(body?.questionId ?? ''),
-        String(errObj.message ?? 'Pilihan tidak sesuai dengan jawaban sebelumnya.'),
-      )
-    }
-  }
-  if (!res.ok) throw new Error('submit_error')
+  // Status mapping lives in submitError.ts so the outbox drain and the
+  // respondent page classify the same failure the same way. A 400 / 422
+  // rejection arrives with a backend sentence attached as `serverMessage`.
+  const submitErr = await submitErrorFromResponse(res)
+  if (submitErr) throw submitErr
 }
 
 export async function saveDraft(
