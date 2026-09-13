@@ -74,6 +74,8 @@
                 onAnswer={(val) => runner.handleAnswer(q.id, val)}
                 onBlur={() => runner.handleBlur(q.id)}
                 {slug}
+                answers={runner.answers}
+                questions={runner.questions}
                 {pratinjau}
               />
             {/each}
@@ -100,6 +102,8 @@
                 onAnswer={(val) => runner.handleAnswer(q.id, val)}
                 onBlur={() => runner.handleBlur(q.id)}
                 {slug}
+                answers={runner.answers}
+                questions={runner.questions}
                 {pratinjau}
               />
             {/each}

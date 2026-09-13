@@ -2,8 +2,13 @@ import { PUBLIC_API_BASE_URL } from '$env/static/public'
 import { env as publicEnv } from '$env/dynamic/public'
 import type { Survey, Question } from './types.js'
 import type { Answers } from './types.js'
+import type { OptionFilter } from './optionFilter.js'
 import { buildMockSurvey } from './mockSurvey.js'
-import { submitErrorFromResponse } from './submitError.js'
+import { submitErrorFromResponse, OptionOutOfFilterError } from './submitError.js'
+// Re-export: klasifikasi kegagalan submit hidup di `submitError.ts` (satu
+// tempat untuk outbox dan halaman responden), tapi pemakainya mengimpor dari
+// sini sejak awal. Memindah kelasnya tanpa re-export akan memutus mereka.
+export { OptionOutOfFilterError }
 
 /**
  * Mock gate — PUBLIC_USE_MOCK is the single master switch. It's read at runtime
@@ -171,12 +176,34 @@ export async function fetchRegions(parent?: string, q?: string, limit = 50): Pro
   }
 }
 
-export async function fetchAsyncOptions(slug: string, questionId: string, q: string, limit = 50, offset = 0): Promise<{ label: string, isOther?: boolean }[]> {
+/**
+ * Query string for the public options endpoint. Exported for tests. The
+ * optional filter (contract §3) is sent as `regionCode=<BPS code>` and
+ * `attr[<key>]=<value>`; the backend ignores either when the question has no
+ * matching filter row, so sending them is always safe.
+ */
+export function buildAsyncOptionParams(q: string, limit: number, offset: number, filter?: OptionFilter | null): URLSearchParams {
+  const params = new URLSearchParams()
+  if (q) params.set('q', q)
+  params.set('limit', String(limit))
+  if (offset > 0) params.set('offset', String(offset))
+  if (filter?.regionCode) params.set('regionCode', filter.regionCode)
+  for (const [key, value] of Object.entries(filter?.attrs ?? {})) {
+    if (key && value) params.set(`attr[${key}]`, value)
+  }
+  return params
+}
+
+export async function fetchAsyncOptions(
+  slug: string,
+  questionId: string,
+  q: string,
+  limit = 50,
+  offset = 0,
+  filter?: OptionFilter | null,
+): Promise<{ label: string, isOther?: boolean }[]> {
   try {
-    const params = new URLSearchParams()
-    if (q) params.set('q', q)
-    params.set('limit', String(limit))
-    if (offset > 0) params.set('offset', String(offset))
+    const params = buildAsyncOptionParams(q, limit, offset, filter)
     const res = await fetch(`${PUBLIC_API_BASE_URL}/s/${slug}/questions/${questionId}/options?${params.toString()}`)
     if (!res.ok) return []
     const data = await res.json()

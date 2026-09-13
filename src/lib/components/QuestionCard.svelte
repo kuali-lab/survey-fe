@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Question, AnswerValue } from '$lib/types.js'
+  import type { Question, AnswerValue, Answers } from '$lib/types.js'
   import QuestionInput from './QuestionInput.svelte'
 
   let {
@@ -10,6 +10,8 @@
     onAnswer,
     onBlur,
     slug = '',
+    answers = {},
+    questions = [],
     // Diteruskan apa adanya ke QuestionInput — lihat alasannya di sana.
     pratinjau = false
   }: {
@@ -20,6 +22,10 @@
     onAnswer: (value: AnswerValue) => void
     onBlur?: () => void
     slug?: string
+    // Whole answer map + question list, needed by filtered dropdowns
+    // (Daftar Pilihan Bersaring) to read their source answers.
+    answers?: Answers
+    questions?: Question[]
     pratinjau?: boolean
   } = $props()
 </script>
@@ -58,6 +64,8 @@
             onChange={onAnswer}
             {onBlur}
             {slug}
+            {answers}
+            {questions}
             {pratinjau}
           />
         </div>
@@ -72,6 +80,8 @@
           value={answer}
           onChange={onAnswer}
           {slug}
+          {answers}
+          {questions}
           {pratinjau}
         />
       </div>
@@ -83,6 +93,8 @@
         value={answer}
         onChange={onAnswer}
         {slug}
+        {answers}
+        {questions}
         {pratinjau}
       />
     </div>

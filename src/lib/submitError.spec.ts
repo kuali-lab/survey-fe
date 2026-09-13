@@ -5,6 +5,7 @@ import {
   submitErrorFromResponse,
   serverMessageOf,
   isPermanentSubmitFailure,
+  OptionOutOfFilterError,
 } from './submitError.js'
 
 /**
@@ -142,6 +143,57 @@ describe.each([400, 422])('submitErrorFromResponse — %i with an unusable body'
   })
 })
 
+/**
+ * Two features meet at 422, and a Response body can only be read once:
+ * a filtered-dropdown rejection needs `error.code` + top-level `questionId`,
+ * an answer-validation rejection needs `error.message`. Before they were
+ * merged each read the body itself, so whichever ran second saw an
+ * already-consumed stream — a failure that only appears when both features are
+ * live, which is precisely when nobody is looking for it.
+ */
+describe('submitErrorFromResponse — 422 OPTION_OUT_OF_FILTER', () => {
+  it('returns an error carrying the offending questionId', async () => {
+    const res = fakeResponse(422, {
+      error: { code: 'OPTION_OUT_OF_FILTER', message: 'Kecamatan tidak ada di kabupaten itu.', status: 422 },
+      questionId: 'q-wilayah',
+    })
+    const err = await submitErrorFromResponse(res)
+    expect(err).toBeInstanceOf(OptionOutOfFilterError)
+    const ooff = err as OptionOutOfFilterError
+    expect(ooff.questionId).toBe('q-wilayah')
+    expect(ooff.detail).toBe('Kecamatan tidak ada di kabupaten itu.')
+    // The coded message stays stable — existing consumers match on err.message.
+    expect(ooff.message).toBe('option_out_of_filter')
+  })
+
+  it('reads the body exactly once', async () => {
+    const res = fakeResponse(422, {
+      error: { code: 'OPTION_OUT_OF_FILTER', message: 'x', status: 422 },
+      questionId: 'q1',
+    })
+    await submitErrorFromResponse(res)
+    expect(res.json).toHaveBeenCalledTimes(1)
+  })
+
+  it('still resolves when questionId is absent', async () => {
+    const err = (await submitErrorFromResponse(
+      fakeResponse(422, { error: { code: 'OPTION_OUT_OF_FILTER', status: 422 } }),
+    )) as OptionOutOfFilterError
+    expect(err).toBeInstanceOf(OptionOutOfFilterError)
+    expect(err.questionId).toBe('')
+    // A fallback sentence, so the respondent never faces an empty explanation.
+    expect(err.detail.length).toBeGreaterThan(0)
+  })
+
+  it('does not swallow the plain answer-validation rejection', async () => {
+    const err = await submitErrorFromResponse(
+      fakeResponse(422, { error: { code: 'ANSWER_VALIDATION_ERROR', message: 'nama tidak valid', status: 422 } }),
+    )
+    expect(err).not.toBeInstanceOf(OptionOutOfFilterError)
+    expect(err?.message).toBe(ANSWER_VALIDATION_ERROR)
+  })
+})
+
 describe('serverMessageOf', () => {
   it('returns null for a plain coded Error', () => {
     expect(serverMessageOf(new Error('submit_error'))).toBeNull()
@@ -171,6 +223,12 @@ describe('isPermanentSubmitFailure', () => {
 
   it('keeps survey_closed permanent', () => {
     expect(isPermanentSubmitFailure('survey_closed')).toBe(true)
+  })
+
+  it('treats a filtered-dropdown rejection as permanent', () => {
+    // The stale pick travels inside the payload, so re-sending it identical is
+    // rejected identically — the outbox must stop instead of spinning.
+    expect(isPermanentSubmitFailure('option_out_of_filter')).toBe(true)
   })
 
   it('keeps submit_error retryable', () => {

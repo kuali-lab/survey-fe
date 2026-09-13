@@ -22,6 +22,24 @@
 
 export const ANSWER_VALIDATION_ERROR = 'answer_validation_error'
 export const BAD_REQUEST_ERROR = 'bad_request_error'
+export const OPTION_OUT_OF_FILTER = 'OPTION_OUT_OF_FILTER'
+
+/**
+ * A filtered dropdown (Daftar Pilihan Bersaring) answer no longer matches the
+ * source answers it was filtered by. `questionId` names the offending catalog
+ * question so the page can jump to it; `detail` is the server's sentence.
+ *
+ * 🔴 Lives here, not in api.ts, because `api.ts` imports this module — the
+ * reverse direction would be a cycle. `api.ts` re-exports it, so every existing
+ * `import { OptionOutOfFilterError } from '$lib/api.js'` keeps working.
+ */
+export class OptionOutOfFilterError extends Error {
+  readonly code = OPTION_OUT_OF_FILTER
+  constructor(readonly questionId: string, readonly detail: string) {
+    super('option_out_of_filter')
+    this.name = 'OptionOutOfFilterError'
+  }
+}
 
 /** An Error carrying a backend sentence meant for the respondent's eyes. */
 export type SubmitError = Error & { serverMessage?: string }
@@ -38,6 +56,10 @@ const PERMANENT_CODES = new Set([
   'survey_closed',
   ANSWER_VALIDATION_ERROR,
   BAD_REQUEST_ERROR,
+  // Re-sending the identical payload is rejected identically: the stale pick is
+  // part of the payload. Without this the outbox drain would spin on it forever
+  // — exactly what this set exists to prevent.
+  'option_out_of_filter',
 ])
 
 /** The slice of fetch's Response this module needs — keeps it unit-testable. */
@@ -47,28 +69,56 @@ type JsonResponse = {
   json: () => Promise<unknown>
 }
 
+/** What a single read of the error envelope yields. */
+type ErrorEnvelope = {
+  code: string | null
+  message: string | null
+  questionId: string | null
+}
+
 /**
- * Pull `error.message` out of the documented envelope:
- *   {"error":{"code":"…","message":"…","status":422}}
- * Returns null for anything unexpected. A proxy or gateway can answer with
- * HTML, an empty body, or a differently shaped JSON, so every step is guarded
- * and the json() rejection is swallowed — the caller must never see a second
- * error raised while trying to explain the first one.
+ * Read the documented envelope ONCE:
+ *   {"error":{"code":"…","message":"…","status":422}, "questionId":"…"}
+ *
+ * 🔴 One read, not two. A Response body can only be consumed once, and 422
+ * now carries two different outcomes — a filtered-dropdown rejection that
+ * needs `code` + `questionId`, and an answer-validation rejection that needs
+ * `message`. Reading per-outcome would mean the second read always sees an
+ * already-consumed stream.
+ *
+ * Everything is guarded and the json() rejection is swallowed: a proxy or
+ * gateway can answer with HTML, an empty body, or differently shaped JSON, and
+ * the caller must never see a second error raised while explaining the first.
  */
-async function readServerMessage(res: JsonResponse): Promise<string | null> {
+async function readErrorEnvelope(res: JsonResponse): Promise<ErrorEnvelope> {
   let body: unknown
   try {
     body = await res.json()
   } catch {
-    return null
+    return { code: null, message: null, questionId: null }
   }
-  if (typeof body !== 'object' || body === null) return null
+  if (typeof body !== 'object' || body === null) {
+    return { code: null, message: null, questionId: null }
+  }
   const error = (body as { error?: unknown }).error
-  if (typeof error !== 'object' || error === null) return null
-  const message = (error as { message?: unknown }).message
-  if (typeof message !== 'string') return null
-  const trimmed = message.trim()
-  return trimmed.length > 0 ? trimmed : null
+  const errObj = typeof error === 'object' && error !== null
+    ? (error as { code?: unknown; message?: unknown })
+    : null
+
+  const rawMessage = errObj?.message
+  const message = typeof rawMessage === 'string' && rawMessage.trim().length > 0
+    ? rawMessage.trim()
+    : null
+
+  const rawCode = errObj?.code
+  const code = typeof rawCode === 'string' && rawCode.length > 0 ? rawCode : null
+
+  // `questionId` sits at the TOP level of the envelope, next to `error` — not
+  // inside it. Contract §6.
+  const rawQid = (body as { questionId?: unknown }).questionId
+  const questionId = typeof rawQid === 'string' && rawQid.length > 0 ? rawQid : null
+
+  return { code, message, questionId }
 }
 
 /**
@@ -83,11 +133,21 @@ export async function submitErrorFromResponse(res: JsonResponse): Promise<Error 
 
   const code = MESSAGE_BEARING_CODES[res.status]
   if (code) {
-    const serverMessage = await readServerMessage(res)
+    const envelope = await readErrorEnvelope(res)
+
+    // A filtered-dropdown rejection is its own outcome: the page returns to the
+    // form and jumps to the named question, so it needs the id, not a sentence.
+    if (envelope.code === OPTION_OUT_OF_FILTER) {
+      return new OptionOutOfFilterError(
+        envelope.questionId ?? '',
+        envelope.message ?? 'Pilihan tidak sesuai dengan jawaban sebelumnya.',
+      )
+    }
+
     // No usable sentence — degrade to exactly what this status did before.
-    if (!serverMessage) return new Error('submit_error')
+    if (!envelope.message) return new Error('submit_error')
     const err: SubmitError = new Error(code)
-    err.serverMessage = serverMessage
+    err.serverMessage = envelope.message
     return err
   }
 
