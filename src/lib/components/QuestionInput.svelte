@@ -11,6 +11,9 @@
   import {
     buildOptionFilter, hasOptionFilter, filterDisabledHint, filterEmptyMessage,
   } from '$lib/optionFilter.js'
+  import {
+    visibleOptions, dependencyDisabledHint, dependencyEmptyMessage, dependencyParentLabel,
+  } from '$lib/optionDependency.js'
   import { getRegionName, resolveRegionName } from '$lib/regionNames.js'
   import { applyNumberInput, numberInputText, numberInputCompare } from '$lib/numberInput.js'
 
@@ -154,8 +157,22 @@
   const selectLimit = $derived(question.maxSelections && question.maxSelections > 0 ? question.maxSelections : 0)
   const atSelectLimit = $derived(selectLimit > 0 && arrValue.length >= selectLimit)
 
-  // Options for choice types — already a typed array from the normalized schema
-  const options = $derived(question.options ?? [])
+  // Options for choice types — already a typed array from the normalized schema.
+  // Pilihan Bertingkat (single_choice / manual dropdown with `dependsOn`): the
+  // list is narrowed to the options allowed under the parent answer. While the
+  // parent is unanswered the full list is shown greyed out and disabled.
+  const allOptions = $derived(question.options ?? [])
+  const dependency = $derived(visibleOptions(question, answers, questions))
+  const dependencyWaiting = $derived(dependency.status === 'waiting')
+  const dependencyHint = $derived(dependencyWaiting ? dependencyDisabledHint(question, questions) : '')
+  const dependencyEmptyText = $derived(
+    dependency.status === 'empty'
+      ? dependencyEmptyMessage(question, dependencyParentLabel(question, answers), questions)
+      : '',
+  )
+  const options = $derived(
+    dependency.status === 'inactive' || dependencyWaiting ? allOptions : dependency.options,
+  )
 
   // Rating
   const ratingScale = $derived(question.maxStars ?? 5)
@@ -216,12 +233,14 @@
   // ── is_other ("Lainnya") state ──
   const otherOption = $derived(options.find(o => o.isOther))
 
-  // For single_choice: selected = strValue matches the isOther label OR user typed its own text
+  // For single_choice: selected = strValue matches the isOther label OR user typed its own text.
+  // Compared against the FULL option list so a narrowed (Pilihan Bertingkat)
+  // list never mistakes a standard label for "Lainnya" free text.
   const isOtherSelected = $derived(
     otherOption ? (
       question.type === 'single_choice' || question.type === 'dropdown'
-        ? strValue !== '' && !options.filter(o => !o.isOther).some(o => o.label === strValue)
-        : arrValue.some(v => !options.filter(o => !o.isOther).some(o => o.label === v) && v !== '')
+        ? strValue !== '' && !allOptions.filter(o => !o.isOther).some(o => o.label === strValue)
+        : arrValue.some(v => !allOptions.filter(o => !o.isOther).some(o => o.label === v) && v !== '')
     ) : false
   )
 
@@ -563,11 +582,12 @@
   {/if}
 
 {:else if question.type === 'single_choice'}
-  <div class="options-list">
+  <div class="options-list" class:dependency-waiting={dependencyWaiting} aria-disabled={dependencyWaiting}>
     {#each options.filter(o => !o.isOther) as opt, i}
       <button
         class="option-card {strValue === opt.label ? 'selected' : ''}"
         type="button"
+        disabled={dependencyWaiting}
         onclick={() => onChange(opt.label)}
       >
         <span class="radio-indicator {strValue === opt.label ? 'selected' : ''}"></span>
@@ -579,6 +599,7 @@
       <button
         class="option-card {isOtherSelected ? 'selected' : ''}"
         type="button"
+        disabled={dependencyWaiting}
         onclick={selectOtherSingle}
       >
         <span class="radio-indicator {isOtherSelected ? 'selected' : ''}"></span>
@@ -595,6 +616,11 @@
       {/if}
     {/if}
   </div>
+  {#if dependencyHint}
+    <p class="dependency-note">{dependencyHint}</p>
+  {:else if dependencyEmptyText}
+    <p class="dependency-note dependency-empty">{dependencyEmptyText}</p>
+  {/if}
 
 {:else if question.type === 'checkbox'}
   <div class="options-list">
@@ -669,8 +695,10 @@
         slug={slug}
         {filterActive}
         filter={optionFilter}
-        {filterHint}
-        filterEmptyMessage={filterEmptyText}
+        filterHint={dependencyHint || filterHint}
+        filterEmptyMessage={dependencyEmptyText || filterEmptyText}
+        disabled={dependencyWaiting}
+        notice={dependencyEmptyText}
       />
     {#if isOtherSelected}
       <input
@@ -1589,6 +1617,23 @@
     margin-left: 32px;
     width: calc(100% - 32px);
     height: 44px;
+  }
+
+  /* ── Pilihan Bertingkat: waiting on the parent / nothing allowed ── */
+  .options-list.dependency-waiting .option-card,
+  .options-list.dependency-waiting .option-card:hover {
+    opacity: 0.55;
+    cursor: not-allowed;
+    border-color: var(--canvas-soft);
+  }
+  .dependency-note {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .dependency-note.dependency-empty {
+    color: var(--text-body);
+    line-height: 1.5;
   }
 
   /* ── File Upload ── */

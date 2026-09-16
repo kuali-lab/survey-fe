@@ -143,9 +143,13 @@
 
   function resumeSurvey() {
     if (!resumePrompt) return
-    runner.loadFrom(resumePrompt)
+    const saved = resumePrompt
     resumePrompt = null
+    // Enter the question stage BEFORE loadFrom: a draft whose dependent answers
+    // are no longer valid gets pruned there, and onDependentsCleared only
+    // pushes the trimmed map to the server draft while on the question stage.
     viewState = 'question'
+    runner.loadFrom(saved)
   }
 
   function discardSavedState() {
