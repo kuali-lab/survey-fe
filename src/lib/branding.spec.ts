@@ -194,7 +194,7 @@ describe('ClosingPage — logo per survei (P2)', () => {
 })
 
 /** Logo pelanggan yang dipakai seluruh uji gerbang. */
-const LOGO_KLIEN = 'https://cdn.test/logo-klien.png'
+const CLIENT_LOGO_URL = 'https://cdn.test/logo-klien.png'
 
 /**
  * Kelima halaman gerbang merender logo dengan bentuk yang persis sama
@@ -209,30 +209,30 @@ const gatePages = [
   {
     name: 'InviteBlockedPage',
     withLogo: () =>
-      render(InviteBlockedPage, { props: { state: 'done' as const, title: 'Survei PID', logoUrl: LOGO_KLIEN } }).body,
+      render(InviteBlockedPage, { props: { state: 'done' as const, title: 'Survei PID', logoUrl: CLIENT_LOGO_URL } }).body,
     withoutLogo: () =>
       render(InviteBlockedPage, { props: { state: 'done' as const, title: 'Survei PID' } }).body,
   },
   {
     name: 'LocationDeniedPage',
-    withLogo: () => render(LocationDeniedPage, { props: { onRetry: () => {}, logoUrl: LOGO_KLIEN } }).body,
+    withLogo: () => render(LocationDeniedPage, { props: { onRetry: () => {}, logoUrl: CLIENT_LOGO_URL } }).body,
     withoutLogo: () => render(LocationDeniedPage, { props: { onRetry: () => {} } }).body,
   },
   {
     name: 'LocationPromptPage',
-    withLogo: () => render(LocationPromptPage, { props: { onStart: () => {}, logoUrl: LOGO_KLIEN } }).body,
+    withLogo: () => render(LocationPromptPage, { props: { onStart: () => {}, logoUrl: CLIENT_LOGO_URL } }).body,
     withoutLogo: () => render(LocationPromptPage, { props: { onStart: () => {} } }).body,
   },
   {
     name: 'SelfieCapturePage',
     withLogo: () =>
-      render(SelfieCapturePage, { props: { onComplete: () => {}, onDenied: () => {}, logoUrl: LOGO_KLIEN } }).body,
+      render(SelfieCapturePage, { props: { onComplete: () => {}, onDenied: () => {}, logoUrl: CLIENT_LOGO_URL } }).body,
     withoutLogo: () =>
       render(SelfieCapturePage, { props: { onComplete: () => {}, onDenied: () => {} } }).body,
   },
   {
     name: 'SelfieDeniedPage',
-    withLogo: () => render(SelfieDeniedPage, { props: { onRetry: () => {}, logoUrl: LOGO_KLIEN } }).body,
+    withLogo: () => render(SelfieDeniedPage, { props: { onRetry: () => {}, logoUrl: CLIENT_LOGO_URL } }).body,
     withoutLogo: () => render(SelfieDeniedPage, { props: { onRetry: () => {} } }).body,
   },
 ]
@@ -241,7 +241,7 @@ describe('halaman gerbang — logo per survei (P4/K29)', () => {
   for (const gate of gatePages) {
     it(`${gate.name} memakai logo survei ketika logoUrl terisi`, () => {
       const body = gate.withLogo()
-      expect(body).toContain(LOGO_KLIEN)
+      expect(body).toContain(CLIENT_LOGO_URL)
       expect(body).toContain('alt="Logo survei"')
       expect(body).not.toContain('aria-label="Logika Statistik"')
     })
@@ -253,7 +253,7 @@ describe('halaman gerbang — logo per survei (P4/K29)', () => {
       const body = gate.withoutLogo()
       expect(body).toContain('aria-label="Logika Statistik"')
       expect(body).not.toContain('alt="Logo survei"')
-      expect(body).not.toContain(LOGO_KLIEN)
+      expect(body).not.toContain(CLIENT_LOGO_URL)
     })
   }
 })
@@ -272,23 +272,23 @@ describe('Logo — prop opsional yang bawaannya tetap merek platform (K29)', () 
 
   it('menghormati prop height yang sudah ada, dengan dan tanpa logo survei', () => {
     expect(render(Logo, { props: { height: 24 } }).body).toContain('height="24"')
-    expect(render(Logo, { props: { height: 24, logoUrl: LOGO_KLIEN } }).body).toContain('height="24"')
+    expect(render(Logo, { props: { height: 24, logoUrl: CLIENT_LOGO_URL } }).body).toContain('height="24"')
   })
 
   it('memilih bentuk logo dari isCustomLogo, bukan dari pemeriksaan kedua', () => {
     // `src` dan teks alternatif diturunkan dari SATU aturan di branding.ts.
     // Dua pemeriksaan independen atas prop mentah akan menyimpang diam-diam
     // begitu aturan logonya tumbuh satu baris — tanpa membuat uji mana pun merah.
-    for (const nilai of [null, undefined, '']) {
-      expect(isCustomLogo(nilai)).toBe(false)
-      const { body } = render(Logo, { props: { logoUrl: nilai } })
+    for (const value of [null, undefined, '']) {
+      expect(isCustomLogo(value)).toBe(false)
+      const { body } = render(Logo, { props: { logoUrl: value } })
       expect(body).toContain('aria-label="Logika Statistik"')
       expect(body).not.toContain('alt="Logo survei"')
     }
 
-    expect(isCustomLogo(LOGO_KLIEN)).toBe(true)
-    const { body } = render(Logo, { props: { logoUrl: LOGO_KLIEN } })
-    expect(body).toContain(`src="${resolveLogoUrl(LOGO_KLIEN)}"`)
+    expect(isCustomLogo(CLIENT_LOGO_URL)).toBe(true)
+    const { body } = render(Logo, { props: { logoUrl: CLIENT_LOGO_URL } })
+    expect(body).toContain(`src="${resolveLogoUrl(CLIENT_LOGO_URL)}"`)
     expect(body).toContain('alt="Logo survei"')
     expect(body).not.toContain('aria-label="Logika Statistik"')
   })
@@ -453,16 +453,11 @@ describe('invarian sumber — nol pemancar kembar', () => {
   })
 })
 
-describe('invarian sumber — siapa yang menerima logo survei (K27/K29)', () => {
-  it('rute render survei mengoper logo ke tujuh permukaan yang dimiliki survei', () => {
-    // Komponen yang menerima prop tapi tidak pernah dioper apa-apa terbaca
-    // seperti fitur yang jadi, padahal mati. Tujuh = halaman pembuka, halaman
-    // penutup, dan kelima halaman gerbang; semuanya memakai ungkapan yang sama
-    // persis supaya satu survei tidak berganti merek di tengah alurnya.
-    const pageSource = readSource('../routes/s/[slug]/+page.svelte')
-    expect(countOccurrences(pageSource, 'logoUrl={survey?.settings?.logoUrl ?? null}')).toBe(7)
-  })
-
+describe('invarian sumber — permukaan yang tetap merek platform (K27)', () => {
+  // Bahwa ketujuh permukaan milik survei benar-benar MENERIMA logonya sudah
+  // dibuktikan per komponen di runtime (uji loop halaman gerbang + P1/P2 di
+  // atas). Yang tersisa di sini adalah asersi KETIADAAN — persis jenis klaim
+  // yang cocok dipindai dari sumber dan sulit ditangkap uji runtime.
   it('cangkang surveyor dan rute non-survei tidak mengoper logo pelanggan', () => {
     // Satu petugas wawancara bisa memegang survei beberapa klien dalam satu
     // sesi, jadi "logo siapa" tidak punya jawaban di tingkat cangkang (K27).

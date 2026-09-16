@@ -293,6 +293,11 @@
     survey?.questions.find((q) => q.type === 'closing_page') ?? null,
   )
   const settings = $derived(survey?.settings ?? { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' as const })
+  // Logo per survei (M2/K29), dioper ke tujuh permukaan yang dimiliki survei.
+  // Dibaca dari `survey` langsung, bukan dari `settings` di atas: literal
+  // cadangan `settings` tidak punya `logoUrl`, jadi `settings.logoUrl` tidak
+  // lolos typecheck.
+  const logoUrl = $derived(survey?.settings?.logoUrl ?? null)
 
   async function handleStart() {
     validationError = null
@@ -611,7 +616,7 @@
       <InviteBlockedPage
         state={inviteBlocked}
         title={survey?.title ?? ''}
-        logoUrl={survey?.settings?.logoUrl ?? null}
+        {logoUrl}
       />
     </div>
 
@@ -660,7 +665,7 @@
           ctaText={'Mulai Survei'}
           onStart={handleStart}
           error={validationError}
-          logoUrl={survey?.settings?.logoUrl ?? null}
+          {logoUrl}
         />
       {/if}
     </div>
@@ -674,7 +679,7 @@
         onComplete={onSelfieComplete}
         onDenied={onSelfieDenied}
         loading={submitting}
-        logoUrl={survey?.settings?.logoUrl ?? null}
+        {logoUrl}
       />
     </div>
 
@@ -686,7 +691,7 @@
       <SelfieDeniedPage
         onRetry={() => { viewState = 'selfie_capture' }}
         loading={false}
-        logoUrl={survey?.settings?.logoUrl ?? null}
+        {logoUrl}
       />
     </div>
 
@@ -699,7 +704,7 @@
         onStart={fetchLocationThenSubmit}
         loading={locationRequesting}
         error={validationError}
-        logoUrl={survey?.settings?.logoUrl ?? null}
+        {logoUrl}
       />
     </div>
 
@@ -711,7 +716,7 @@
       <LocationDeniedPage
         onRetry={fetchLocationThenSubmit}
         loading={locationRequesting}
-        logoUrl={survey?.settings?.logoUrl ?? null}
+        {logoUrl}
       />
     </div>
 
@@ -778,7 +783,7 @@
         description={closingQuestion?.description ?? null}
         imageUrl={closingQuestion?.imageUrl ?? null}
         imageLayout={closingQuestion?.imageLayout ?? 'center'}
-        logoUrl={survey?.settings?.logoUrl ?? null}
+        {logoUrl}
       />
     </div>
   {/if}

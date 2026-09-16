@@ -25,6 +25,10 @@
 
 {#if isCustom}
   <img src={logoSrc} alt="Logo survei" {height} />
+<!-- Blok <svg> di bawah sengaja dibiarkan rata kolom 0, tidak ikut diindentasi
+     ke dalam {:else}: dengan begitu diff-nya terhadap versi pra-M2 tetap nol,
+     dan "logo platform tidak berubah satu byte pun" bisa diaudit ulang kapan
+     saja hanya dengan membandingkan blok ini. -->
 {:else}
 <svg
   height={height}
