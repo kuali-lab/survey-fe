@@ -214,3 +214,102 @@ describe('SurveyRunner — Pilihan Bertingkat', () => {
     expect(r.currentIndex).toBe(3)
   })
 })
+
+// ── Top of Mind ──────────────────────────────────────────────────────────────
+function makeTomRunner(opts: { required?: boolean; maxSelections?: number; displayMode?: 'scroll' | 'one_per_page' } = {}) {
+  const survey: Survey = {
+    id: 'sv-tom',
+    title: 'TOM',
+    settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: opts.displayMode ?? 'one_per_page' },
+    skipRules: [],
+    closeMessage: null,
+    closeImageUrl: null,
+    questions: [
+      q({
+        id: 'brand', type: 'checkbox', sortOrder: 1, topOfMind: true,
+        required: opts.required ?? false, maxSelections: opts.maxSelections,
+        options: [
+          { id: 'a', label: 'Aqua', sortOrder: 0 },
+          { id: 'b', label: 'Cleo', sortOrder: 1 },
+          { id: 'c', label: 'Prima', sortOrder: 2 },
+          { id: 'o', label: 'Lainnya', sortOrder: 3, isOther: true },
+        ],
+      }),
+      q({ id: 'n', type: 'short_text', sortOrder: 2 }),
+    ],
+  }
+  return new SurveyRunner({ getSurvey: () => survey, onFinish: () => {}, autoSubmit: false })
+}
+
+function keyPress(r: SurveyRunner, key: string) {
+  const e = { key, preventDefault: () => {}, target: { tagName: 'DIV' } } as unknown as KeyboardEvent
+  ;(r as unknown as { handleKeydown: (e: KeyboardEvent) => void }).handleKeydown(e)
+}
+
+describe('SurveyRunner — Top of Mind', () => {
+  it('required: no first pick blocks with the stage-1 message', async () => {
+    const r = makeTomRunner({ required: true })
+    await r.handleNext()
+    expect(r.questionErrors.brand).toBe('Pilih minimal satu jawaban.')
+    expect(r.currentIndex).toBe(0)
+  })
+
+  it('required: a plain array (draft from before the toggle) is asked again', async () => {
+    const r = makeTomRunner({ required: true })
+    r.loadFrom({ answers: { brand: ['Aqua', 'Cleo'] }, currentIndex: 0 })
+    await r.handleNext()
+    expect(r.questionErrors.brand).toBe('Pilih minimal satu jawaban.')
+  })
+
+  it('required: first pick alone is enough — stage 2 is optional', async () => {
+    const r = makeTomRunner({ required: true })
+    r.handleAnswer('brand', { first: 'Aqua', selected: ['Aqua'] })
+    await r.handleNext()
+    expect(r.questionErrors).toEqual({})
+    expect(r.currentIndex).toBe(1)
+  })
+
+  it('optional: skipping entirely is fine', async () => {
+    const r = makeTomRunner({ required: false })
+    await r.handleNext()
+    expect(r.currentIndex).toBe(1)
+  })
+
+  it('does not auto-advance after the first pick (stage 2 still to come)', () => {
+    const r = makeTomRunner()
+    r.handleAnswer('brand', { first: 'Aqua', selected: ['Aqua'] })
+    expect(r.autoAdvancing).toBe(false)
+  })
+
+  it('back-navigation keeps the two-stage answer intact', async () => {
+    const r = makeTomRunner()
+    r.handleAnswer('brand', { first: 'Aqua', selected: ['Aqua', 'Cleo'] })
+    await r.handleNext()
+    r.handleBack()
+    expect(r.answers.brand).toEqual({ first: 'Aqua', selected: ['Aqua', 'Cleo'] })
+  })
+
+  it('keyboard letters: stage 1 picks the first, stage 2 toggles among the remaining', () => {
+    const r = makeTomRunner({ maxSelections: 3 })
+    keyPress(r, 'b') // stage 1 → Cleo
+    expect(r.answers.brand).toEqual({ first: 'Cleo', selected: ['Cleo'] })
+    // stage 2 list on screen is [Cleo, Aqua, Prima, Lainnya] — Cleo pinned first
+    keyPress(r, 'c') // Prima
+    expect(r.answers.brand).toEqual({ first: 'Cleo', selected: ['Cleo', 'Prima'] })
+    keyPress(r, 'b') // Aqua
+    expect(r.answers.brand).toEqual({ first: 'Cleo', selected: ['Cleo', 'Prima', 'Aqua'] })
+    keyPress(r, 'd') // Lainnya needs text — ignored
+    expect(r.answers.brand).toEqual({ first: 'Cleo', selected: ['Cleo', 'Prima', 'Aqua'] })
+    keyPress(r, 'c') // toggle Prima off
+    expect(r.answers.brand).toEqual({ first: 'Cleo', selected: ['Cleo', 'Aqua'] })
+    keyPress(r, 'a') // the pinned first → clears everything
+    expect(r.answers.brand).toBeNull()
+  })
+
+  it('scroll-mode progress counts a first-pick-only answer as answered', () => {
+    const r = makeTomRunner({ displayMode: 'scroll' })
+    const before = r.progress
+    r.handleAnswer('brand', { first: 'Aqua', selected: ['Aqua'] })
+    expect(r.progress).toBeGreaterThan(before)
+  })
+})

@@ -98,6 +98,10 @@ export interface Question {
   hasAsyncOptions?: boolean
   filterConfig?: FilterConfig
   dependsOn?: OptionDependency
+  // Top of Mind (checkbox only): ask the respondent for the ONE option that
+  // comes to mind first, then for the rest with that option excluded. The
+  // answer becomes a TopOfMindAnswer instead of a plain string[].
+  topOfMind?: boolean
   options?: QuestionOption[]
   // Flat array of image URLs for image_choice options, parallel to options[].
   // Derived from options[].imageUrl when normalized from the API response.
@@ -150,7 +154,19 @@ export interface ContactInfo {
   email: string
 }
 
-export type AnswerValue = string | number | string[] | Record<string, string> | ContactInfo | null
+/**
+ * Answer for a checkbox question with `topOfMind` on. `first` is the option
+ * label picked in stage 1; `selected` is the FULL selection (stage 1 + stage
+ * 2), always with `first` at index 0. "Lainnya" free text follows the plain
+ * checkbox convention: the typed text is the label. `first === ''` means the
+ * respondent has not picked yet (the answer is treated as empty).
+ */
+export interface TopOfMindAnswer {
+  first: string
+  selected: string[]
+}
+
+export type AnswerValue = string | number | string[] | Record<string, string> | ContactInfo | TopOfMindAnswer | null
 
 export type Answers = Record<string, AnswerValue>
 

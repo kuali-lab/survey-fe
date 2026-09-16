@@ -90,6 +90,32 @@ function cascadeBlock(): Question[] {
   ]
 }
 
+// ── Top of Mind demo: two-stage checkbox in one card ─────────────────────────
+// First "mana yang pertama terlintas?" (one pick), then the rest with that
+// pick excluded. `tom-1` has "Lainnya" and is required; `tom-2` shows the
+// maxSelections cap (3 total → 2 more in stage 2).
+function topOfMindBlock(): Question[] {
+  return [
+    q({
+      id: 'tom-1',
+      type: 'checkbox',
+      topOfMind: true,
+      required: true,
+      title: 'Merek <b>air mineral</b> apa saja yang Anda ketahui?',
+      titlePlain: 'Merek air mineral apa saja yang Anda ketahui?',
+      options: opts(['Aqua', 'Le Minerale', 'Cleo', 'Prima', 'Nestlé Pure Life'], true),
+    }),
+    q({
+      id: 'tom-2',
+      type: 'checkbox',
+      topOfMind: true,
+      maxSelections: 3,
+      title: 'Aplikasi belanja online apa yang Anda kenal? (maks 3)',
+      options: opts(['Tokopedia', 'Shopee', 'Lazada', 'Blibli', 'TikTok Shop']),
+    }),
+  ]
+}
+
 export function buildMockSurvey(slug: string): Survey {
   order = 0
   return {
@@ -121,7 +147,9 @@ export function buildMockSurvey(slug: string): Survey {
         title: 'Bagian 1: Tentang Anda',
         description: 'Beberapa pertanyaan singkat mengenai data diri.',
       }),
-      // Placed first so the Pilihan Bertingkat demo is reachable right away.
+      // Placed first so the Top of Mind and Pilihan Bertingkat demos are
+      // reachable right away.
+      ...topOfMindBlock(),
       ...cascadeBlock(),
       q({ id: 'short-1', type: 'short_text', title: 'Siapa nama panggilan Anda?', placeholder: 'Misal: Budi', required: true }),
       q({ id: 'long-1', type: 'long_text', title: 'Ceritakan sedikit tentang keseharian Anda.' }),

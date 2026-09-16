@@ -16,6 +16,14 @@
   } from '$lib/optionDependency.js'
   import { getRegionName, resolveRegionName } from '$lib/regionNames.js'
   import { applyNumberInput, numberInputText, numberInputCompare } from '$lib/numberInput.js'
+  import { fade } from 'svelte/transition'
+  import { flip } from 'svelte/animate'
+  import { cubicOut } from 'svelte/easing'
+  import {
+    TOM_STAGE2_HINT,
+    isTopOfMindQuestion, topOfMindFirst, topOfMindRest, remainingOptions, restLimit, restAtLimit,
+    setTopOfMindFirst, toggleTopOfMindRest, clearTopOfMind, normalizeTopOfMind, topOfMindOtherText, firstIsOther,
+  } from '$lib/topOfMind.js'
 
   let {
     question,
@@ -388,6 +396,113 @@
       destroy() { node.removeEventListener('input', adjust) }
     }
   }
+
+  // ── Top of Mind: one list, two stages (see $lib/topOfMind.ts) ─────────────
+  // Looks like a plain checkbox question. The FIRST tap is recorded as the
+  // top-of-mind pick: that row flips to the top (animate:flip), stays checked,
+  // and a hint invites more picks. Tapping the pinned row again clears the
+  // whole answer (stage 2 picks were relative to it). Stage is derived from
+  // the answer, so back-navigation and draft resume need nothing extra.
+  const tom = $derived(isTopOfMindQuestion(question))
+  const tomFirst = $derived(topOfMindFirst(value))
+  const tomRest = $derived(topOfMindRest(value))
+  const tomRemaining = $derived(remainingOptions(options, tomFirst))
+  const tomOtherOption = $derived(tomRemaining.find(o => o.isOther))
+  const tomRestLimit = $derived(restLimit(question.maxSelections))
+  const tomRestAtLimit = $derived(restAtLimit(value, question.maxSelections))
+  const tomFirstIsOther = $derived(firstIsOther(value, allOptions))
+  const tomStandardLabels = $derived(new Set(allOptions.filter(o => !o.isOther).map(o => o.label)))
+  const tomOtherInRest = $derived(!tomFirstIsOther && tomRest.some(r => !tomStandardLabels.has(r)))
+  const tomStage = $derived<1 | 2>(tomFirst === '' ? 1 : 2)
+
+  // "Lainnya" as first pick: chosen but not yet confirmed with text.
+  let tomOtherPending = $state(false)
+  let tomOtherDraft = $state('')
+  // "Lainnya" in stage 2 — same convention as the plain checkbox.
+  let tomOtherText = $state(untrack(() => topOfMindOtherText(value, question.options ?? [])))
+
+  const TOM_OTHER_KEY = '__other__'
+  type TomRow = { key: string; label: string; isOther: boolean; isFirst: boolean; checked: boolean; disabled: boolean }
+  // Keyed rows: the first pick keeps the key of the option it came from, so
+  // animate:flip slides it to the top instead of re-rendering it.
+  const tomRows = $derived.by<TomRow[]>(() => {
+    const ordered = [...options.filter(o => !o.isOther), ...options.filter(o => o.isOther)]
+    if (tomStage === 1) {
+      return ordered.map(o => ({
+        key: o.isOther ? TOM_OTHER_KEY : o.label, label: o.label, isOther: !!o.isOther,
+        isFirst: false, checked: !!o.isOther && tomOtherPending, disabled: false,
+      }))
+    }
+    const first: TomRow = {
+      key: tomFirstIsOther ? TOM_OTHER_KEY : tomFirst, label: tomFirst, isOther: tomFirstIsOther,
+      isFirst: true, checked: true, disabled: false,
+    }
+    const rest = [...tomRemaining.filter(o => !o.isOther), ...tomRemaining.filter(o => o.isOther)].map(o => {
+      const checked = o.isOther ? tomOtherInRest : tomRest.includes(o.label)
+      return {
+        key: o.isOther ? TOM_OTHER_KEY : o.label, label: o.label, isOther: !!o.isOther,
+        isFirst: false, checked, disabled: !checked && tomRestAtLimit,
+      }
+    })
+    return [first, ...rest]
+  })
+  const tomShowOtherInput = $derived(tomStage === 1 ? tomOtherPending : tomOtherInRest)
+  const tomHintText = $derived(
+    tomRemaining.length === 0
+      ? 'Tidak ada pilihan lain.'
+      : tomRestLimit > 0
+        ? `Bisa pilih hingga ${tomRestLimit} jawaban lagi (${tomRest.length}/${tomRestLimit}).`
+        : TOM_STAGE2_HINT,
+  )
+
+  const tomReduceMotion =
+    typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  const tomFlip = { duration: tomReduceMotion ? 0 : 260, easing: cubicOut }
+  const tomFade = { duration: tomReduceMotion ? 0 : 180 }
+
+  function tomTapRow(row: TomRow) {
+    if (row.isFirst) {
+      tomOtherPending = false
+      onChange(clearTopOfMind())
+      return
+    }
+    if (tomStage === 1) {
+      if (row.isOther) {
+        tomOtherPending = true
+        return
+      }
+      tomOtherPending = false
+      onChange(setTopOfMindFirst(value, row.label))
+      return
+    }
+    if (row.isOther) tomToggleOtherRest()
+    else onChange(toggleTopOfMindRest(value, row.label, question.maxSelections))
+  }
+  function tomConfirmOtherFirst() {
+    const text = tomOtherDraft.trim()
+    if (!text) return
+    tomOtherPending = false
+    onChange(setTopOfMindFirst(value, text))
+  }
+  function tomToggleOtherRest() {
+    if (!tomOtherOption) return
+    if (tomOtherInRest) {
+      onChange(normalizeTopOfMind(tomFirst, tomRest.filter(r => tomStandardLabels.has(r))))
+    } else {
+      if (tomRestAtLimit) return
+      onChange(normalizeTopOfMind(tomFirst, [...tomRest, tomOtherText || tomOtherOption.label]))
+    }
+  }
+  function tomUpdateOtherRest(text: string) {
+    if (!tomOtherOption) return
+    tomOtherText = text
+    const cleaned = tomRest.filter(r => tomStandardLabels.has(r))
+    cleaned.push(text || tomOtherOption.label)
+    onChange(normalizeTopOfMind(tomFirst, cleaned))
+  }
+  function tomFocus(node: HTMLInputElement) {
+    node.focus()
+  }
 </script>
 
 {#if question.type === 'image_choice'}
@@ -621,6 +736,66 @@
   {:else if dependencyEmptyText}
     <p class="dependency-note dependency-empty">{dependencyEmptyText}</p>
   {/if}
+
+{:else if question.type === 'checkbox' && tom}
+  <div class="tom" data-tom-stage={tomStage}>
+    <div class="options-list" role="group">
+      {#each tomRows as row (row.key)}
+        <div class="tom-row" animate:flip={tomFlip}>
+          <button
+            class="option-card {row.checked ? 'selected' : ''} {row.isFirst ? 'tom-first' : ''}"
+            type="button"
+            role="checkbox"
+            aria-checked={row.checked}
+            disabled={row.disabled}
+            style={row.disabled ? 'opacity:0.55;cursor:not-allowed;' : ''}
+            onclick={() => tomTapRow(row)}
+          >
+            <span class="checkbox-indicator {row.checked ? 'selected' : ''}">
+              {#if row.checked}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                  <path d="M5 12.5l5 5 9-10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              {/if}
+            </span>
+            <span class="option-label">{row.label}</span>
+          </button>
+          {#if row.isOther && !row.isFirst && tomShowOtherInput}
+            {#if tomStage === 1}
+              <div class="tom-other-row">
+                <input
+                  class="text-input other-text-input tom-other-input"
+                  type="text"
+                  placeholder="Tuliskan jawaban Anda..."
+                  value={tomOtherDraft}
+                  use:tomFocus
+                  oninput={(e) => { tomOtherDraft = (e.currentTarget as HTMLInputElement).value }}
+                  onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); tomConfirmOtherFirst() } }}
+                />
+                <button
+                  class="tom-mini-btn"
+                  type="button"
+                  disabled={!tomOtherDraft.trim()}
+                  onclick={tomConfirmOtherFirst}
+                >Lanjut</button>
+              </div>
+            {:else}
+              <input
+                class="text-input other-text-input"
+                type="text"
+                placeholder="Tuliskan jawaban Anda..."
+                value={tomOtherText}
+                oninput={(e) => tomUpdateOtherRest((e.currentTarget as HTMLInputElement).value)}
+              />
+            {/if}
+          {/if}
+        </div>
+      {/each}
+    </div>
+    {#if tomStage === 2}
+      <p class="tom-hint" in:fade={tomFade}>{tomHintText}</p>
+    {/if}
+  </div>
 
 {:else if question.type === 'checkbox'}
   <div class="options-list">
@@ -1634,6 +1809,43 @@
   .dependency-note.dependency-empty {
     color: var(--text-body);
     line-height: 1.5;
+  }
+
+  /* ── Top of Mind: one list, first pick flips to the top ── */
+  .tom-row {
+    display: flex;
+    flex-direction: column;
+  }
+  .tom-hint {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .tom-other-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .tom-other-row .tom-other-input {
+    flex: 1;
+    width: auto;
+  }
+  .tom-mini-btn {
+    height: 44px;
+    padding: 0 16px;
+    border: none;
+    border-radius: var(--radius-input);
+    background: var(--ink);
+    color: var(--on-ink);
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .tom-mini-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
 
   /* ── File Upload ── */
