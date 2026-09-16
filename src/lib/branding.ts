@@ -35,23 +35,41 @@ export const SURVEY_ROUTE_ID = '/s/[slug]'
 /** Pratinjau draf, yang merender komponen responden yang sama persis. */
 export const PREVIEW_ROUTE_ID = '/pratinjau'
 
-/** Hanya bagian branding dari pengaturan survei; ketiga kuncinya opsional. */
+/**
+ * Bagian branding dari pengaturan survei yang masih dibaca sebagai objek.
+ *
+ * `logoUrl` tidak termasuk: rute sudah membongkarnya jadi string sebelum
+ * mengopernya sebagai prop komponen, jadi `resolveLogoUrl` menerima nilainya
+ * langsung alih-alih dirakit ulang cuma untuk dibongkar lagi.
+ */
 export type BrandingSettings =
-  | Partial<Pick<SurveySettings, 'logoUrl' | 'faviconUrl' | 'ogImageUrl'>>
+  | Partial<Pick<SurveySettings, 'faviconUrl' | 'ogImageUrl'>>
   | null
   | undefined
 
 /** Logo yang dirender di halaman pembuka & penutup. */
-export function resolveLogoUrl(settings?: BrandingSettings): string {
-  return settings?.logoUrl || PLATFORM_LOGO_URL
+export function resolveLogoUrl(logoUrl?: string | null): string {
+  return logoUrl || PLATFORM_LOGO_URL
+}
+
+/**
+ * Apakah logo yang tampil milik survei, bukan milik platform.
+ *
+ * Ada supaya teks `alt` diturunkan dari aturan yang SAMA dengan `src`.
+ * Kalau `alt` memeriksa sendiri prop mentahnya, keduanya akan menyimpang
+ * begitu aturan logo tumbuh satu baris saja — dan penyimpangan itu tidak
+ * membuat satu uji pun merah.
+ */
+export function isCustomLogo(logoUrl?: string | null): boolean {
+  return resolveLogoUrl(logoUrl) !== PLATFORM_LOGO_URL
 }
 
 /**
  * Favicon per survei, atau `null` bila survei tidak punya.
  *
  * `null` sengaja berarti "jangan pancarkan apa pun": rantai ikon platform di
- * `app.html` sudah menangani kasus itu, dan memancarkan ikon kosong justru
- * menambah deklarasi yang harus diperebutkan peramban.
+ * `+layout.svelte` sudah menangani kasus itu, dan memancarkan ikon kosong
+ * justru menambah deklarasi yang harus diperebutkan peramban.
  */
 export function resolveFaviconUrl(settings?: BrandingSettings): string | null {
   return settings?.faviconUrl || null

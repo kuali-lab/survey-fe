@@ -8,6 +8,7 @@ import {
   PLATFORM_LOGO_URL,
   PLATFORM_OG_IMAGE_PATH,
   resolveLogoUrl,
+  isCustomLogo,
   resolveFaviconUrl,
   resolveOgImageUrl,
   toAbsoluteUrl,
@@ -54,20 +55,28 @@ const closingProps = {
 
 describe('resolveLogoUrl', () => {
   it('memakai logo survei ketika logoUrl terisi', () => {
-    expect(resolveLogoUrl({ logoUrl: 'https://cdn.test/logo-klien.png' }))
+    expect(resolveLogoUrl('https://cdn.test/logo-klien.png'))
       .toBe('https://cdn.test/logo-klien.png')
   })
 
-  it('jatuh ke aset platform ketika logoUrl null', () => {
-    expect(resolveLogoUrl({ logoUrl: null })).toBe(PLATFORM_LOGO_URL)
-  })
-
-  it('jatuh ke aset platform ketika field-nya tidak ada sama sekali', () => {
-    // Bentuk survei dari singgahan localStorage lama: kunci brandingnya belum
-    // pernah ada. Ketiadaan field harus berarti aset platform, bukan kosong.
-    expect(resolveLogoUrl({})).toBe(PLATFORM_LOGO_URL)
-    expect(resolveLogoUrl(undefined)).toBe(PLATFORM_LOGO_URL)
+  it('jatuh ke aset platform ketika logoUrl null, absen, atau kosong', () => {
+    // Survei dari singgahan localStorage lama tidak punya kunci ini sama
+    // sekali. Ketiadaannya harus berarti aset platform, bukan kosong.
     expect(resolveLogoUrl(null)).toBe(PLATFORM_LOGO_URL)
+    expect(resolveLogoUrl(undefined)).toBe(PLATFORM_LOGO_URL)
+    expect(resolveLogoUrl('')).toBe(PLATFORM_LOGO_URL)
+  })
+})
+
+describe('isCustomLogo', () => {
+  it('menjawab "survei atau platform?" dari aturan yang sama dengan resolveLogoUrl', () => {
+    // Teks `alt` diturunkan dari sini, bukan dari pemeriksaan kedua atas prop
+    // mentah: dua pemeriksaan independen akan menyimpang diam-diam begitu
+    // aturan logonya tumbuh.
+    expect(isCustomLogo('https://cdn.test/logo-klien.png')).toBe(true)
+    expect(isCustomLogo(null)).toBe(false)
+    expect(isCustomLogo(undefined)).toBe(false)
+    expect(isCustomLogo('')).toBe(false)
   })
 })
 
@@ -149,11 +158,14 @@ describe('WelcomePage — logo per survei (P1)', () => {
     })
     expect(body).toContain('https://cdn.test/logo-klien.png')
     expect(body).not.toContain(PLATFORM_LOGO_URL)
+    expect(body).toContain('alt="Logo survei"')
+    expect(body).not.toContain('alt="Logika Statistik"')
   })
 
   it('jatuh ke logo platform ketika logoUrl tidak diberikan', () => {
     const { body } = render(WelcomePage, { props: welcomeProps })
     expect(body).toContain(PLATFORM_LOGO_URL)
+    expect(body).toContain('alt="Logika Statistik"')
   })
 })
 
@@ -164,11 +176,14 @@ describe('ClosingPage — logo per survei (P2)', () => {
     })
     expect(body).toContain('https://cdn.test/logo-klien.png')
     expect(body).not.toContain(PLATFORM_LOGO_URL)
+    expect(body).toContain('alt="Logo survei"')
+    expect(body).not.toContain('alt="Logika Statistik"')
   })
 
   it('jatuh ke logo platform ketika logoUrl tidak diberikan', () => {
     const { body } = render(ClosingPage, { props: closingProps })
     expect(body).toContain(PLATFORM_LOGO_URL)
+    expect(body).toContain('alt="Logika Statistik"')
   })
 })
 
@@ -188,6 +203,26 @@ describe('tata letak akar — satu sumber tag OG', () => {
   beforeEach(() => {
     page.route.id = null
     page.data = {}
+    page.url = new URL('http://test.local/')
+  })
+
+  it('menghasilkan og:image absolut walau PUBLIC_SITE_URL kosong', () => {
+    // Pemancar platform dulu memakai aturan cadangan yang BERBEDA dari halaman
+    // survei: basis kosong menghasilkan path relatif, dan crawler tidak
+    // mengurainya — persis kegagalan yang modul ini ada untuk memperbaiki.
+    // Stub env memang tidak punya PUBLIC_SITE_URL, jadi cabang inilah yang
+    // dijalankan seluruh uji render di bawah.
+    page.route.id = '/'
+    page.url = new URL('https://survey.test/')
+    const { head } = render(RootLayout, { props: { children: noChildren } })
+    expect(head).toContain('content="https://survey.test/og-default.png"')
+    expect(head).not.toContain('content="/og-default.png"')
+  })
+
+  it('memakai summary_large_image, sepadan dengan gambar bawaan 1200x630', () => {
+    page.route.id = '/'
+    const { head } = render(RootLayout, { props: { children: noChildren } })
+    expect(head).toContain('content="summary_large_image"')
   })
 
   it('memancarkan tepat satu og:image, twitter:image, dan twitter:card di rute non-survei', () => {
@@ -220,6 +255,7 @@ describe('tata letak akar — favicon per survei (P3)', () => {
   beforeEach(() => {
     page.route.id = null
     page.data = {}
+    page.url = new URL('http://test.local/')
   })
 
   it('memancarkan tepat satu rel="icon" milik survei ketika faviconUrl terisi', () => {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { resolveLogoUrl } from '$lib/branding.js'
+  import { isCustomLogo, resolveLogoUrl } from '$lib/branding.js'
 
   let {
     title,
@@ -24,14 +24,15 @@
     logoUrl?: string | null
   } = $props()
 
-  const logoSrc = $derived(resolveLogoUrl({ logoUrl }))
+  const logoSrc = $derived(resolveLogoUrl(logoUrl))
+  const logoAlt = $derived(isCustomLogo(logoUrl) ? 'Logo survei' : 'Logika Statistik')
   const layout = $derived(imageLayout ?? 'center')
   const isInline = $derived(layout === 'left' || layout === 'right')
 </script>
 
 <div class="welcome" class:layout-inline={isInline} class:layout-right={layout === 'right'}>
   <div class="logo-bar">
-    <img src={logoSrc} alt={logoUrl ? 'Logo survei' : 'Logika Statistik'} class="logo-img" />
+    <img src={logoSrc} alt={logoAlt} class="logo-img" />
   </div>
 
   {#if imageUrl}

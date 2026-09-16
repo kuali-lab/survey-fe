@@ -18,9 +18,19 @@
   // Gambar bawaannya kini `og-default.png` (1200×630), bukan lagi wordmark
   // 229×35 yang ditolak WhatsApp/Facebook karena di bawah ambang 200×200 —
   // itulah sebab pratinjau tautan selama ini kosong.
-  const ogImage = toAbsoluteUrl(PLATFORM_OG_IMAGE_PATH, env.PUBLIC_SITE_URL || '')
+  //
+  // 🔴 Aturan cadangan basisnya WAJIB sama dengan halaman survei
+  // (`s/[slug]/+page.svelte`): origin permintaan saat PUBLIC_SITE_URL kosong.
+  // Basis kosong menghasilkan `og:image` relatif, dan crawler tidak
+  // mengurainya — kegagalan yang sama persis dengan yang modul ini perbaiki.
+  const ogImage = $derived(
+    toAbsoluteUrl(PLATFORM_OG_IMAGE_PATH, env.PUBLIC_SITE_URL || page.url.origin),
+  )
 
-  // 🔴 SATU-SATUNYA tempat deklarasi ikon di seluruh aplikasi.
+  // 🔴 Satu-satunya `<link rel="icon">` di seluruh dokumen.
+  //
+  // (`app.html` masih memuat `<link rel="manifest">`, dan manifes PWA punya
+  // ikon pemasangannya sendiri — itu ikon layar utama, bukan ikon tab.)
   //
   // app.html sengaja tidak lagi mendeklarasikan rantai ikonnya. SvelteKit hanya
   // MENGGABUNG isi `<svelte:head>` tanpa deduplikasi, jadi ikon per-survei akan
@@ -43,6 +53,10 @@
 
 <svelte:head>
   {#if surveyFaviconUrl}
+    <!-- `apple-touch-icon` sengaja ikut hilang di sini: responden yang
+         memasang survei ke layar utama iOS lebih baik mendapat cuplikan layar
+         daripada logo platform yang bukan merek survei ini. Merek survei
+         menang utuh, bukan setengah. -->
     <link rel="icon" href={surveyFaviconUrl} />
   {:else}
     <!-- Rantai ikon platform, dipindahkan apa adanya dari app.html.
@@ -57,7 +71,9 @@
   {#if emitPlatformOgTags}
     <meta property="og:image" content={ogImage} />
     <meta name="twitter:image" content={ogImage} />
-    <meta name="twitter:card" content="summary" />
+    <!-- Sepadan dengan gambar bawaan 1200×630. `summary` merender thumbnail
+         kecil persegi, yang justru membuang perbaikan yang baru dibayar. -->
+    <meta name="twitter:card" content="summary_large_image" />
   {/if}
 </svelte:head>
 
