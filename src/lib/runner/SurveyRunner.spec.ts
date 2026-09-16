@@ -205,10 +205,12 @@ describe('SurveyRunner — Pilihan Bertingkat', () => {
     expect(r.currentIndex).toBe(2)
   })
 
-  it('a required dependent waiting on its parent is enforced', async () => {
+  it('D-1: a required dependent whose parent was skipped (unanswered) does not trap the respondent', async () => {
     const r = makeCascadeRunner(undefined, { brandRequired: true })
     r.loadFrom({ answers: {}, currentIndex: 2 })
+    expect(r.currentPage?.questions[0].id).toBe('brand')
     await r.handleNext()
-    expect(r.questionErrors.brand).toBe('Pertanyaan ini wajib diisi.')
+    expect(r.questionErrors).toEqual({})
+    expect(r.currentIndex).toBe(3)
   })
 })

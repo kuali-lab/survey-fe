@@ -212,12 +212,14 @@ export class SurveyRunner {
 
   // ---- Validation ----
   private validateOne(q: Question, answer: AnswerValue): string | null {
-    // Pilihan Bertingkat D-1: a required dependent whose parent is answered but
-    // leaves no mapped option to pick is treated as satisfied, so a gap in the
-    // researcher's mapping never traps the respondent. "Lainnya" stays optional.
-    const requiredHere =
-      q.required &&
-      !(isEmptyAnswer(answer) && visibleOptions(q, this.answers, this.questions).status === 'empty')
+    // Pilihan Bertingkat D-1: a required dependent the respondent cannot answer
+    // is treated as satisfied, so it never traps them. That is the case when the
+    // parent is answered but leaves no mapped option ('empty'), and when the
+    // parent is unanswered ('waiting') — e.g. a skip rule jumped over it, or an
+    // optional parent was left blank. A required parent still blocks via its
+    // own check. "Lainnya" stays optional.
+    const depStatus = isEmptyAnswer(answer) ? visibleOptions(q, this.answers, this.questions).status : 'inactive'
+    const requiredHere = q.required && depStatus !== 'empty' && depStatus !== 'waiting'
     if (requiredHere) {
       if (answer === null || answer === undefined) return 'Pertanyaan ini wajib diisi.'
       if (typeof answer === 'string' && answer.trim() === '') return 'Pertanyaan ini wajib diisi.'
