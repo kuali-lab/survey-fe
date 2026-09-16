@@ -14,6 +14,7 @@ import type { Survey, Question, Answers, AnswerValue, SurveySettings } from '$li
 import { getAnswerableQuestions } from '$lib/utils.js'
 import { evaluateNext } from '$lib/skipLogic.js'
 import { isValidPhoneFormat } from '$lib/phone.js'
+import { getFilterDependents } from '$lib/optionFilter.js'
 import { buildSurveySections, type SurveyPage } from './sections.js'
 
 export type { SurveyPage }
@@ -29,6 +30,16 @@ function isAnsweredValue(v: AnswerValue | undefined): boolean {
     return [c.firstName, c.lastName, c.phone, c.email].some((x) => typeof x === 'string' && x.trim() !== '')
   }
   return true
+}
+
+// Shallow-enough equality for answer values: scalars by identity, arrays and
+// objects by structure. Used to tell a real source change from a re-emit of
+// the same value (which must NOT wipe dependent filtered dropdowns).
+function answerValuesEqual(a: AnswerValue | undefined, b: AnswerValue | undefined): boolean {
+  if (a === b) return true
+  if (a == null || b == null) return a == null && b == null
+  if (typeof a !== 'object' || typeof b !== 'object') return false
+  return JSON.stringify(a) === JSON.stringify(b)
 }
 
 const AUTO_ADVANCE_TYPES = new Set([
@@ -71,6 +82,13 @@ export type RunnerOptions = {
    * unaffected.
    */
   autoSubmit?: boolean
+  /**
+   * Fired after handleAnswer clears the answers of filtered dropdowns whose
+   * source question just changed value (Daftar Pilihan Bersaring). The page
+   * uses it to push the trimmed answer map to the server draft right away —
+   * local drafts already follow `answers` reactively.
+   */
+  onDependentsCleared?: (clearedIds: string[]) => void
 }
 
 export class SurveyRunner {
@@ -95,12 +113,14 @@ export class SurveyRunner {
   private _onFinish!: () => void | Promise<void>
   private _lastButtonLabel!: string | undefined
   private _autoSubmit = true
+  private _onDependentsCleared: ((clearedIds: string[]) => void) | undefined
 
   constructor(opts: RunnerOptions) {
     this._getSurvey = opts.getSurvey
     this._onFinish = opts.onFinish
     this._autoSubmit = opts.autoSubmit ?? true
     this._lastButtonLabel = opts.lastButtonLabel
+    this._onDependentsCleared = opts.onDependentsCleared
   }
 
   /** Update the onFinish callback. Used by the surveyor flow where each
@@ -357,12 +377,30 @@ export class SurveyRunner {
   }
 
   handleAnswer = (qid: string, value: AnswerValue) => {
-    this.answers = { ...this.answers, [qid]: value }
-    if (this.questionErrors[qid]) {
-      const next = { ...this.questionErrors }
-      delete next[qid]
-      this.questionErrors = next
+    const prev = this.answers[qid]
+    const next: Answers = { ...this.answers, [qid]: value }
+
+    // Daftar Pilihan Bersaring: a filtered dropdown's answer is only valid for
+    // the source answers it was picked under. When a SOURCE changes value, drop
+    // every dependent answer (screen + drafts) so a stale pick can never be
+    // submitted — the backend would 422 it anyway (OPTION_OUT_OF_FILTER).
+    const cleared: string[] = []
+    if (!answerValuesEqual(prev, value)) {
+      for (const dep of getFilterDependents(qid, this.questions)) {
+        if (dep.id === qid) continue
+        delete next[dep.id]
+        cleared.push(dep.id)
+      }
     }
+
+    this.answers = next
+    if (this.questionErrors[qid] || cleared.some((id) => this.questionErrors[id])) {
+      const nextErrors = { ...this.questionErrors }
+      delete nextErrors[qid]
+      for (const id of cleared) delete nextErrors[id]
+      this.questionErrors = nextErrors
+    }
+    if (cleared.length > 0) this._onDependentsCleared?.(cleared)
 
     if (
       this.effectiveDisplayMode !== 'scroll' &&

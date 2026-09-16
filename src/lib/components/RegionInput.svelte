@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { AnswerValue } from '$lib/types.js'
   import { fetchRegions, type RegionOption } from '$lib/api.js'
+  import { rememberRegionNames } from '$lib/regionNames.js'
   import { untrack } from 'svelte'
 
   let {
@@ -54,6 +55,9 @@
     // Guard against a stale response landing after the parent changed.
     loading[level] = false
     lists[level] = rows
+    // Filtered dropdowns name the chosen region in their empty state; the
+    // answer itself is only a code, so keep code→name around.
+    rememberRegionNames(rows)
   }
 
   function onSearchInput(level: number, q: string) {
@@ -123,6 +127,7 @@
     for (let level = 0; level < codes.length; level++) {
       const rows = await fetchRegions(parentCodeFor(level))
       lists[level] = rows
+      rememberRegionNames(rows)
       const match = rows.find((r) => r.code === codes[level])
       if (!match) {
         // Couldn't resolve this ancestor (e.g. search-only API). Stop here —

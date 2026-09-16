@@ -11,3 +11,9 @@ vite.config.ts.timestamp-*
 
 # Local-only preview screenshots from design reviews.
 /audit/
+
+# git worktrees (local only, never committed)
+.worktrees/
+
+# keluaran graphify: dibangun ulang lokal, tidak pernah di-commit
+graphify-out/

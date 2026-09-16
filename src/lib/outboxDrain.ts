@@ -1,5 +1,6 @@
 import { outbox, type OutboxItem } from './outbox.js'
 import { submitSurveyAnswers } from './api.js'
+import { isPermanentSubmitFailure } from './submitError.js'
 
 type DrainEventMap = {
   'outbox:start': () => void
@@ -93,7 +94,12 @@ export async function drain(): Promise<void> {
           emit('outbox:sent', { ...item, status: 'sent', sentAt: Date.now() })
           continue
         }
-        const permanent = msg === 'unauthorized' || msg === 'survey_closed'
+        // A 400 / 422 rejection is terminal: the backend refused this exact
+        // payload, and the drain can no longer edit it (the surveyor's answers
+        // were cleared on enqueue). Retrying would spin forever, so park it as
+        // permanent_fail — the submission stays on the device and surfaces on
+        // the kiriman page with a reason instead of a silent endless loop.
+        const permanent = isPermanentSubmitFailure(msg)
         await outbox.markFailed(item.id, msg, permanent)
         emit(
           'outbox:failed',

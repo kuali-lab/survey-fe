@@ -2,7 +2,13 @@ import { PUBLIC_API_BASE_URL } from '$env/static/public'
 import { env as publicEnv } from '$env/dynamic/public'
 import type { Survey, Question } from './types.js'
 import type { Answers } from './types.js'
+import type { OptionFilter } from './optionFilter.js'
 import { buildMockSurvey } from './mockSurvey.js'
+import { submitErrorFromResponse, OptionOutOfFilterError } from './submitError.js'
+// Re-export: klasifikasi kegagalan submit hidup di `submitError.ts` (satu
+// tempat untuk outbox dan halaman responden), tapi pemakainya mengimpor dari
+// sini sejak awal. Memindah kelasnya tanpa re-export akan memutus mereka.
+export { OptionOutOfFilterError }
 
 /**
  * Mock gate — PUBLIC_USE_MOCK is the single master switch. It's read at runtime
@@ -170,12 +176,34 @@ export async function fetchRegions(parent?: string, q?: string, limit = 50): Pro
   }
 }
 
-export async function fetchAsyncOptions(slug: string, questionId: string, q: string, limit = 50, offset = 0): Promise<{ label: string, isOther?: boolean }[]> {
+/**
+ * Query string for the public options endpoint. Exported for tests. The
+ * optional filter (contract §3) is sent as `regionCode=<BPS code>` and
+ * `attr[<key>]=<value>`; the backend ignores either when the question has no
+ * matching filter row, so sending them is always safe.
+ */
+export function buildAsyncOptionParams(q: string, limit: number, offset: number, filter?: OptionFilter | null): URLSearchParams {
+  const params = new URLSearchParams()
+  if (q) params.set('q', q)
+  params.set('limit', String(limit))
+  if (offset > 0) params.set('offset', String(offset))
+  if (filter?.regionCode) params.set('regionCode', filter.regionCode)
+  for (const [key, value] of Object.entries(filter?.attrs ?? {})) {
+    if (key && value) params.set(`attr[${key}]`, value)
+  }
+  return params
+}
+
+export async function fetchAsyncOptions(
+  slug: string,
+  questionId: string,
+  q: string,
+  limit = 50,
+  offset = 0,
+  filter?: OptionFilter | null,
+): Promise<{ label: string, isOther?: boolean }[]> {
   try {
-    const params = new URLSearchParams()
-    if (q) params.set('q', q)
-    params.set('limit', String(limit))
-    if (offset > 0) params.set('offset', String(offset))
+    const params = buildAsyncOptionParams(q, limit, offset, filter)
     const res = await fetch(`${PUBLIC_API_BASE_URL}/s/${slug}/questions/${questionId}/options?${params.toString()}`)
     if (!res.ok) return []
     const data = await res.json()
@@ -189,6 +217,36 @@ export async function fetchAsyncOptions(slug: string, questionId: string, q: str
     return []
   }
 }
+
+/**
+ * Ambil DRAF survei AI untuk dipratinjau, memakai token berumur pendek yang
+ * diterbitkan logika-be di balik auth dashboard.
+ *
+ * 🔴 Bentuk balasannya SAMA dengan `GET /s/:slug` — itulah alasan seluruh
+ * pratinjau bisa dirender komponen responden yang asli, tanpa perender kedua
+ * yang akan menyimpang.
+ *
+ * ⚠️ Nol cache, nol mode mock, dan nol fallback ke salinan lama. Draf berubah
+ * tiap kali pengguna mengoreksinya lewat percakapan; menampilkan salinan basi
+ * di sini berarti pengguna memeriksa pertanyaan yang sudah tidak ada, lalu
+ * menyimpan sesuatu yang lain.
+ *
+ * `preview_invalid` = token kedaluwarsa/palsu; `not_found` = drafnya tidak ada
+ * (atau bukan milik pemegang token — server sengaja tidak membedakannya).
+ */
+export async function fetchDrafPratinjau(
+  token: string,
+  fetchFn: typeof fetch = fetch,
+  baseUrl: string = PUBLIC_API_BASE_URL,
+): Promise<Survey> {
+  const res = await fetchFn(`${baseUrl}/ai-draft-preview?token=${encodeURIComponent(token)}`)
+  if (res.status === 401) throw new Error('preview_invalid')
+  if (res.status === 404) throw new Error('not_found')
+  if (!res.ok) throw new Error('server_error')
+  const data = await res.json()
+  return normalizeSurvey(data.survey as Record<string, unknown>)
+}
+
 
 export async function fetchSurvey(
   slug: string,
@@ -263,10 +321,11 @@ export async function submitSurveyAnswers(
       invitationToken: invitationToken ?? undefined,
     })
   })
-  if (res.status === 401) throw new Error('unauthorized')
-  if (res.status === 409) throw new Error('already_submitted')
-  if (res.status === 410) throw new Error('survey_closed')
-  if (!res.ok) throw new Error('submit_error')
+  // Status mapping lives in submitError.ts so the outbox drain and the
+  // respondent page classify the same failure the same way. A 400 / 422
+  // rejection arrives with a backend sentence attached as `serverMessage`.
+  const submitErr = await submitErrorFromResponse(res)
+  if (submitErr) throw submitErr
 }
 
 export async function saveDraft(

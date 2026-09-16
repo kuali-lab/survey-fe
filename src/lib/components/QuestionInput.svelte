@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Question, AnswerValue, ContactInfo } from '$lib/types.js'
+  import type { Question, AnswerValue, ContactInfo, Answers } from '$lib/types.js'
   import { PUBLIC_API_BASE_URL } from '$env/static/public'
   import { untrack } from 'svelte'
   import type { Action } from 'svelte/action'
@@ -8,24 +8,77 @@
   import RegionInput from './RegionInput.svelte'
   import SearchableDropdown from './SearchableDropdown.svelte'
   import { sanitizePhoneInput } from '$lib/phone.js'
+  import {
+    buildOptionFilter, hasOptionFilter, filterDisabledHint, filterEmptyMessage,
+  } from '$lib/optionFilter.js'
+  import { getRegionName, resolveRegionName } from '$lib/regionNames.js'
+  import { applyNumberInput, numberInputText, numberInputCompare } from '$lib/numberInput.js'
 
   let {
     question,
     value,
     onChange,
     onBlur,
-    slug = ''
+    slug = '',
+    answers = {},
+    questions = [],
+    // 🔴 Pratinjau: draf tidak punya slug, jadi unggahan akan menembak
+    // `/s//upload`. Itu permintaan keluar dari halaman yang seharusnya nol
+    // pengiriman — dimatikan di sini, dengan kalimat yang menjelaskan, bukan
+    // dibiarkan gagal sendiri sebagai "Tidak dapat mengunggah berkas".
+    pratinjau = false
   }: {
     question: Question
     value: AnswerValue
     onChange: (v: AnswerValue) => void
     onBlur?: () => void
     slug?: string
+    // Daftar Pilihan Bersaring: a filtered dropdown reads its source answers
+    // from the whole answer map. Only dropdowns with filterConfig use these.
+    answers?: Answers
+    questions?: Question[]
+    pratinjau?: boolean
   } = $props()
+
+  // ── Filtered dropdown (contract §8) ─────────────────────────────────────────
+  const filterActive = $derived(question.type === 'dropdown' && hasOptionFilter(question))
+  // null while any source question is unanswered → dropdown disabled.
+  const optionFilter = $derived(filterActive ? buildOptionFilter(question, answers, questions) : null)
+  const filterHint = $derived(filterActive ? filterDisabledHint(question) : '')
+  // Selected source option LABELS (not values) for the empty-state wording.
+  const filterAttrLabels = $derived.by(() => {
+    if (!filterActive) return [] as string[]
+    return (question.filterConfig?.attrs ?? []).map((a) => {
+      const v = answers[a.sourceQuestionId]
+      return typeof v === 'string' ? v.trim() : ''
+    })
+  })
+  // Region name for the chosen code: RegionInput records what it lists/picks;
+  // a code restored from a draft may need one lookup.
+  const filterRegionCode = $derived(optionFilter?.regionCode ?? '')
+  let filterRegionName = $state('')
+  $effect(() => {
+    const code = filterRegionCode
+    if (!code) { filterRegionName = ''; return }
+    const known = getRegionName(code)
+    if (known) { filterRegionName = known; return }
+    filterRegionName = ''
+    void resolveRegionName(code).then((name) => {
+      if (code === filterRegionCode) filterRegionName = name
+    })
+  })
+  const filterEmptyText = $derived(
+    filterActive ? filterEmptyMessage(question, filterRegionName || filterRegionCode, filterAttrLabels) : '',
+  )
 
   // Text helpers
   const strValue = $derived(typeof value === 'string' ? value : (value != null ? String(value) : ''))
-  const numValue = $derived(typeof value === 'number' ? value : null)
+  // `number` answers travel as the literal typed text so leading zeros survive
+  // (see numberInput.ts). Older drafts / outbox payloads still hold real numbers,
+  // so both shapes must render. numText is what the input shows; numCompare is
+  // the numeric view used only for the min/max blur correction.
+  const numText = $derived(numberInputText(value))
+  const numCompare = $derived(numberInputCompare(value))
   // Live number-range warning (below min / capped at max). Shown red + shakes on
   // each offending keystroke. shakeKey bumps to replay the shake animation.
   let numberWarn = $state<string | null>(null)
@@ -232,6 +285,11 @@
   const MAX_UPLOAD_BYTES = 10 * 1024 * 1024 // 10 MB — matches the UI hint
 
   async function processFile(file: File) {
+    if (pratinjau) {
+      uploadError = 'Unggah berkas tidak aktif di pratinjau.'
+      onChange(null)
+      return
+    }
     if (file.size > MAX_UPLOAD_BYTES) {
       uploadError = 'Ukuran berkas melebihi batas 10 MB.'
       onChange(null)
@@ -420,43 +478,31 @@
     inputmode="decimal"
     min={question.minValue}
     max={question.maxValue}
-    value={numValue !== null ? numValue : ''}
+    value={numText}
     oninput={(e) => {
-      let v = (e.currentTarget as HTMLInputElement).value
-      // Limit digit count (maxLength). type=number ignores native maxlength.
-      if (question.maxLength && v.length > question.maxLength) {
-        v = v.slice(0, question.maxLength)
-      }
-      let num = v === '' ? null : Number(v)
-      let warn: string | null = null
-      // Hard-cap at maxValue while typing (adding digits only increases). Warn so
-      // the cap isn't silent.
-      if (num !== null && question.maxValue != null && num > question.maxValue) {
-        num = question.maxValue
-        v = String(num)
-        warn = `Nilai maksimal ${question.maxValue}.`
-      } else if (num !== null && question.minValue != null && num < question.minValue) {
-        // Below min: do NOT clamp while typing (would block multi-digit entry like
-        // "15" when min is 10). Surface a live red, shaking warning instead; the
-        // value is corrected up to min on blur.
-        warn = `Nilai minimal ${question.minValue}.`
-      }
-      e.currentTarget.value = v
-      if (warn) {
-        numberWarn = warn
+      // Truncation, the maxValue hard cap and the minValue warning all live in
+      // applyNumberInput so they stay testable without a DOM.
+      const r = applyNumberInput((e.currentTarget as HTMLInputElement).value, {
+        maxLength: question.maxLength,
+        minValue: question.minValue,
+        maxValue: question.maxValue,
+      })
+      e.currentTarget.value = r.text
+      if (r.warn) {
+        numberWarn = r.warn
         shakeKey++
       } else {
         numberWarn = null
       }
-      onChange(num)
+      onChange(r.value)
     }}
     onblur={(e) => {
       // Clamp up to minValue on blur (clamping min while typing would block
       // entering any digit below it). The live warning above already informed the
       // respondent, so this correction is not silent.
-      if (numValue !== null && question.minValue != null && numValue < question.minValue) {
-        const clamped = question.minValue
-        ;(e.currentTarget as HTMLInputElement).value = String(clamped)
+      if (numCompare !== null && question.minValue != null && numCompare < question.minValue) {
+        const clamped = String(question.minValue)
+        ;(e.currentTarget as HTMLInputElement).value = clamped
         onChange(clamped)
       }
       numberWarn = null
@@ -621,6 +667,10 @@
         hasAsyncOptions={question.hasAsyncOptions}
         questionId={question.id}
         slug={slug}
+        {filterActive}
+        filter={optionFilter}
+        {filterHint}
+        filterEmptyMessage={filterEmptyText}
       />
     {#if isOtherSelected}
       <input

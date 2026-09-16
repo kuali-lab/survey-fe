@@ -1,17 +1,13 @@
 <script lang="ts">
   import type { PageData } from './$types.js'
   import type { ViewState, Answers } from '$lib/types.js'
-  import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress, getInvitationStatus, getDeviceStatus } from '$lib/api.js'
+  import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress, getInvitationStatus, getDeviceStatus, OptionOutOfFilterError } from '$lib/api.js'
   import { computeFingerprint } from '$lib/fingerprint.js'
-  import { getQuestionNumber } from '$lib/utils.js'
+  import { serverMessageOf } from '$lib/submitError.js'
   import { page } from '$app/stores'
   import { goto } from '$app/navigation'
   import { onMount, tick, untrack } from 'svelte'
-  import { fly } from 'svelte/transition'
-  import { cubicOut } from 'svelte/easing'
 
-  import ProgressBar from '$lib/components/ProgressBar.svelte'
-  import SectionHeader from '$lib/components/SectionHeader.svelte'
   import WelcomePage from '$lib/components/WelcomePage.svelte'
   import LocationPromptPage from '$lib/components/LocationPromptPage.svelte'
   import LocationDeniedPage from '$lib/components/LocationDeniedPage.svelte'
@@ -21,8 +17,7 @@
   import ClosedPage from '$lib/components/ClosedPage.svelte'
   import ErrorPage from '$lib/components/ErrorPage.svelte'
   import InviteBlockedPage from '$lib/components/InviteBlockedPage.svelte'
-  import QuestionCard from '$lib/components/QuestionCard.svelte'
-  import NavButton from '$lib/components/NavButton.svelte'
+  import SurveyStage from '$lib/components/SurveyStage.svelte'
   import { loadSurveyorSession } from '$lib/surveyorAuth.js'
   import { SurveyRunner } from '$lib/runner/SurveyRunner.svelte.js'
 
@@ -68,6 +63,15 @@
     // Never auto-submit — the respondent must press "Kirim Jawaban" so they can
     // review their answers first (covers the last page and skip-to-END rules).
     autoSubmit: false,
+    // A filtered dropdown was wiped because its source answer changed: push the
+    // trimmed answer map to the server draft now (it is otherwise only written
+    // on page change), so a resume never brings the stale pick back. The local
+    // draft follows runner.answers reactively (see saveCurrentState effect).
+    onDependentsCleared: () => {
+      if (fingerprintHash && slug && viewState === 'question') {
+        saveDraft(slug, draftSessionKey(fingerprintHash), runner.answers, runner.currentIndex).catch(() => {})
+      }
+    },
   })
 
   // Persisted respondent state, keyed per survey slug. Selfie/location are
@@ -430,13 +434,37 @@
       viewState = 'closing'
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'submit_error'
-      if (msg === 'already_submitted') {
+      // 400 / 422 arrive with a sentence the backend wrote for the respondent.
+      const serverMessage = serverMessageOf(err)
+      if (err instanceof OptionOutOfFilterError) {
+        // A filtered dropdown answer no longer matches its source answers:
+        // return to the form, jump to the offending question and show the
+        // server's message inline (works in scroll mode too — jumpTo lands on
+        // the single page and the `.error` scroll below finds the card).
+        viewState = 'question'
+        submitError = err.detail
+        await tick()
+        if (err.questionId) {
+          runner.jumpTo(err.questionId)
+          runner.questionErrors = { [err.questionId]: err.detail }
+          setTimeout(() => {
+            document.querySelector('.error')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }, 300)
+        }
+      } else if (msg === 'already_submitted') {
         submitError = 'Survei ini sudah pernah Anda isi sebelumnya.'
         viewState = 'question'
         clearSavedState()
       } else if (msg === 'survey_closed') {
         viewState = 'closed'
         clearSavedState()
+      } else if (serverMessage) {
+        // Show it verbatim: the fix differs per case (correct an answer for
+        // a 422, reload the page for a 400), and 'silakan coba lagi' would
+        // send the respondent back into a submit that can never succeed.
+        // Stay on the question view so the answer can actually be corrected.
+        submitError = serverMessage
+        viewState = 'question'
       } else {
         submitError = 'Terjadi kesalahan saat mengirim jawaban. Silakan coba lagi.'
         viewState = 'question'
@@ -672,100 +700,15 @@
     </div>
 
   {:else if viewState === 'question'}
-    <div class="survey-wrap">
-      {#if settings.showProgress}
-        <ProgressBar progress={runner.progress} />
-      {/if}
-
-      <main class="content">
-        <div
-          class="question-stage"
-          class:single-question={runner.currentPage?.questions.length === 1 && !runner.isScrollMode}
-        >
-          {#if runner.isScrollMode}
-            <!-- Scroll mode: render every group as its own section so the
-                 respondent view matches the builder (groups don't disappear). -->
-            {#each runner.scrollSections as section (section.id)}
-              <div class="stage-slide">
-                {#if section.title}
-                  <SectionHeader
-                    title={section.title}
-                    description={section.description ?? null}
-                  />
-                {/if}
-                {#each section.questions as q (q.id)}
-                  <QuestionCard
-                    question={q}
-                    questionNumber={settings.showNumbers ? getQuestionNumber(q, runner.questions) : ''}
-                    answer={runner.answers[q.id] ?? null}
-                    validationError={questionErrors[q.id] ?? null}
-                    onAnswer={(val) => runner.handleAnswer(q.id, val)}
-                    onBlur={() => runner.handleBlur(q.id)}
-                    {slug}
-                  />
-                {/each}
-              </div>
-            {/each}
-          {:else if runner.currentPage}
-            {#key runner.currentPage.id}
-              <div
-                class="stage-slide"
-                in:fly={{ y: prefersReducedMotion ? 0 : 16, duration: prefersReducedMotion ? 0 : 220, easing: cubicOut }}
-              >
-                {#if runner.currentPage.title}
-                  <SectionHeader
-                    title={runner.currentPage.title}
-                    description={runner.currentPage.description ?? null}
-                  />
-                {/if}
-                {#each runner.currentPage.questions as q (q.id)}
-                  <QuestionCard
-                    question={q}
-                    questionNumber={settings.showNumbers ? getQuestionNumber(q, runner.questions) : ''}
-                    answer={runner.answers[q.id] ?? null}
-                    validationError={questionErrors[q.id] ?? null}
-                    onAnswer={(val) => runner.handleAnswer(q.id, val)}
-                    onBlur={() => runner.handleBlur(q.id)}
-                    {slug}
-                  />
-                {/each}
-              </div>
-            {/key}
-          {/if}
-        </div>
-
-        {#if submitError}
-          <div class="submit-error">{submitError}</div>
-        {/if}
-
-        {#if runner.autoAdvancing}
-          <div class="auto-advance-hint" aria-live="polite">
-            <span class="auto-advance-spinner" aria-hidden="true"></span>
-            Lanjut otomatis…
-          </div>
-        {/if}
-
-        <div class="nav">
-          {#if runner.currentIndex > 0 && settings.showNavArrows}
-            <NavButton
-              label="Sebelumnya"
-              onClick={runner.handleBack}
-              variant="secondary"
-              disabled={submitting}
-            />
-          {/if}
-          <div class="nav-right">
-            <NavButton
-              label={runner.nextButtonLabel}
-              onClick={runner.handleNext}
-              variant="primary"
-              disabled={submitting}
-              loading={submitting}
-            />
-          </div>
-        </div>
-      </main>
-    </div>
+    <SurveyStage
+      {runner}
+      {settings}
+      {questionErrors}
+      {slug}
+      {submitError}
+      {submitting}
+      {prefersReducedMotion}
+    />
 
     {#if showSubmitConfirm}
       <div
@@ -878,119 +821,10 @@
     to { transform: rotate(360deg); }
   }
 
-  .survey-wrap {
-    min-height: 100dvh;
-    display: flex;
-    flex-direction: column;
-  }
+  /* Gaya panggung survei (.survey-wrap/.content/.question-stage/.nav/…)
+     pindah ke `$lib/components/SurveyStage.svelte` bersama templatnya —
+     dipakai bersama oleh halaman responden dan halaman pratinjau. */
 
-  .content {
-    flex: 1;
-    max-width: 720px;
-    width: 100%;
-    margin: 0 auto;
-    padding: 8px 20px 16px;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .question-stage {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    padding: 16px 0;
-    /* Outer gap between scroll-mode section blocks. Without card chrome the
-       questions are visually flat; a moderate gap keeps grouping legible
-       without making the page feel sparse. In one_per_page mode there's only
-       one .stage-slide child so the gap is inert. */
-    gap: 32px;
-  }
-
-  /* On desktop, vertically center the single question for a Typeform-like
-     focus. On mobile, top-anchor — centering creates a floating-in-space feel
-     because the viewport is tall and the question alone can't fill it. */
-  @media (min-width: 768px) {
-    .question-stage.single-question {
-      justify-content: center;
-    }
-  }
-
-  .stage-slide {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .question-stage:not(.single-question) .stage-slide {
-    /* Inner gap between questions within a single section. */
-    gap: 24px;
-  }
-
-  @media (min-width: 768px) {
-    .question-stage {
-      gap: 40px;
-    }
-  }
-
-  .nav {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding-top: 12px;
-    padding-bottom: max(8px, env(safe-area-inset-bottom));
-  }
-
-  .nav-right {
-    margin-left: auto;
-  }
-
-  @media (max-width: 767px) {
-    .nav {
-      position: sticky;
-      bottom: 0;
-      background: var(--canvas);
-      margin: 12px -20px 0;
-      padding: 12px 20px;
-      padding-bottom: max(12px, env(safe-area-inset-bottom));
-      border-top: 1px solid var(--canvas-soft);
-      z-index: 5;
-    }
-  }
-
-  .submit-error {
-    background: var(--error-bg);
-    border: 1px solid var(--error-border);
-    border-radius: var(--radius-input);
-    color: var(--error);
-    padding: 12px 16px;
-    font-size: 14px;
-    margin-top: 8px;
-  }
-
-  .auto-advance-hint {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-body);
-    margin: 8px 0 0;
-    align-self: flex-start;
-  }
-
-  .auto-advance-spinner {
-    width: 12px;
-    height: 12px;
-    border: 2px solid var(--canvas-soft);
-    border-top-color: var(--ink);
-    border-radius: 50%;
-    animation: auto-spin 0.6s linear infinite;
-  }
-
-  @keyframes auto-spin {
-    to { transform: rotate(360deg); }
-  }
 
   .resume-card {
     background: var(--canvas);
@@ -1075,15 +909,6 @@
     }
     .resume-description {
       font-size: 16px;
-    }
-  }
-
-  @media (min-width: 768px) {
-    .content {
-      padding: 16px 24px 24px;
-    }
-    .stage-slide {
-      gap: 20px;
     }
   }
 

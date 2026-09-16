@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { OutboxItem } from '$lib/outbox.js'
+  import { ANSWER_VALIDATION_ERROR, BAD_REQUEST_ERROR } from '$lib/submitError.js'
 
   type Props = {
     item: OutboxItem | null
@@ -30,6 +31,10 @@
     if (code === 'unauthorized') return 'Sesi petugas berakhir. Silakan masuk ulang.'
     if (code === 'survey_closed') return 'Survei sudah ditutup.'
     if (code === 'submit_error') return 'Server menolak kiriman. Akan dicoba lagi.'
+    // Terminal rejections: the payload is already frozen in the outbox, so
+    // promising another automatic attempt would be a lie.
+    if (code === ANSWER_VALIDATION_ERROR) return 'Jawaban ditolak server karena tidak lolos pemeriksaan. Kiriman ini tidak bisa dikirim ulang apa adanya — laporkan ke admin.'
+    if (code === BAD_REQUEST_ERROR) return 'Data kiriman tidak dapat dibaca server. Kiriman ini tidak bisa dikirim ulang apa adanya — laporkan ke admin.'
     return 'Belum bisa kirim. Akan dicoba lagi otomatis.'
   }
 </script>
