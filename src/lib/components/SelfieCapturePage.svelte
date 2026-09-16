@@ -5,11 +5,14 @@
   let {
     onComplete,
     onDenied,
-    loading = false
+    loading = false,
+    logoUrl = null
   }: {
     onComplete: (imageBase64: string) => void
     onDenied: () => void
     loading?: boolean
+    /** Logo per survei (M2/K29). `null`/absen = logo platform, seperti sebelumnya. */
+    logoUrl?: string | null
   } = $props()
 
   type Stage = 'intro' | 'requesting' | 'streaming' | 'captured'
@@ -187,7 +190,7 @@
        once, before being immersed in the camera UI. -->
   <div class="intro">
     <div class="logo-bar">
-      <Logo height={24} />
+      <Logo height={24} {logoUrl} />
       <span class="title-pill">Foto Selfie</span>
     </div>
 

@@ -608,7 +608,11 @@
 <div class="page" class:page-question={viewState === 'question'}>
   {#if inviteBlocked}
     <div class="centered-wrap">
-      <InviteBlockedPage state={inviteBlocked} title={survey?.title ?? ''} />
+      <InviteBlockedPage
+        state={inviteBlocked}
+        title={survey?.title ?? ''}
+        logoUrl={survey?.settings?.logoUrl ?? null}
+      />
     </div>
 
   {:else if viewState === 'loading'}
@@ -670,6 +674,7 @@
         onComplete={onSelfieComplete}
         onDenied={onSelfieDenied}
         loading={submitting}
+        logoUrl={survey?.settings?.logoUrl ?? null}
       />
     </div>
 
@@ -681,6 +686,7 @@
       <SelfieDeniedPage
         onRetry={() => { viewState = 'selfie_capture' }}
         loading={false}
+        logoUrl={survey?.settings?.logoUrl ?? null}
       />
     </div>
 
@@ -693,6 +699,7 @@
         onStart={fetchLocationThenSubmit}
         loading={locationRequesting}
         error={validationError}
+        logoUrl={survey?.settings?.logoUrl ?? null}
       />
     </div>
 
@@ -704,6 +711,7 @@
       <LocationDeniedPage
         onRetry={fetchLocationThenSubmit}
         loading={locationRequesting}
+        logoUrl={survey?.settings?.logoUrl ?? null}
       />
     </div>
 

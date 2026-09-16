@@ -7,7 +7,8 @@
     ctaText = 'Izinkan & kirim jawaban',
     onStart,
     error = null,
-    loading = false
+    loading = false,
+    logoUrl = null
   }: {
     title?: string
     description?: string
@@ -15,12 +16,14 @@
     onStart: () => void
     error?: string | null
     loading?: boolean
+    /** Logo per survei (M2/K29). `null`/absen = logo platform, seperti sebelumnya. */
+    logoUrl?: string | null
   } = $props()
 </script>
 
 <div class="gate">
   <div class="logo-bar">
-    <Logo height={24} />
+    <Logo height={24} {logoUrl} />
   </div>
 
   <div class="icon-circle" aria-hidden="true">

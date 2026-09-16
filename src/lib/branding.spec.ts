@@ -17,6 +17,12 @@ import {
 } from './branding.js'
 import WelcomePage from './components/WelcomePage.svelte'
 import ClosingPage from './components/ClosingPage.svelte'
+import Logo from './components/Logo.svelte'
+import InviteBlockedPage from './components/InviteBlockedPage.svelte'
+import LocationDeniedPage from './components/LocationDeniedPage.svelte'
+import LocationPromptPage from './components/LocationPromptPage.svelte'
+import SelfieCapturePage from './components/SelfieCapturePage.svelte'
+import SelfieDeniedPage from './components/SelfieDeniedPage.svelte'
 import RootLayout from '../routes/+layout.svelte'
 import { page } from './test/app-state.js'
 
@@ -187,6 +193,107 @@ describe('ClosingPage — logo per survei (P2)', () => {
   })
 })
 
+/** Logo pelanggan yang dipakai seluruh uji gerbang. */
+const LOGO_KLIEN = 'https://cdn.test/logo-klien.png'
+
+/**
+ * Kelima halaman gerbang merender logo dengan bentuk yang persis sama
+ * (`<Logo height={24} />` di dalam `.logo-bar`), jadi harapannya ditulis sekali
+ * lalu dijalankan untuk kelimanya.
+ *
+ * Tiap entri membungkus panggilan `render`-nya sendiri alih-alih menaruh
+ * komponen di satu larik: prop wajib tiap komponen berbeda, dan pembungkus ini
+ * membuat semuanya tetap bertipe tanpa satu pun cast.
+ */
+const gatePages = [
+  {
+    name: 'InviteBlockedPage',
+    withLogo: () =>
+      render(InviteBlockedPage, { props: { state: 'done' as const, title: 'Survei PID', logoUrl: LOGO_KLIEN } }).body,
+    withoutLogo: () =>
+      render(InviteBlockedPage, { props: { state: 'done' as const, title: 'Survei PID' } }).body,
+  },
+  {
+    name: 'LocationDeniedPage',
+    withLogo: () => render(LocationDeniedPage, { props: { onRetry: () => {}, logoUrl: LOGO_KLIEN } }).body,
+    withoutLogo: () => render(LocationDeniedPage, { props: { onRetry: () => {} } }).body,
+  },
+  {
+    name: 'LocationPromptPage',
+    withLogo: () => render(LocationPromptPage, { props: { onStart: () => {}, logoUrl: LOGO_KLIEN } }).body,
+    withoutLogo: () => render(LocationPromptPage, { props: { onStart: () => {} } }).body,
+  },
+  {
+    name: 'SelfieCapturePage',
+    withLogo: () =>
+      render(SelfieCapturePage, { props: { onComplete: () => {}, onDenied: () => {}, logoUrl: LOGO_KLIEN } }).body,
+    withoutLogo: () =>
+      render(SelfieCapturePage, { props: { onComplete: () => {}, onDenied: () => {} } }).body,
+  },
+  {
+    name: 'SelfieDeniedPage',
+    withLogo: () => render(SelfieDeniedPage, { props: { onRetry: () => {}, logoUrl: LOGO_KLIEN } }).body,
+    withoutLogo: () => render(SelfieDeniedPage, { props: { onRetry: () => {} } }).body,
+  },
+]
+
+describe('halaman gerbang — logo per survei (P4/K29)', () => {
+  for (const gate of gatePages) {
+    it(`${gate.name} memakai logo survei ketika logoUrl terisi`, () => {
+      const body = gate.withLogo()
+      expect(body).toContain(LOGO_KLIEN)
+      expect(body).toContain('alt="Logo survei"')
+      expect(body).not.toContain('aria-label="Logika Statistik"')
+    })
+
+    it(`${gate.name} jatuh ke logo platform ketika logoUrl tidak diberikan`, () => {
+      // Regresi aman-mundur: survei tanpa logo — termasuk salinan localStorage
+      // lama yang tidak punya kunci branding sama sekali — harus tampak persis
+      // seperti sebelum M2.
+      const body = gate.withoutLogo()
+      expect(body).toContain('aria-label="Logika Statistik"')
+      expect(body).not.toContain('alt="Logo survei"')
+      expect(body).not.toContain(LOGO_KLIEN)
+    })
+  }
+})
+
+describe('Logo — prop opsional yang bawaannya tetap merek platform (K29)', () => {
+  it('tanpa prop baru, merender SVG platform persis seperti sebelumnya', () => {
+    // Logo.svelte dipakai 10 berkas dan lima di antaranya SENGAJA tetap merek
+    // platform. Selama pemanggil tidak mengoper logo, keluarannya wajib tidak
+    // bergerak satu atribut pun.
+    const { body } = render(Logo, { props: {} })
+    expect(body).toContain('aria-label="Logika Statistik"')
+    expect(body).toContain('viewBox="0 0 173 35"')
+    expect(body).toContain('#F6C400')
+    expect(body).not.toContain('alt="Logo survei"')
+  })
+
+  it('menghormati prop height yang sudah ada, dengan dan tanpa logo survei', () => {
+    expect(render(Logo, { props: { height: 24 } }).body).toContain('height="24"')
+    expect(render(Logo, { props: { height: 24, logoUrl: LOGO_KLIEN } }).body).toContain('height="24"')
+  })
+
+  it('memilih bentuk logo dari isCustomLogo, bukan dari pemeriksaan kedua', () => {
+    // `src` dan teks alternatif diturunkan dari SATU aturan di branding.ts.
+    // Dua pemeriksaan independen atas prop mentah akan menyimpang diam-diam
+    // begitu aturan logonya tumbuh satu baris — tanpa membuat uji mana pun merah.
+    for (const nilai of [null, undefined, '']) {
+      expect(isCustomLogo(nilai)).toBe(false)
+      const { body } = render(Logo, { props: { logoUrl: nilai } })
+      expect(body).toContain('aria-label="Logika Statistik"')
+      expect(body).not.toContain('alt="Logo survei"')
+    }
+
+    expect(isCustomLogo(LOGO_KLIEN)).toBe(true)
+    const { body } = render(Logo, { props: { logoUrl: LOGO_KLIEN } })
+    expect(body).toContain(`src="${resolveLogoUrl(LOGO_KLIEN)}"`)
+    expect(body).toContain('alt="Logo survei"')
+    expect(body).not.toContain('aria-label="Logika Statistik"')
+  })
+})
+
 describe('shouldEmitPlatformOgTags', () => {
   it('menahan tag bawaan pada rute survei, yang memancarkannya sendiri', () => {
     expect(shouldEmitPlatformOgTags('/s/[slug]')).toBe(false)
@@ -343,5 +450,35 @@ describe('invarian sumber — nol pemancar kembar', () => {
     expect(countOccurrences(pageSource, 'property="og:image"')).toBe(1)
     expect(countOccurrences(pageSource, 'name="twitter:image"')).toBe(1)
     expect(countOccurrences(pageSource, 'name="twitter:card"')).toBe(1)
+  })
+})
+
+describe('invarian sumber — siapa yang menerima logo survei (K27/K29)', () => {
+  it('rute render survei mengoper logo ke tujuh permukaan yang dimiliki survei', () => {
+    // Komponen yang menerima prop tapi tidak pernah dioper apa-apa terbaca
+    // seperti fitur yang jadi, padahal mati. Tujuh = halaman pembuka, halaman
+    // penutup, dan kelima halaman gerbang; semuanya memakai ungkapan yang sama
+    // persis supaya satu survei tidak berganti merek di tengah alurnya.
+    const pageSource = readSource('../routes/s/[slug]/+page.svelte')
+    expect(countOccurrences(pageSource, 'logoUrl={survey?.settings?.logoUrl ?? null}')).toBe(7)
+  })
+
+  it('cangkang surveyor dan rute non-survei tidak mengoper logo pelanggan', () => {
+    // Satu petugas wawancara bisa memegang survei beberapa klien dalam satu
+    // sesi, jadi "logo siapa" tidak punya jawaban di tingkat cangkang (K27).
+    // Penampil berkas dan halaman awal situs tidak dimiliki survei mana pun —
+    // loader penampil berkas bahkan tidak mengembalikan objek survei.
+    const platformSurfaces = [
+      './components/surveyor/SurveyorAppShell.svelte',
+      '../routes/surveyor/+page.svelte',
+      '../routes/surveyor/s/[slug]/+page.svelte',
+      '../routes/+page.svelte',
+      '../routes/s/[slug]/files/[fileId]/+page.svelte',
+    ]
+    for (const relative of platformSurfaces) {
+      const source = readSource(relative)
+      expect(countOccurrences(source, '<Logo')).toBeGreaterThan(0)
+      expect(countOccurrences(source, 'logoUrl')).toBe(0)
+    }
   })
 })
