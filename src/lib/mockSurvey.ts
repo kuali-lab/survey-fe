@@ -29,6 +29,67 @@ const opts = (labels: string[], withOther = false) => [
   ...(withOther ? [{ id: 'o-other', label: 'Lainnya', sortOrder: labels.length, isOther: true }] : []),
 ]
 
+// ── Pilihan Bertingkat demo: Kota → Mall → Brand ─────────────────────────────
+// Kota options carry a `value` (so their key is the code), Mall and Brand use
+// their labels as keys. "Trans Studio Mall Makassar" has no brand mapped on
+// purpose, to show the "Tidak ada pilihan untuk …" state (D-1: still passable).
+const KOTA = [
+  { label: 'Jakarta', value: 'JKT' },
+  { label: 'Bandung', value: 'BDG' },
+  { label: 'Surabaya', value: 'SBY' },
+  { label: 'Medan', value: 'MDN' },
+  { label: 'Makassar', value: 'MKS' },
+]
+const MALL_BY_KOTA: Record<string, string[]> = {
+  JKT: ['Grand Indonesia', 'Plaza Senayan', 'Pondok Indah Mall'],
+  BDG: ['Paris Van Java', '23 Paskal'],
+  SBY: ['Tunjungan Plaza', 'Pakuwon Mall'],
+  MDN: ['Sun Plaza', 'Delipark'],
+  MKS: ['Trans Studio Mall Makassar'],
+}
+const MALLS_BY_BRAND: Record<string, string[]> = {
+  Uniqlo: ['Grand Indonesia', 'Pondok Indah Mall', 'Paris Van Java', 'Tunjungan Plaza', 'Pakuwon Mall', 'Delipark'],
+  Zara: ['Grand Indonesia', 'Plaza Senayan', 'Tunjungan Plaza'],
+  'H&M': ['Grand Indonesia', 'Pondok Indah Mall', 'Paris Van Java', 'Tunjungan Plaza', 'Sun Plaza'],
+  Starbucks: ['Grand Indonesia', 'Plaza Senayan', 'Pondok Indah Mall', 'Paris Van Java', '23 Paskal', 'Tunjungan Plaza', 'Pakuwon Mall', 'Delipark'],
+  Gramedia: ['Pondok Indah Mall', '23 Paskal', 'Tunjungan Plaza', 'Sun Plaza'],
+  Sephora: ['Grand Indonesia', 'Plaza Senayan', 'Tunjungan Plaza'],
+}
+
+function cascadeBlock(): Question[] {
+  const malls = Object.values(MALL_BY_KOTA).flat()
+  const mallAllowed: Record<string, string[]> = {}
+  for (const [kota, list] of Object.entries(MALL_BY_KOTA)) {
+    for (const m of list) mallAllowed[m] = [...(mallAllowed[m] ?? []), kota]
+  }
+  return [
+    q({
+      id: 'cascade-kota',
+      type: 'single_choice',
+      title: 'Di <b>kota</b> mana Anda paling sering berbelanja?',
+      titlePlain: 'Di kota mana Anda paling sering berbelanja?',
+      required: true,
+      options: KOTA.map((k, i) => ({ id: `o-kota-${k.value}`, label: k.label, value: k.value, sortOrder: i })),
+    }),
+    q({
+      id: 'cascade-mall',
+      type: 'dropdown',
+      title: 'Mal mana yang paling sering Anda kunjungi?',
+      required: true,
+      options: opts(malls, true),
+      dependsOn: { sourceQuestionId: 'cascade-kota', allowed: mallAllowed },
+    }),
+    q({
+      id: 'cascade-brand',
+      type: 'single_choice',
+      title: 'Gerai apa yang paling sering Anda datangi di mal tersebut?',
+      required: true,
+      options: opts(Object.keys(MALLS_BY_BRAND), true),
+      dependsOn: { sourceQuestionId: 'cascade-mall', allowed: { ...MALLS_BY_BRAND } },
+    }),
+  ]
+}
+
 export function buildMockSurvey(slug: string): Survey {
   order = 0
   return {
@@ -60,6 +121,8 @@ export function buildMockSurvey(slug: string): Survey {
         title: 'Bagian 1: Tentang Anda',
         description: 'Beberapa pertanyaan singkat mengenai data diri.',
       }),
+      // Placed first so the Pilihan Bertingkat demo is reachable right away.
+      ...cascadeBlock(),
       q({ id: 'short-1', type: 'short_text', title: 'Siapa nama panggilan Anda?', placeholder: 'Misal: Budi', required: true }),
       q({ id: 'long-1', type: 'long_text', title: 'Ceritakan sedikit tentang keseharian Anda.' }),
       q({ id: 'email-1', type: 'email', title: 'Alamat email Anda?' }),

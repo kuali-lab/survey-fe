@@ -104,3 +104,111 @@ describe('SurveyRunner.handleAnswer — filter source invalidation', () => {
     expect(cleared).toHaveBeenCalledWith(['s'])
   })
 })
+
+// ── Pilihan Bertingkat: Kota → Mall → Brand (+ a catalog filter off Brand) ──
+function makeCascadeSurvey(opts: { brandRequired?: boolean; displayMode?: 'scroll' | 'one_per_page' } = {}): Survey {
+  const opt = (label: string, i: number, extra: Record<string, unknown> = {}) => ({ id: `o-${label}`, label, sortOrder: i, ...extra })
+  return {
+    id: 'cascade',
+    title: 'Belanja',
+    settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: opts.displayMode ?? 'one_per_page' },
+    skipRules: [],
+    closeMessage: null,
+    closeImageUrl: null,
+    questions: [
+      q({ id: 'kota', type: 'single_choice', sortOrder: 1, options: [opt('Jakarta', 0, { value: 'JKT' }), opt('Makassar', 1, { value: 'MKS' })] }),
+      q({
+        id: 'mall', type: 'dropdown', sortOrder: 2,
+        options: [opt('Grand Indonesia', 0), opt('Plaza Senayan', 1), opt('TSM Makassar', 2)],
+        dependsOn: { sourceQuestionId: 'kota', allowed: { 'Grand Indonesia': ['JKT'], 'Plaza Senayan': ['JKT'], 'TSM Makassar': ['MKS'] } },
+      }),
+      q({
+        id: 'brand', type: 'single_choice', sortOrder: 3, required: opts.brandRequired ?? false,
+        options: [opt('Zara', 0), opt('Uniqlo', 1)],
+        dependsOn: { sourceQuestionId: 'mall', allowed: { Zara: ['Grand Indonesia', 'Plaza Senayan'], Uniqlo: ['Grand Indonesia'] } },
+      }),
+      q({
+        id: 'outlet', type: 'dropdown', sortOrder: 4, hasAsyncOptions: true,
+        filterConfig: { attrs: [{ key: 'brand', sourceQuestionId: 'brand' }] },
+      }),
+      q({ id: 'nama', type: 'short_text', sortOrder: 5 }),
+    ],
+  }
+}
+
+function makeCascadeRunner(onDependentsCleared?: (ids: string[]) => void, opts: Parameters<typeof makeCascadeSurvey>[0] = {}) {
+  const survey = makeCascadeSurvey(opts)
+  return new SurveyRunner({ getSurvey: () => survey, onFinish: () => {}, autoSubmit: false, onDependentsCleared })
+}
+
+describe('SurveyRunner — Pilihan Bertingkat', () => {
+  const full = { kota: 'Jakarta', mall: 'Grand Indonesia', brand: 'Uniqlo', outlet: 'Uniqlo GI Lt. 3', nama: 'Budi' }
+
+  it('changing level 1 clears levels 2, 3 and the catalog dependent', () => {
+    const cleared = vi.fn()
+    const r = makeCascadeRunner(cleared)
+    r.loadFrom({ answers: full, currentIndex: 0 })
+    expect(cleared).not.toHaveBeenCalled()
+
+    r.handleAnswer('kota', 'Makassar')
+
+    expect(r.answers).toEqual({ kota: 'Makassar', nama: 'Budi' })
+    expect(cleared).toHaveBeenCalledWith(['mall', 'brand', 'outlet'])
+  })
+
+  it('changing level 2 clears only the levels below it', () => {
+    const r = makeCascadeRunner()
+    r.loadFrom({ answers: full, currentIndex: 0 })
+    r.handleAnswer('mall', 'Plaza Senayan')
+    expect(r.answers).toEqual({ kota: 'Jakarta', mall: 'Plaza Senayan', nama: 'Budi' })
+  })
+
+  it('re-emitting the same parent value clears nothing', () => {
+    const cleared = vi.fn()
+    const r = makeCascadeRunner(cleared)
+    r.loadFrom({ answers: full, currentIndex: 0 })
+    r.handleAnswer('kota', 'Jakarta')
+    expect(r.answers).toEqual(full)
+    expect(cleared).not.toHaveBeenCalled()
+  })
+
+  it('draft resume drops no-longer-visible answers transitively and fires the callback', () => {
+    const cleared = vi.fn()
+    const r = makeCascadeRunner(cleared)
+    // Draft saved before the researcher re-mapped Plaza Senayan away from Uniqlo.
+    r.loadFrom({ answers: { kota: 'Jakarta', mall: 'Plaza Senayan', brand: 'Uniqlo', outlet: 'X', nama: 'Budi' }, currentIndex: 3 })
+    expect(r.answers).toEqual({ kota: 'Jakarta', mall: 'Plaza Senayan', nama: 'Budi' })
+    expect(cleared).toHaveBeenCalledWith(['brand', 'outlet'])
+    expect(r.currentIndex).toBe(3)
+  })
+
+  it('draft resume drops a mall that no longer belongs to the drafted city', () => {
+    const r = makeCascadeRunner()
+    r.loadFrom({ answers: { kota: 'Makassar', mall: 'Grand Indonesia', brand: 'Zara' }, currentIndex: 0 })
+    expect(r.answers).toEqual({ kota: 'Makassar' })
+  })
+
+  it('D-1: a required dependent with no visible option (parent answered) passes validation', async () => {
+    const r = makeCascadeRunner(undefined, { brandRequired: true, displayMode: 'one_per_page' })
+    r.loadFrom({ answers: { kota: 'Makassar', mall: 'TSM Makassar' }, currentIndex: 2 })
+    expect(r.currentPage?.questions[0].id).toBe('brand')
+    await r.handleNext()
+    expect(r.questionErrors).toEqual({})
+    expect(r.currentIndex).toBe(3)
+  })
+
+  it('a required dependent that still has options is enforced', async () => {
+    const r = makeCascadeRunner(undefined, { brandRequired: true })
+    r.loadFrom({ answers: { kota: 'Jakarta', mall: 'Plaza Senayan' }, currentIndex: 2 })
+    await r.handleNext()
+    expect(r.questionErrors.brand).toBe('Pertanyaan ini wajib diisi.')
+    expect(r.currentIndex).toBe(2)
+  })
+
+  it('a required dependent waiting on its parent is enforced', async () => {
+    const r = makeCascadeRunner(undefined, { brandRequired: true })
+    r.loadFrom({ answers: {}, currentIndex: 2 })
+    await r.handleNext()
+    expect(r.questionErrors.brand).toBe('Pertanyaan ini wajib diisi.')
+  })
+})

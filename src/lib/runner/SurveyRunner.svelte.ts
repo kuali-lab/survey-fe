@@ -14,12 +14,21 @@ import type { Survey, Question, Answers, AnswerValue, SurveySettings } from '$li
 import { getAnswerableQuestions } from '$lib/utils.js'
 import { evaluateNext } from '$lib/skipLogic.js'
 import { isValidPhoneFormat } from '$lib/phone.js'
-import { getFilterDependents } from '$lib/optionFilter.js'
+import { collectDependents, pruneDependentAnswers, visibleOptions } from '$lib/optionDependency.js'
 import { buildSurveySections, type SurveyPage } from './sections.js'
 
 export type { SurveyPage }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function isEmptyAnswer(v: AnswerValue | undefined): boolean {
+  return (
+    v === null ||
+    v === undefined ||
+    (typeof v === 'string' && v.trim() === '') ||
+    (Array.isArray(v) && v.length === 0)
+  )
+}
 
 function isAnsweredValue(v: AnswerValue | undefined): boolean {
   if (v === null || v === undefined) return false
@@ -203,7 +212,13 @@ export class SurveyRunner {
 
   // ---- Validation ----
   private validateOne(q: Question, answer: AnswerValue): string | null {
-    if (q.required) {
+    // Pilihan Bertingkat D-1: a required dependent whose parent is answered but
+    // leaves no mapped option to pick is treated as satisfied, so a gap in the
+    // researcher's mapping never traps the respondent. "Lainnya" stays optional.
+    const requiredHere =
+      q.required &&
+      !(isEmptyAnswer(answer) && visibleOptions(q, this.answers, this.questions).status === 'empty')
+    if (requiredHere) {
       if (answer === null || answer === undefined) return 'Pertanyaan ini wajib diisi.'
       if (typeof answer === 'string' && answer.trim() === '') return 'Pertanyaan ini wajib diisi.'
       if (Array.isArray(answer) && answer.length === 0) return 'Pilih minimal satu jawaban.'
@@ -238,7 +253,7 @@ export class SurveyRunner {
       answer === undefined ||
       (typeof answer === 'string' && answer.trim() === '') ||
       (Array.isArray(answer) && answer.length === 0)
-    if (!q.required && isEmpty && q.type !== 'file_upload') return null
+    if (!requiredHere && isEmpty && q.type !== 'file_upload') return null
 
     if (!isEmpty) {
       let strVal = ''
@@ -380,16 +395,16 @@ export class SurveyRunner {
     const prev = this.answers[qid]
     const next: Answers = { ...this.answers, [qid]: value }
 
-    // Daftar Pilihan Bersaring: a filtered dropdown's answer is only valid for
-    // the source answers it was picked under. When a SOURCE changes value, drop
-    // every dependent answer (screen + drafts) so a stale pick can never be
+    // Daftar Pilihan Bersaring + Pilihan Bertingkat: a dependent answer is only
+    // valid for the source answers it was picked under. When a SOURCE changes
+    // value, drop every TRANSITIVE dependent (Kota → Mall → Brand, also through
+    // catalog filters) on screen + drafts, so a stale pick can never be
     // submitted — the backend would 422 it anyway (OPTION_OUT_OF_FILTER).
     const cleared: string[] = []
     if (!answerValuesEqual(prev, value)) {
-      for (const dep of getFilterDependents(qid, this.questions)) {
-        if (dep.id === qid) continue
-        delete next[dep.id]
-        cleared.push(dep.id)
+      for (const depId of collectDependents(qid, this.questions)) {
+        delete next[depId]
+        cleared.push(depId)
       }
     }
 
@@ -491,11 +506,17 @@ export class SurveyRunner {
   }
 
   loadFrom = (state: { answers: Answers; currentIndex: number; accumulatedTimeMs?: number }) => {
-    this.answers = state.answers
+    // Draft self-heal (Pilihan Bertingkat §2.3): the survey may have changed
+    // since the draft was saved, so drop dependent answers that are no longer
+    // visible under the drafted parent answers (cascading) and let the page
+    // trim the server draft exactly like handleAnswer does.
+    const { answers, cleared } = pruneDependentAnswers(state.answers ?? {}, this.questions)
+    this.answers = answers
     const maxIdx = Math.max(0, this.surveyPages.length - 1)
     this.currentIndex = Math.min(state.currentIndex, maxIdx)
     this.accumulatedTimeMs = state.accumulatedTimeMs || 0
     this.lastActiveTime = Date.now()
+    if (cleared.length > 0) this._onDependentsCleared?.(cleared)
   }
 
   getDurationSeconds = () => {
@@ -634,8 +655,10 @@ export class SurveyRunner {
 
     if (q.type === 'single_choice' || q.type === 'checkbox' || q.type === 'image_choice') {
       if (!q.options) return
-      const standard = q.options.filter((o) => !o.isOther)
-      const other = q.options.find((o) => o.isOther)
+      // Pilihan Bertingkat: letters address only the options on screen.
+      const shown = visibleOptions(q, this.answers, this.questions).options
+      const standard = shown.filter((o) => !o.isOther)
+      const other = shown.find((o) => o.isOther)
       const opts = other ? [...standard, other] : standard
       const idx = key.charCodeAt(0) - 65
       if (idx < 0 || idx >= opts.length) return

@@ -8,6 +8,7 @@
   let {
     options = [], value = '', onChange, placeholder = '-- Pilih salah satu --', hasAsyncOptions = false, questionId = '', slug = '',
     filterActive = false, filter = null, filterHint = '', filterEmptyMessage = '',
+    disabled = false, notice = '',
   } = $props<{
     options?: { label: string, isOther?: boolean }[];
     value: string;
@@ -25,11 +26,17 @@
     filter?: OptionFilter | null;
     filterHint?: string;
     filterEmptyMessage?: string;
+    // Pilihan Bertingkat (manual option list narrowed by a parent answer):
+    // `disabled` = parent unanswered (shows `filterHint`); `notice` = a
+    // persistent line under the control, e.g. the "Tidak ada pilihan untuk …"
+    // message when the parent answer allows nothing.
+    disabled?: boolean;
+    notice?: string;
   }>();
 
-  // Disabled until every source answer is present. Only meaningful for async
-  // (catalog) dropdowns — a manual option list has nothing to filter.
-  let filterBlocked = $derived(filterActive && hasAsyncOptions && !filter);
+  // Disabled until every source answer is present. The catalog filter only
+  // applies to async dropdowns; `disabled` covers local dependent lists.
+  let filterBlocked = $derived(disabled || (filterActive && hasAsyncOptions && !filter));
   // Stable identity so the fetch effect re-runs only when the params change.
   let filterKey = $derived(optionFilterKey(filter));
 
@@ -216,7 +223,7 @@
         <div class="empty-state">Ketik minimal {MIN_SEARCH_CHARS} huruf untuk mencari.</div>
       {:else if filteredOptions.length === 0 && isFetching}
         <div class="empty-state">Memuat...</div>
-      {:else if filteredOptions.length === 0 && filter && filterEmptyMessage && debouncedSearch === ''}
+      {:else if filteredOptions.length === 0 && (filter || !hasAsyncOptions) && filterEmptyMessage && debouncedSearch === ''}
         <div class="empty-state filter-empty">{filterEmptyMessage}</div>
       {:else if filteredOptions.length === 0}
         <div class="empty-state">Tidak ada pilihan yang cocok.</div>
@@ -253,6 +260,8 @@
 
   {#if filterBlocked && filterHint}
     <p class="filter-hint">{filterHint}</p>
+  {:else if notice}
+    <p class="filter-hint filter-notice">{notice}</p>
   {/if}
 </div>
 
@@ -300,6 +309,10 @@
     margin: 8px 0 0;
     font-size: 13px;
     color: var(--text-muted);
+  }
+  .filter-hint.filter-notice {
+    color: var(--text-body);
+    line-height: 1.5;
   }
   .empty-state.filter-empty {
     color: var(--text-body);

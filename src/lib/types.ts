@@ -50,6 +50,18 @@ export interface FilterConfig {
   attrs?: FilterAttr[]
 }
 
+/**
+ * "Pilihan Bertingkat" (plan §0): a plain single_choice / dropdown question
+ * whose inline options are narrowed by the answer to ONE earlier plain choice
+ * question. `allowed` maps a dependent option key to the parent option keys it
+ * is shown under (key = trimmed `value`, else trimmed `label`). Absent = no
+ * dependency.
+ */
+export interface OptionDependency {
+  sourceQuestionId: string
+  allowed: Record<string, string[]>
+}
+
 export interface Question {
   id: string
   type: QuestionType
@@ -85,6 +97,7 @@ export interface Question {
   // Relational config
   hasAsyncOptions?: boolean
   filterConfig?: FilterConfig
+  dependsOn?: OptionDependency
   options?: QuestionOption[]
   // Flat array of image URLs for image_choice options, parallel to options[].
   // Derived from options[].imageUrl when normalized from the API response.
