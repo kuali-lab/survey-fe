@@ -6,6 +6,8 @@
   import { serverMessageOf } from '$lib/submitError.js'
   import { page } from '$app/stores'
   import { goto } from '$app/navigation'
+  import { env } from '$env/dynamic/public'
+  import { resolveOgImageUrl } from '$lib/branding.js'
   import { onMount, tick, untrack } from 'svelte'
 
   import WelcomePage from '$lib/components/WelcomePage.svelte'
@@ -525,8 +527,17 @@
   const metaDescription = $derived(
     (welcomeQuestion?.descriptionPlain ?? survey?.title ?? 'Isi survei dari Logika Statistik — platform riset dan analisis statistik.').slice(0, 160),
   )
+  // Urutan gambar pratinjau tautan: gambar OG survei → gambar sampul halaman
+  // pembuka (perilaku yang sudah ada) → aset bawaan platform 1200×630.
+  //
+  // Basisnya PUBLIC_SITE_URL, dengan origin permintaan sebagai cadangan:
+  // crawler tidak mengurai path relatif, jadi hasilnya wajib absolut.
   const ogImage = $derived(
-    welcomeQuestion?.imageUrl ?? `${$page.url.origin}/logo-logika-teta.png`,
+    resolveOgImageUrl({
+      settings: survey?.settings,
+      welcomeImageUrl: welcomeQuestion?.imageUrl ?? null,
+      base: env.PUBLIC_SITE_URL || $page.url.origin,
+    }),
   )
   const canonicalUrl = $derived(
     `${$page.url.origin}/s/${data.slug}`,
@@ -579,7 +590,11 @@
   <meta name="twitter:title" content={pageTitle} />
   <meta name="twitter:description" content={metaDescription} />
   <meta name="twitter:image" content={ogImage} />
-  <meta name="twitter:card" content={welcomeQuestion?.imageUrl ? 'summary_large_image' : 'summary'} />
+  <!-- Selalu `summary_large_image`: tiap cabang `ogImage` kini menghasilkan
+       gambar yang memang diperuntukkan sebagai pratinjau, dan bawaannya
+       1200×630. Dulu ia bergantung pada ada-tidaknya gambar sampul, sementara
+       app.html menetapkan `summary` tanpa syarat — dua sumber, pemenang tak pasti. -->
+  <meta name="twitter:card" content="summary_large_image" />
 </svelte:head>
 
 <svelte:window
@@ -641,6 +656,7 @@
           ctaText={'Mulai Survei'}
           onStart={handleStart}
           error={validationError}
+          logoUrl={survey?.settings?.logoUrl ?? null}
         />
       {/if}
     </div>
@@ -754,6 +770,7 @@
         description={closingQuestion?.description ?? null}
         imageUrl={closingQuestion?.imageUrl ?? null}
         imageLayout={closingQuestion?.imageLayout ?? 'center'}
+        logoUrl={survey?.settings?.logoUrl ?? null}
       />
     </div>
   {/if}

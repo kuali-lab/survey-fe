@@ -123,6 +123,18 @@ export interface SurveySettings {
    * berarti BOLEH kembali — bukan dilarang.
    */
   allowBack?: boolean
+  /**
+   * Branding per survei yang dilihat responden (M2): logo di halaman
+   * pembuka/penutup, favicon tab, dan gambar pratinjau tautan.
+   *
+   * 🔴 Ketiganya opsional dengan alasan yang sama seperti `allowBack`:
+   * `fetchSurvey` menyinggahkan objek survei ke localStorage, dan salinan lama
+   * tidak punya kunci ini. Ketiadaan field berarti PAKAI ASET PLATFORM — bukan
+   * kosong. Aturannya dipusatkan di `$lib/branding.ts`.
+   */
+  logoUrl?: string | null
+  faviconUrl?: string | null
+  ogImageUrl?: string | null
   displayMode: 'scroll' | 'one_per_page'
 }
 

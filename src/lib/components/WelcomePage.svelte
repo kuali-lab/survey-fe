@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { resolveLogoUrl } from '$lib/branding.js'
+
   let {
     title,
     titlePlain = '',
@@ -7,7 +9,8 @@
     imageLayout = 'center',
     ctaText,
     onStart,
-    error = null
+    error = null,
+    logoUrl = null
   }: {
     title: string
     titlePlain?: string
@@ -17,15 +20,18 @@
     ctaText: string
     onStart: () => void
     error?: string | null
+    /** Logo per survei (M2). `null`/absen = logo platform, seperti sebelumnya. */
+    logoUrl?: string | null
   } = $props()
 
+  const logoSrc = $derived(resolveLogoUrl({ logoUrl }))
   const layout = $derived(imageLayout ?? 'center')
   const isInline = $derived(layout === 'left' || layout === 'right')
 </script>
 
 <div class="welcome" class:layout-inline={isInline} class:layout-right={layout === 'right'}>
   <div class="logo-bar">
-    <img src="/logo-logika-teta.svg" alt="Logika Statistik" class="logo-img" />
+    <img src={logoSrc} alt={logoUrl ? 'Logo survei' : 'Logika Statistik'} class="logo-img" />
   </div>
 
   {#if imageUrl}

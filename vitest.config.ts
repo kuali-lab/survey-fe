@@ -16,6 +16,7 @@ export default defineConfig({
       '$env/static/public': here('./src/lib/test/env-public.ts'),
       '$env/dynamic/public': here('./src/lib/test/env-public.ts'),
       '$env/dynamic/private': here('./src/lib/test/env-private.ts'),
+      '$app/state': here('./src/lib/test/app-state.ts'),
     },
   },
   test: {
