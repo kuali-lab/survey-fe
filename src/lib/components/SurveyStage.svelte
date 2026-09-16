@@ -124,7 +124,14 @@
     {/if}
 
     <div class="nav">
-      {#if runner.currentIndex > 0 && settings.showNavArrows}
+      <!--
+        `runner.canGoBack` di sini KOSMETIK, bukan penegakan: tombol mati yang
+        terlihat adalah UX buruk. Penegakan No-Back hidup di `handleBack` dalam
+        runner, yang juga menutup roda tetikus, gestur sentuh, dan papan ketik —
+        jangan pernah membalik peran keduanya. `showNavArrows` tetap sakelar
+        terpisah dan tidak digabung ke sini.
+      -->
+      {#if runner.currentIndex > 0 && settings.showNavArrows && runner.canGoBack}
         <NavButton
           label="Sebelumnya"
           onClick={runner.handleBack}

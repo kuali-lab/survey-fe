@@ -115,6 +115,14 @@ export interface SurveySettings {
   requireLocation?: boolean
   requireSelfie?: boolean
   oneResponsePerDevice?: boolean
+  /**
+   * Responden boleh kembali ke pertanyaan sebelumnya (M1 No-Back).
+   *
+   * 🔴 Opsional dengan sengaja: `fetchSurvey` menyinggahkan objek survei ke
+   * localStorage, dan salinan lama tidak punya field ini. Ketiadaan field
+   * berarti BOLEH kembali — bukan dilarang.
+   */
+  allowBack?: boolean
   displayMode: 'scroll' | 'one_per_page'
 }
 

@@ -33,7 +33,16 @@ export function getSurveyorRunner(
     _runner.setOnFinish(onFinish)
     return _runner
   }
-  _runner = new SurveyRunner({ getSurvey, onFinish, lastButtonLabel: 'Tinjau Jawaban' })
+  // 🔴 `enforceAllowBack: false` — larangan kembali ke pertanyaan sebelumnya
+  // (M1 No-Back) hanya berlaku untuk responden. Surveyor memakai runner yang sama,
+  // dan layar rekapnya dibangun justru untuk mengoreksi jawaban saat wawancara:
+  // menegakkan larangan di sini ikut mematikan tombol "Edit" di rekap.
+  _runner = new SurveyRunner({
+    getSurvey,
+    onFinish,
+    lastButtonLabel: 'Tinjau Jawaban',
+    enforceAllowBack: false,
+  })
   _surveyId = survey.id
   _runner.lastActiveTime = Date.now()
   return _runner

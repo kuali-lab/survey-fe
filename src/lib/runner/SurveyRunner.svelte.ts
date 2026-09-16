@@ -51,6 +51,7 @@ const DEFAULT_SETTINGS: SurveySettings = {
   showBranding: true,
   showNavArrows: true,
   showNumbers: true,
+  allowBack: true,
   displayMode: 'one_per_page',
 }
 
@@ -89,6 +90,17 @@ export type RunnerOptions = {
    * local drafts already follow `answers` reactively.
    */
   onDependentsCleared?: (clearedIds: string[]) => void
+  /**
+   * Tegakkan `settings.allowBack` — larangan kembali ke pertanyaan sebelumnya
+   * (M1 No-Back). Bawaannya `true`, jadi alur responden terkena larangan tanpa
+   * perlu menyalakan apa pun.
+   *
+   * 🔴 Alur SURVEYOR mematikannya (`false`). Runner ini dipakai bersama oleh alur
+   * responden dan alur surveyor, sementara layar rekap surveyor justru dibangun
+   * untuk mengoreksi jawaban saat wawancara — penjaga yang dipasang polos ikut
+   * mengunci tombol "Edit" di sana. Larangan ini hanya untuk responden.
+   */
+  enforceAllowBack?: boolean
 }
 
 export class SurveyRunner {
@@ -113,6 +125,7 @@ export class SurveyRunner {
   private _onFinish!: () => void | Promise<void>
   private _lastButtonLabel!: string | undefined
   private _autoSubmit = true
+  private _enforceAllowBack = true
   private _onDependentsCleared: ((clearedIds: string[]) => void) | undefined
 
   constructor(opts: RunnerOptions) {
@@ -121,6 +134,7 @@ export class SurveyRunner {
     this._autoSubmit = opts.autoSubmit ?? true
     this._lastButtonLabel = opts.lastButtonLabel
     this._onDependentsCleared = opts.onDependentsCleared
+    this._enforceAllowBack = opts.enforceAllowBack ?? true
   }
 
   /** Update the onFinish callback. Used by the surveyor flow where each
@@ -146,6 +160,23 @@ export class SurveyRunner {
     this.skipRules.length > 0 ? 'one_per_page' : (this.settings.displayMode || 'one_per_page'),
   )
   isScrollMode = $derived(this.effectiveDisplayMode === 'scroll')
+
+  // M1 No-Back: boleh tidaknya responden mundur satu halaman.
+  //
+  // Kelayakannya dihitung dari mode EFEKTIF, bukan `settings.displayMode` mentah:
+  // survei yang punya skip rules dipaksa one_per_page walau tersimpan 'scroll',
+  // dan di situlah tombol "Sebelumnya" nyata muncul.
+  //
+  // 🔴 `!== false`, bukan `=== true`. Survei dari singgahan localStorage lama tidak
+  // punya field `allowBack`, dan `undefined` harus berarti boleh mundur — kalau
+  // tidak, responden dengan singgahan lama kehilangan tombol mundurnya.
+  //
+  // Alur surveyor mematikan penegakan lewat `enforceAllowBack: false` (lihat
+  // RunnerOptions): larangan ini hanya untuk responden.
+  canGoBack = $derived(
+    !this._enforceAllowBack ||
+      (this.effectiveDisplayMode !== 'scroll' && this.settings.allowBack !== false),
+  )
 
   // ---- Derived: pagination ----
   // one_per_page: each standalone question is its own page; each group is one
@@ -362,6 +393,11 @@ export class SurveyRunner {
   }
 
   handleBack = () => {
+    // Penjaga M1 ada DI SINI, bukan di komponen halaman. handleBack adalah muara
+    // kelima jalan mundur (tombol responden, tombol surveyor, roda tetikus, gestur
+    // sentuh, papan ketik), jadi satu penjaga menutup kelimanya; menyembunyikan
+    // tombol hanya menutup satu.
+    if (!this.canGoBack) return
     this.cancelAutoAdvance()
     this.questionErrors = {}
     // When skip logic is active, use the navigation history to retrace the
