@@ -133,10 +133,10 @@ describe('SurveyRunner.handleAnswer — filter source invalidation', () => {
 })
 
 // ─── M1 No-Back: larangan kembali ke pertanyaan sebelumnya ───────────────────
-// Penegakannya HARUS di runner. Tombol "Sebelumnya" cuma satu dari lima jalan
-// mundur (tombol responden, tombol surveyor, roda tetikus, gestur sentuh, papan
-// ketik) dan kelimanya bermuara di handleBack — menyembunyikan tombol saja lolos
-// empat sisanya.
+// Penegakannya HARUS di runner. Untuk alur RESPONDEN, tombol "Sebelumnya" cuma satu
+// dari lima jalan mundur (tombol responden, tombol surveyor, roda tetikus, gestur
+// sentuh, papan ketik) dan semuanya bermuara di handleBack — menyembunyikan tombol
+// saja lolos empat sisanya. Alur surveyor sengaja dikecualikan (lihat U11).
 
 const navHistoryOf = (r: SurveyRunner) => (r as unknown as { navHistory: number[] }).navHistory
 

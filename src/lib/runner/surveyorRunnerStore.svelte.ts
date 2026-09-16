@@ -34,9 +34,9 @@ export function getSurveyorRunner(
     return _runner
   }
   // 🔴 `enforceAllowBack: false` — larangan kembali ke pertanyaan sebelumnya
-  // (M1 No-Back) hanya berlaku untuk responden. Surveyor memakai runner yang sama,
-  // dan layar rekapnya dibangun justru untuk mengoreksi jawaban saat wawancara:
-  // menegakkan larangan di sini ikut mematikan tombol "Edit" di rekap.
+  // (M1 No-Back) hanya berlaku untuk responden. Petugas wawancara perlu mengoreksi
+  // salah input; tanpa baris ini tombol "Sebelumnya" surveyor beserta gestur di
+  // layar wawancara ikut terkunci. Alasan lengkapnya di komentar `canGoBack`.
   _runner = new SurveyRunner({
     getSurvey,
     onFinish,
