@@ -116,8 +116,71 @@ function topOfMindBlock(): Question[] {
   ]
 }
 
+// ── Matrix demo: wide grids that used to force horizontal scrolling ──────────
+// Served alone at `/s/mock-matrix` so the matrix layouts can be tested without
+// clicking through the whole demo. Covers: 5-col Likert with long labels,
+// 7-col agreement scale, 10-col numeric scale, and many rows.
+const rowsOf = (labels: string[]) => labels.map((label, i) => ({ id: `r-${i}`, label, sortOrder: i }))
+const colsOf = (labels: string[]) => labels.map((label, i) => ({ id: `c-${i}`, label, sortOrder: i }))
+
+function matrixBlock(): Question[] {
+  return [
+    q({
+      id: 'matrix-likert5',
+      type: 'matrix',
+      required: true,
+      title: 'Seberapa puas Anda dengan layanan kami?',
+      matrixRows: rowsOf(['Kecepatan pelayanan', 'Keramahan petugas', 'Kebersihan ruang tunggu', 'Kejelasan informasi biaya']),
+      matrixCols: colsOf(['Sangat tidak puas', 'Tidak puas', 'Cukup puas', 'Puas', 'Sangat puas']),
+    }),
+    q({
+      id: 'matrix-agree7',
+      type: 'matrix',
+      title: 'Seberapa setuju Anda dengan pernyataan berikut?',
+      matrixRows: rowsOf([
+        'Aplikasi ini mudah digunakan tanpa perlu bantuan orang lain',
+        'Saya akan merekomendasikan aplikasi ini kepada rekan kerja',
+        'Fitur yang tersedia sudah sesuai dengan kebutuhan saya',
+      ]),
+      matrixCols: colsOf([
+        'Sangat tidak setuju', 'Tidak setuju', 'Agak tidak setuju', 'Netral',
+        'Agak setuju', 'Setuju', 'Sangat setuju',
+      ]),
+    }),
+    q({
+      id: 'matrix-scale10',
+      type: 'matrix',
+      title: 'Beri nilai 1–10 untuk tiap kanal layanan.',
+      matrixRows: rowsOf(['Call center', 'WhatsApp', 'Email', 'Kantor cabang', 'Aplikasi mobile', 'Situs web']),
+      matrixCols: colsOf(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']),
+    }),
+    q({
+      id: 'matrix-freq',
+      type: 'matrix',
+      title: 'Seberapa sering Anda menggunakan moda transportasi berikut?',
+      matrixRows: rowsOf([
+        'Sepeda motor pribadi', 'Mobil pribadi', 'Ojek online', 'Taksi online', 'Bus kota / TransJakarta',
+        'KRL / Commuter Line', 'MRT / LRT', 'Angkot', 'Sepeda', 'Jalan kaki',
+      ]),
+      matrixCols: colsOf(['Tidak pernah', 'Jarang', '1–2 kali seminggu', '3–5 kali seminggu', 'Setiap hari', 'Tidak tahu']),
+    }),
+  ]
+}
+
 export function buildMockSurvey(slug: string): Survey {
   order = 0
+  if (slug === 'mock-matrix') {
+    const survey = buildMockSurvey('mock')
+    order = 0
+    return {
+      ...survey,
+      title: 'Demo Matriks (Mock)',
+      questions: [
+        ...matrixBlock(),
+        q({ id: 'closing', type: 'closing_page', title: 'Terima kasih!', description: 'Demo matriks selesai.' }),
+      ],
+    }
+  }
   return {
     id: 'mock-survey-1',
     title: 'Survei Demo (Mock)',

@@ -7,6 +7,7 @@
   import 'flatpickr/dist/flatpickr.css'
   import RegionInput from './RegionInput.svelte'
   import SearchableDropdown from './SearchableDropdown.svelte'
+  import MatrixInput from './MatrixInput.svelte'
   import { sanitizePhoneInput } from '$lib/phone.js'
   import {
     buildOptionFilter, hasOptionFilter, filterDisabledHint, filterEmptyMessage,
@@ -1016,63 +1017,9 @@
   </div>
 
 {:else if question.type === 'matrix'}
-  <div class="matrix-wrap">
-    <!-- Tablet+ table layout (>= 640px). Hidden on small screens via CSS. -->
-    <table class="matrix-table">
-      <thead>
-        <tr>
-          <th class="matrix-row-header"></th>
-          {#each matrixCols as col}
-            <th class="matrix-col-header">{col.label}</th>
-          {/each}
-        </tr>
-      </thead>
-      <tbody>
-        {#each matrixRows as row}
-          <tr class="matrix-row">
-            <td class="matrix-row-label">{row.label}</td>
-            {#each matrixCols as col}
-              {@const selected = matrixValue[row.label] === col.label}
-              <td class="matrix-cell">
-                <button
-                  class="matrix-radio {selected ? 'selected' : ''}"
-                  type="button"
-                  aria-label="{row.label}: {col.label}"
-                  onclick={() => setMatrixCell(row.label, col.label)}
-                >
-                  <span class="radio-dot"></span>
-                </button>
-              </td>
-            {/each}
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-
-    <!-- Mobile fallback (< 640px). Each row becomes a card with a label
-         heading and a vertical button list — no horizontal scrolling. -->
-    <div class="matrix-mobile">
-      {#each matrixRows as row}
-        <div class="matrix-mobile-row">
-          <div class="matrix-mobile-label">{row.label}</div>
-          <div class="matrix-mobile-options">
-            {#each matrixCols as col}
-              {@const selected = matrixValue[row.label] === col.label}
-              <button
-                class="option-card {selected ? 'selected' : ''}"
-                type="button"
-                aria-label="{row.label}: {col.label}"
-                onclick={() => setMatrixCell(row.label, col.label)}
-              >
-                <span class="radio-indicator {selected ? 'selected' : ''}"></span>
-                <span class="option-label">{col.label}</span>
-              </button>
-            {/each}
-          </div>
-        </div>
-      {/each}
-    </div>
-  </div>
+  {#key question.id}
+    <MatrixInput rows={matrixRows} cols={matrixCols} value={matrixValue} onSelect={setMatrixCell} />
+  {/key}
 
 {:else if question.type === 'contact_info'}
   <div class="contact-grid">
@@ -1600,120 +1547,6 @@
     font-size: 12px;
     color: var(--text-body);
     padding: 0 2px;
-  }
-
-  /* ── Matrix ── */
-  .matrix-wrap {
-    overflow-x: auto;
-  }
-
-  .matrix-table {
-    display: none;
-  }
-
-  .matrix-mobile {
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-  }
-
-  .matrix-mobile-row {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .matrix-mobile-label {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--text-primary);
-    line-height: 1.4;
-  }
-
-  .matrix-mobile-options {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  @media (min-width: 640px) {
-    .matrix-table {
-      display: table;
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 14px;
-    }
-    .matrix-mobile {
-      display: none;
-    }
-  }
-
-  .matrix-col-header {
-    text-align: center;
-    padding: 8px 12px;
-    font-weight: 500;
-    font-size: 13px;
-    color: var(--text-body);
-    white-space: nowrap;
-    border-bottom: 1px solid var(--canvas-soft);
-  }
-
-  .matrix-row-header {
-    padding: 8px;
-    border-bottom: 1px solid var(--canvas-soft);
-  }
-
-  .matrix-row:nth-child(even) {
-    background: var(--canvas-soft);
-  }
-
-  .matrix-row-label {
-    padding: 12px 16px 12px 4px;
-    font-size: 14px;
-    color: var(--text-primary);
-    line-height: 1.4;
-    min-width: 120px;
-  }
-
-  .matrix-cell {
-    text-align: center;
-    padding: 8px 12px;
-    vertical-align: middle;
-  }
-
-  .matrix-radio {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    border: 2px solid var(--surface-pressed);
-    background: var(--canvas);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto;
-    transition: border-color 0.15s, background 0.15s;
-  }
-
-  .matrix-radio:hover {
-    border-color: var(--ink);
-  }
-
-  .matrix-radio.selected {
-    border-color: var(--ink);
-    background: var(--ink);
-  }
-
-  .matrix-radio .radio-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: transparent;
-    transition: background 0.15s;
-  }
-
-  .matrix-radio.selected .radio-dot {
-    background: var(--on-ink);
   }
 
   /* ── Statement ── */
