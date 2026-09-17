@@ -241,6 +241,7 @@
                   slug={data.slug}
                   answers={runner.answers}
                   questions={runner.questions}
+                  paged
                 />
               {/each}
             </div>
@@ -256,7 +257,7 @@
       {/if}
 
       <div class="nav">
-        {#if runner.currentIndex > 0 && settings.showNavArrows}
+        {#if runner.canGoBack && settings.showNavArrows}
           <NavButton label="Sebelumnya" onClick={runner.handleBack} variant="secondary" />
         {/if}
         <div class="nav-right">

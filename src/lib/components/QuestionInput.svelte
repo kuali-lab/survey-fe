@@ -16,7 +16,7 @@
   } from '$lib/optionDependency.js'
   import { getRegionName, resolveRegionName } from '$lib/regionNames.js'
   import { applyNumberInput, numberInputText, numberInputCompare } from '$lib/numberInput.js'
-  import { fade } from 'svelte/transition'
+  import { fade, fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import { cubicOut } from 'svelte/easing'
   import {
@@ -37,7 +37,10 @@
     // `/s//upload`. Itu permintaan keluar dari halaman yang seharusnya nol
     // pengiriman — dimatikan di sini, dengan kalimat yang menjelaskan, bukan
     // dibiarkan gagal sendiri sebagai "Tidak dapat mengunggah berkas".
-    pratinjau = false
+    pratinjau = false,
+    // Top of Mind: one-per-page mode renders stage 2 as an "extended question"
+    // (first pick excluded, intro line) instead of pinning the first pick.
+    paged = false,
   }: {
     question: Question
     value: AnswerValue
@@ -49,6 +52,7 @@
     answers?: Answers
     questions?: Question[]
     pratinjau?: boolean
+    paged?: boolean
   } = $props()
 
   // ── Filtered dropdown (contract §8) ─────────────────────────────────────────
@@ -413,7 +417,13 @@
   const tomFirstIsOther = $derived(firstIsOther(value, allOptions))
   const tomStandardLabels = $derived(new Set(allOptions.filter(o => !o.isOther).map(o => o.label)))
   const tomOtherInRest = $derived(!tomFirstIsOther && tomRest.some(r => !tomStandardLabels.has(r)))
-  const tomStage = $derived<1 | 2>(tomFirst === '' ? 1 : 2)
+  // Paged mode: after the first tap the list stays put for a beat (the tap
+  // lands visibly), then stage 2 slides in like a new question.
+  let tomSettling = $state(false)
+  const tomStage = $derived<1 | 2>(tomFirst === '' || tomSettling ? 1 : 2)
+  // Re-mount the stage block on stage change only in paged mode (slide-in);
+  // scroll mode keeps one list and flips the first pick to the top instead.
+  const tomKey = $derived(paged ? tomStage : 0)
 
   // "Lainnya" as first pick: chosen but not yet confirmed with text.
   let tomOtherPending = $state(false)
@@ -444,7 +454,9 @@
         isFirst: false, checked, disabled: !checked && tomRestAtLimit,
       }
     })
-    return [first, ...rest]
+    // Paged mode: stage 2 shows only the remaining options — the first pick is
+    // named in the intro line, not pinned in the list.
+    return paged ? rest : [first, ...rest]
   })
   const tomShowOtherInput = $derived(tomStage === 1 ? tomOtherPending : tomOtherInRest)
   const tomHintText = $derived(
@@ -459,6 +471,16 @@
     typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
   const tomFlip = { duration: tomReduceMotion ? 0 : 260, easing: cubicOut }
   const tomFade = { duration: tomReduceMotion ? 0 : 180 }
+  const tomFly = { y: tomReduceMotion ? 0 : 16, duration: tomReduceMotion ? 0 : 220, easing: cubicOut }
+
+  function tomSettleThenAdvance() {
+    if (!paged || tomReduceMotion) return
+    tomSettling = true
+    setTimeout(() => {
+      tomSettling = false
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+    }, 260)
+  }
 
   function tomTapRow(row: TomRow) {
     if (row.isFirst) {
@@ -473,6 +495,7 @@
       }
       tomOtherPending = false
       onChange(setTopOfMindFirst(value, row.label))
+      tomSettleThenAdvance()
       return
     }
     if (row.isOther) tomToggleOtherRest()
@@ -483,6 +506,7 @@
     if (!text) return
     tomOtherPending = false
     onChange(setTopOfMindFirst(value, text))
+    tomSettleThenAdvance()
   }
   function tomToggleOtherRest() {
     if (!tomOtherOption) return
@@ -739,6 +763,14 @@
 
 {:else if question.type === 'checkbox' && tom}
   <div class="tom" data-tom-stage={tomStage}>
+    {#key tomKey}
+    <div class="tom-stage" in:fly={tomFly}>
+    {#if paged && tomStage === 2}
+      <p class="tom-intro" data-test="tom-intro">
+        Pilihan pertama Anda: <strong>{tomFirst}</strong>.
+        <span class="tom-intro-more">Ada lagi yang terlintas? {tomHintText}</span>
+      </p>
+    {/if}
     <div class="options-list" role="group">
       {#each tomRows as row (row.key)}
         <div class="tom-row" animate:flip={tomFlip}>
@@ -792,9 +824,11 @@
         </div>
       {/each}
     </div>
-    {#if tomStage === 2}
+    {#if tomStage === 2 && !paged}
       <p class="tom-hint" in:fade={tomFade}>{tomHintText}</p>
     {/if}
+    </div>
+    {/key}
   </div>
 
 {:else if question.type === 'checkbox'}
@@ -1815,6 +1849,21 @@
   .tom-row {
     display: flex;
     flex-direction: column;
+  }
+  .tom-intro {
+    margin: 0 0 12px;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--text-body);
+  }
+  .tom-intro strong {
+    color: var(--text-primary);
+  }
+  .tom-intro-more {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-muted);
+    font-size: 14px;
   }
   .tom-hint {
     margin: 8px 0 0;

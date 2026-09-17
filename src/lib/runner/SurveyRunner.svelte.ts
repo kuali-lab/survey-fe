@@ -162,6 +162,18 @@ export class SurveyRunner {
   )
   isScrollMode = $derived(this.effectiveDisplayMode === 'scroll')
 
+  // Top of Mind in paged mode: stage 2 (first pick made, now the rest) reads as
+  // its own question, so "Sebelumnya" first returns to stage 1. This is the id
+  // of that question when the current page is exactly it, else null.
+  tomStage2QuestionId = $derived.by<string | null>(() => {
+    if (this.effectiveDisplayMode === 'scroll') return null
+    const page = this.currentPage
+    if (!page || page.questions.length !== 1) return null
+    const q = page.questions[0]
+    return isTopOfMindQuestion(q) && topOfMindFirst(this.answers[q.id]) !== '' ? q.id : null
+  })
+  canGoBack = $derived(this.currentIndex > 0 || this.tomStage2QuestionId !== null)
+
   // ---- Derived: pagination ----
   // one_per_page: each standalone question is its own page; each group is one
   // page (members inside). Ordered by sort_order so it matches the builder.
@@ -382,6 +394,13 @@ export class SurveyRunner {
   handleBack = () => {
     this.cancelAutoAdvance()
     this.questionErrors = {}
+    // Top of Mind (paged): back out of stage 2 first — clearing the first pick
+    // clears the rest with it, which is the same reset a re-pick does.
+    if (this.tomStage2QuestionId) {
+      this.handleAnswer(this.tomStage2QuestionId, null)
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
     // When skip logic is active, use the navigation history to retrace the
     // actual path the user followed. Without skip rules, simple decrement
     // is sufficient (the two are equivalent in that case).
@@ -663,26 +682,18 @@ export class SurveyRunner {
       const tom = isTopOfMindQuestion(q)
       const tomFirst = tom ? topOfMindFirst(cur) : ''
       const visible = visibleOptions(q, this.answers, this.questions).options
-      // Top of Mind stage 2: the list on screen is [first pick, ...remaining],
-      // so letter A is the pinned first and the rest follow in display order.
+      // Top of Mind stage 2 (keyboard only runs in paged mode): the list on
+      // screen is the remaining options — the first pick is named above it.
       const shown = tom && tomFirst !== '' ? remainingOptions(visible, tomFirst) : visible
       const standard = shown.filter((o) => !o.isOther)
       const other = shown.find((o) => o.isOther)
-      let opts = other ? [...standard, other] : standard
-      if (tom && tomFirst !== '') {
-        const firstOpt = visible.find((o) => !o.isOther && o.label === tomFirst) ?? visible.find((o) => o.isOther)
-        if (firstOpt) opts = [firstOpt, ...opts]
-      }
+      const opts = other ? [...standard, other] : standard
       const idx = key.charCodeAt(0) - 65
       if (idx < 0 || idx >= opts.length) return
       const opt = opts[idx]
       e.preventDefault()
 
       if (tom) {
-        if (tomFirst !== '' && idx === 0) {
-          this.handleAnswer(q.id, null) // tapping the pinned first clears the answer
-          return
-        }
         // "Lainnya" needs typed text — leave it to the pointer/touch flow.
         if (opt.isOther) return
         if (tomFirst === '') this.handleAnswer(q.id, setTopOfMindFirst(cur, opt.label))
