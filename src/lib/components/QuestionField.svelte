@@ -19,7 +19,17 @@
     slug = '',
     answers = {},
     questions = [],
-    pratinjau = false
+    pratinjau = false,
+    // 🔴 Diteruskan, tidak ditafsirkan. `paged` milik Top of Mind (dev lain) dan
+    // dikirim `QuestionCard` untuk `QuestionInput` — komponen ini cuma kebetulan
+    // berdiri di antaranya.
+    //
+    // Tanpa baris ini prop itu MATI di perbatasan sini: `QuestionInput` selalu
+    // menerima `false`, cabang `{#if paged && tomStage === 2}` tidak pernah
+    // menyala, dan mode satu-soal-per-halaman Top of Mind patah tanpa satu pun
+    // galat. Komponen ini lahir sesudah `paged` ada di `dev`, jadi git
+    // menggabungkan keduanya bersih — celahnya hanya terlihat dari svelte-check.
+    paged = false
   }: {
     question: Question
     value: AnswerValue
@@ -29,6 +39,7 @@
     answers?: Answers
     questions?: Question[]
     pratinjau?: boolean
+    paged?: boolean
   } = $props()
 
   const berulang = $derived(questionRepeats(question))
@@ -66,6 +77,7 @@
             {answers}
             {questions}
             {pratinjau}
+            {paged}
           />
         </div>
         {#if rows.length > 1}
@@ -88,7 +100,7 @@
     {/if}
   </div>
 {:else}
-  <QuestionInput {question} {value} {onChange} {onBlur} {slug} {answers} {questions} {pratinjau} />
+  <QuestionInput {question} {value} {onChange} {onBlur} {slug} {answers} {questions} {pratinjau} {paged} />
 {/if}
 
 <style>

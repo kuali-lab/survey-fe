@@ -7,12 +7,24 @@
   import 'flatpickr/dist/flatpickr.css'
   import RegionInput from './RegionInput.svelte'
   import SearchableDropdown from './SearchableDropdown.svelte'
+  import MatrixInput from './MatrixInput.svelte'
   import { sanitizePhoneInput } from '$lib/phone.js'
   import {
     buildOptionFilter, hasOptionFilter, filterDisabledHint, filterEmptyMessage,
   } from '$lib/optionFilter.js'
+  import {
+    visibleOptions, dependencyDisabledHint, dependencyEmptyMessage, dependencyParentLabel,
+  } from '$lib/optionDependency.js'
   import { getRegionName, resolveRegionName } from '$lib/regionNames.js'
   import { applyNumberInput, numberInputText, numberInputCompare } from '$lib/numberInput.js'
+  import { fade, fly } from 'svelte/transition'
+  import { flip } from 'svelte/animate'
+  import { cubicOut } from 'svelte/easing'
+  import {
+    TOM_STAGE2_HINT,
+    isTopOfMindQuestion, topOfMindFirst, topOfMindRest, remainingOptions, restLimit, restAtLimit,
+    setTopOfMindFirst, toggleTopOfMindRest, clearTopOfMind, normalizeTopOfMind, topOfMindOtherText, firstIsOther,
+  } from '$lib/topOfMind.js'
 
   let {
     question,
@@ -26,7 +38,10 @@
     // `/s//upload`. Itu permintaan keluar dari halaman yang seharusnya nol
     // pengiriman — dimatikan di sini, dengan kalimat yang menjelaskan, bukan
     // dibiarkan gagal sendiri sebagai "Tidak dapat mengunggah berkas".
-    pratinjau = false
+    pratinjau = false,
+    // Top of Mind: one-per-page mode renders stage 2 as an "extended question"
+    // (first pick excluded, intro line) instead of pinning the first pick.
+    paged = false,
   }: {
     question: Question
     value: AnswerValue
@@ -38,6 +53,7 @@
     answers?: Answers
     questions?: Question[]
     pratinjau?: boolean
+    paged?: boolean
   } = $props()
 
   // ── Filtered dropdown (contract §8) ─────────────────────────────────────────
@@ -154,8 +170,22 @@
   const selectLimit = $derived(question.maxSelections && question.maxSelections > 0 ? question.maxSelections : 0)
   const atSelectLimit = $derived(selectLimit > 0 && arrValue.length >= selectLimit)
 
-  // Options for choice types — already a typed array from the normalized schema
-  const options = $derived(question.options ?? [])
+  // Options for choice types — already a typed array from the normalized schema.
+  // Pilihan Bertingkat (single_choice / manual dropdown with `dependsOn`): the
+  // list is narrowed to the options allowed under the parent answer. While the
+  // parent is unanswered the full list is shown greyed out and disabled.
+  const allOptions = $derived(question.options ?? [])
+  const dependency = $derived(visibleOptions(question, answers, questions))
+  const dependencyWaiting = $derived(dependency.status === 'waiting')
+  const dependencyHint = $derived(dependencyWaiting ? dependencyDisabledHint(question, questions) : '')
+  const dependencyEmptyText = $derived(
+    dependency.status === 'empty'
+      ? dependencyEmptyMessage(question, dependencyParentLabel(question, answers), questions)
+      : '',
+  )
+  const options = $derived(
+    dependency.status === 'inactive' || dependencyWaiting ? allOptions : dependency.options,
+  )
 
   // Rating
   const ratingScale = $derived(question.maxStars ?? 5)
@@ -216,12 +246,14 @@
   // ── is_other ("Lainnya") state ──
   const otherOption = $derived(options.find(o => o.isOther))
 
-  // For single_choice: selected = strValue matches the isOther label OR user typed its own text
+  // For single_choice: selected = strValue matches the isOther label OR user typed its own text.
+  // Compared against the FULL option list so a narrowed (Pilihan Bertingkat)
+  // list never mistakes a standard label for "Lainnya" free text.
   const isOtherSelected = $derived(
     otherOption ? (
       question.type === 'single_choice' || question.type === 'dropdown'
-        ? strValue !== '' && !options.filter(o => !o.isOther).some(o => o.label === strValue)
-        : arrValue.some(v => !options.filter(o => !o.isOther).some(o => o.label === v) && v !== '')
+        ? strValue !== '' && !allOptions.filter(o => !o.isOther).some(o => o.label === strValue)
+        : arrValue.some(v => !allOptions.filter(o => !o.isOther).some(o => o.label === v) && v !== '')
     ) : false
   )
 
@@ -368,6 +400,133 @@
     return {
       destroy() { node.removeEventListener('input', adjust) }
     }
+  }
+
+  // ── Top of Mind: one list, two stages (see $lib/topOfMind.ts) ─────────────
+  // Looks like a plain checkbox question. The FIRST tap is recorded as the
+  // top-of-mind pick: that row flips to the top (animate:flip), stays checked,
+  // and a hint invites more picks. Tapping the pinned row again clears the
+  // whole answer (stage 2 picks were relative to it). Stage is derived from
+  // the answer, so back-navigation and draft resume need nothing extra.
+  const tom = $derived(isTopOfMindQuestion(question))
+  const tomFirst = $derived(topOfMindFirst(value))
+  const tomRest = $derived(topOfMindRest(value))
+  const tomRemaining = $derived(remainingOptions(options, tomFirst))
+  const tomOtherOption = $derived(tomRemaining.find(o => o.isOther))
+  const tomRestLimit = $derived(restLimit(question.maxSelections))
+  const tomRestAtLimit = $derived(restAtLimit(value, question.maxSelections))
+  const tomFirstIsOther = $derived(firstIsOther(value, allOptions))
+  const tomStandardLabels = $derived(new Set(allOptions.filter(o => !o.isOther).map(o => o.label)))
+  const tomOtherInRest = $derived(!tomFirstIsOther && tomRest.some(r => !tomStandardLabels.has(r)))
+  // Paged mode: after the first tap the list stays put for a beat (the tap
+  // lands visibly), then stage 2 slides in like a new question.
+  let tomSettling = $state(false)
+  const tomStage = $derived<1 | 2>(tomFirst === '' || tomSettling ? 1 : 2)
+  // Re-mount the stage block on stage change only in paged mode (slide-in);
+  // scroll mode keeps one list and flips the first pick to the top instead.
+  const tomKey = $derived(paged ? tomStage : 0)
+
+  // "Lainnya" as first pick: chosen but not yet confirmed with text.
+  let tomOtherPending = $state(false)
+  let tomOtherDraft = $state('')
+  // "Lainnya" in stage 2 — same convention as the plain checkbox.
+  let tomOtherText = $state(untrack(() => topOfMindOtherText(value, question.options ?? [])))
+
+  const TOM_OTHER_KEY = '__other__'
+  type TomRow = { key: string; label: string; isOther: boolean; isFirst: boolean; checked: boolean; disabled: boolean }
+  // Keyed rows: the first pick keeps the key of the option it came from, so
+  // animate:flip slides it to the top instead of re-rendering it.
+  const tomRows = $derived.by<TomRow[]>(() => {
+    const ordered = [...options.filter(o => !o.isOther), ...options.filter(o => o.isOther)]
+    if (tomStage === 1) {
+      return ordered.map(o => ({
+        key: o.isOther ? TOM_OTHER_KEY : o.label, label: o.label, isOther: !!o.isOther,
+        isFirst: false, checked: !!o.isOther && tomOtherPending, disabled: false,
+      }))
+    }
+    const first: TomRow = {
+      key: tomFirstIsOther ? TOM_OTHER_KEY : tomFirst, label: tomFirst, isOther: tomFirstIsOther,
+      isFirst: true, checked: true, disabled: false,
+    }
+    const rest = [...tomRemaining.filter(o => !o.isOther), ...tomRemaining.filter(o => o.isOther)].map(o => {
+      const checked = o.isOther ? tomOtherInRest : tomRest.includes(o.label)
+      return {
+        key: o.isOther ? TOM_OTHER_KEY : o.label, label: o.label, isOther: !!o.isOther,
+        isFirst: false, checked, disabled: !checked && tomRestAtLimit,
+      }
+    })
+    // Paged mode: stage 2 shows only the remaining options — the first pick is
+    // named in the intro line, not pinned in the list.
+    return paged ? rest : [first, ...rest]
+  })
+  const tomShowOtherInput = $derived(tomStage === 1 ? tomOtherPending : tomOtherInRest)
+  const tomHintText = $derived(
+    tomRemaining.length === 0
+      ? 'Tidak ada pilihan lain.'
+      : tomRestLimit > 0
+        ? `Bisa pilih hingga ${tomRestLimit} jawaban lagi (${tomRest.length}/${tomRestLimit}).`
+        : TOM_STAGE2_HINT,
+  )
+
+  const tomReduceMotion =
+    typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  const tomFlip = { duration: tomReduceMotion ? 0 : 260, easing: cubicOut }
+  const tomFade = { duration: tomReduceMotion ? 0 : 180 }
+  const tomFly = { y: tomReduceMotion ? 0 : 16, duration: tomReduceMotion ? 0 : 220, easing: cubicOut }
+
+  function tomSettleThenAdvance() {
+    if (!paged || tomReduceMotion) return
+    tomSettling = true
+    setTimeout(() => {
+      tomSettling = false
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+    }, 260)
+  }
+
+  function tomTapRow(row: TomRow) {
+    if (row.isFirst) {
+      tomOtherPending = false
+      onChange(clearTopOfMind())
+      return
+    }
+    if (tomStage === 1) {
+      if (row.isOther) {
+        tomOtherPending = true
+        return
+      }
+      tomOtherPending = false
+      onChange(setTopOfMindFirst(value, row.label))
+      tomSettleThenAdvance()
+      return
+    }
+    if (row.isOther) tomToggleOtherRest()
+    else onChange(toggleTopOfMindRest(value, row.label, question.maxSelections))
+  }
+  function tomConfirmOtherFirst() {
+    const text = tomOtherDraft.trim()
+    if (!text) return
+    tomOtherPending = false
+    onChange(setTopOfMindFirst(value, text))
+    tomSettleThenAdvance()
+  }
+  function tomToggleOtherRest() {
+    if (!tomOtherOption) return
+    if (tomOtherInRest) {
+      onChange(normalizeTopOfMind(tomFirst, tomRest.filter(r => tomStandardLabels.has(r))))
+    } else {
+      if (tomRestAtLimit) return
+      onChange(normalizeTopOfMind(tomFirst, [...tomRest, tomOtherText || tomOtherOption.label]))
+    }
+  }
+  function tomUpdateOtherRest(text: string) {
+    if (!tomOtherOption) return
+    tomOtherText = text
+    const cleaned = tomRest.filter(r => tomStandardLabels.has(r))
+    cleaned.push(text || tomOtherOption.label)
+    onChange(normalizeTopOfMind(tomFirst, cleaned))
+  }
+  function tomFocus(node: HTMLInputElement) {
+    node.focus()
   }
 </script>
 
@@ -563,11 +722,12 @@
   {/if}
 
 {:else if question.type === 'single_choice'}
-  <div class="options-list">
+  <div class="options-list" class:dependency-waiting={dependencyWaiting} aria-disabled={dependencyWaiting}>
     {#each options.filter(o => !o.isOther) as opt, i}
       <button
         class="option-card {strValue === opt.label ? 'selected' : ''}"
         type="button"
+        disabled={dependencyWaiting}
         onclick={() => onChange(opt.label)}
       >
         <span class="radio-indicator {strValue === opt.label ? 'selected' : ''}"></span>
@@ -579,6 +739,7 @@
       <button
         class="option-card {isOtherSelected ? 'selected' : ''}"
         type="button"
+        disabled={dependencyWaiting}
         onclick={selectOtherSingle}
       >
         <span class="radio-indicator {isOtherSelected ? 'selected' : ''}"></span>
@@ -594,6 +755,81 @@
         />
       {/if}
     {/if}
+  </div>
+  {#if dependencyHint}
+    <p class="dependency-note">{dependencyHint}</p>
+  {:else if dependencyEmptyText}
+    <p class="dependency-note dependency-empty">{dependencyEmptyText}</p>
+  {/if}
+
+{:else if question.type === 'checkbox' && tom}
+  <div class="tom" data-tom-stage={tomStage}>
+    {#key tomKey}
+    <div class="tom-stage" in:fly={tomFly}>
+    {#if paged && tomStage === 2}
+      <p class="tom-intro" data-test="tom-intro">
+        Pilihan pertama Anda: <strong>{tomFirst}</strong>.
+        <span class="tom-intro-more">Ada lagi yang terlintas? {tomHintText}</span>
+      </p>
+    {/if}
+    <div class="options-list" role="group">
+      {#each tomRows as row (row.key)}
+        <div class="tom-row" animate:flip={tomFlip}>
+          <button
+            class="option-card {row.checked ? 'selected' : ''} {row.isFirst ? 'tom-first' : ''}"
+            type="button"
+            role="checkbox"
+            aria-checked={row.checked}
+            disabled={row.disabled}
+            style={row.disabled ? 'opacity:0.55;cursor:not-allowed;' : ''}
+            onclick={() => tomTapRow(row)}
+          >
+            <span class="checkbox-indicator {row.checked ? 'selected' : ''}">
+              {#if row.checked}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                  <path d="M5 12.5l5 5 9-10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              {/if}
+            </span>
+            <span class="option-label">{row.label}</span>
+          </button>
+          {#if row.isOther && !row.isFirst && tomShowOtherInput}
+            {#if tomStage === 1}
+              <div class="tom-other-row">
+                <input
+                  class="text-input other-text-input tom-other-input"
+                  type="text"
+                  placeholder="Tuliskan jawaban Anda..."
+                  value={tomOtherDraft}
+                  use:tomFocus
+                  oninput={(e) => { tomOtherDraft = (e.currentTarget as HTMLInputElement).value }}
+                  onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); tomConfirmOtherFirst() } }}
+                />
+                <button
+                  class="tom-mini-btn"
+                  type="button"
+                  disabled={!tomOtherDraft.trim()}
+                  onclick={tomConfirmOtherFirst}
+                >Lanjut</button>
+              </div>
+            {:else}
+              <input
+                class="text-input other-text-input"
+                type="text"
+                placeholder="Tuliskan jawaban Anda..."
+                value={tomOtherText}
+                oninput={(e) => tomUpdateOtherRest((e.currentTarget as HTMLInputElement).value)}
+              />
+            {/if}
+          {/if}
+        </div>
+      {/each}
+    </div>
+    {#if tomStage === 2 && !paged}
+      <p class="tom-hint" in:fade={tomFade}>{tomHintText}</p>
+    {/if}
+    </div>
+    {/key}
   </div>
 
 {:else if question.type === 'checkbox'}
@@ -669,8 +905,10 @@
         slug={slug}
         {filterActive}
         filter={optionFilter}
-        {filterHint}
-        filterEmptyMessage={filterEmptyText}
+        filterHint={dependencyHint || filterHint}
+        filterEmptyMessage={dependencyEmptyText || filterEmptyText}
+        disabled={dependencyWaiting}
+        notice={dependencyEmptyText}
       />
     {#if isOtherSelected}
       <input
@@ -779,63 +1017,9 @@
   </div>
 
 {:else if question.type === 'matrix'}
-  <div class="matrix-wrap">
-    <!-- Tablet+ table layout (>= 640px). Hidden on small screens via CSS. -->
-    <table class="matrix-table">
-      <thead>
-        <tr>
-          <th class="matrix-row-header"></th>
-          {#each matrixCols as col}
-            <th class="matrix-col-header">{col.label}</th>
-          {/each}
-        </tr>
-      </thead>
-      <tbody>
-        {#each matrixRows as row}
-          <tr class="matrix-row">
-            <td class="matrix-row-label">{row.label}</td>
-            {#each matrixCols as col}
-              {@const selected = matrixValue[row.label] === col.label}
-              <td class="matrix-cell">
-                <button
-                  class="matrix-radio {selected ? 'selected' : ''}"
-                  type="button"
-                  aria-label="{row.label}: {col.label}"
-                  onclick={() => setMatrixCell(row.label, col.label)}
-                >
-                  <span class="radio-dot"></span>
-                </button>
-              </td>
-            {/each}
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-
-    <!-- Mobile fallback (< 640px). Each row becomes a card with a label
-         heading and a vertical button list — no horizontal scrolling. -->
-    <div class="matrix-mobile">
-      {#each matrixRows as row}
-        <div class="matrix-mobile-row">
-          <div class="matrix-mobile-label">{row.label}</div>
-          <div class="matrix-mobile-options">
-            {#each matrixCols as col}
-              {@const selected = matrixValue[row.label] === col.label}
-              <button
-                class="option-card {selected ? 'selected' : ''}"
-                type="button"
-                aria-label="{row.label}: {col.label}"
-                onclick={() => setMatrixCell(row.label, col.label)}
-              >
-                <span class="radio-indicator {selected ? 'selected' : ''}"></span>
-                <span class="option-label">{col.label}</span>
-              </button>
-            {/each}
-          </div>
-        </div>
-      {/each}
-    </div>
-  </div>
+  {#key question.id}
+    <MatrixInput rows={matrixRows} cols={matrixCols} value={matrixValue} onSelect={setMatrixCell} />
+  {/key}
 
 {:else if question.type === 'contact_info'}
   <div class="contact-grid">
@@ -1365,120 +1549,6 @@
     padding: 0 2px;
   }
 
-  /* ── Matrix ── */
-  .matrix-wrap {
-    overflow-x: auto;
-  }
-
-  .matrix-table {
-    display: none;
-  }
-
-  .matrix-mobile {
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-  }
-
-  .matrix-mobile-row {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .matrix-mobile-label {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--text-primary);
-    line-height: 1.4;
-  }
-
-  .matrix-mobile-options {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  @media (min-width: 640px) {
-    .matrix-table {
-      display: table;
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 14px;
-    }
-    .matrix-mobile {
-      display: none;
-    }
-  }
-
-  .matrix-col-header {
-    text-align: center;
-    padding: 8px 12px;
-    font-weight: 500;
-    font-size: 13px;
-    color: var(--text-body);
-    white-space: nowrap;
-    border-bottom: 1px solid var(--canvas-soft);
-  }
-
-  .matrix-row-header {
-    padding: 8px;
-    border-bottom: 1px solid var(--canvas-soft);
-  }
-
-  .matrix-row:nth-child(even) {
-    background: var(--canvas-soft);
-  }
-
-  .matrix-row-label {
-    padding: 12px 16px 12px 4px;
-    font-size: 14px;
-    color: var(--text-primary);
-    line-height: 1.4;
-    min-width: 120px;
-  }
-
-  .matrix-cell {
-    text-align: center;
-    padding: 8px 12px;
-    vertical-align: middle;
-  }
-
-  .matrix-radio {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    border: 2px solid var(--surface-pressed);
-    background: var(--canvas);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto;
-    transition: border-color 0.15s, background 0.15s;
-  }
-
-  .matrix-radio:hover {
-    border-color: var(--ink);
-  }
-
-  .matrix-radio.selected {
-    border-color: var(--ink);
-    background: var(--ink);
-  }
-
-  .matrix-radio .radio-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: transparent;
-    transition: background 0.15s;
-  }
-
-  .matrix-radio.selected .radio-dot {
-    background: var(--on-ink);
-  }
-
   /* ── Statement ── */
   .statement-body {
     background: var(--canvas-soft);
@@ -1589,6 +1659,75 @@
     margin-left: 32px;
     width: calc(100% - 32px);
     height: 44px;
+  }
+
+  /* ── Pilihan Bertingkat: waiting on the parent / nothing allowed ── */
+  .options-list.dependency-waiting .option-card,
+  .options-list.dependency-waiting .option-card:hover {
+    opacity: 0.55;
+    cursor: not-allowed;
+    border-color: var(--canvas-soft);
+  }
+  .dependency-note {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .dependency-note.dependency-empty {
+    color: var(--text-body);
+    line-height: 1.5;
+  }
+
+  /* ── Top of Mind: one list, first pick flips to the top ── */
+  .tom-row {
+    display: flex;
+    flex-direction: column;
+  }
+  .tom-intro {
+    margin: 0 0 12px;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--text-body);
+  }
+  .tom-intro strong {
+    color: var(--text-primary);
+  }
+  .tom-intro-more {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+  .tom-hint {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .tom-other-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .tom-other-row .tom-other-input {
+    flex: 1;
+    width: auto;
+  }
+  .tom-mini-btn {
+    height: 44px;
+    padding: 0 16px;
+    border: none;
+    border-radius: var(--radius-input);
+    background: var(--ink);
+    color: var(--on-ink);
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .tom-mini-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
 
   /* ── File Upload ── */

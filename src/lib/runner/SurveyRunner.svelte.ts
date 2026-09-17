@@ -14,17 +14,32 @@ import type { Survey, Question, Answers, AnswerValue, SurveySettings } from '$li
 import { getAnswerableQuestions } from '$lib/utils.js'
 import { evaluateNext } from '$lib/skipLogic.js'
 import { isValidPhoneFormat } from '$lib/phone.js'
-import { getFilterDependents } from '$lib/optionFilter.js'
+import { collectDependents, pruneDependentAnswers, visibleOptions } from '$lib/optionDependency.js'
+import {
+  TOM_REQUIRED_ERROR, isTopOfMindAnswer, isTopOfMindEmpty, isTopOfMindQuestion,
+  remainingOptions, setTopOfMindFirst, toggleTopOfMindRest, topOfMindFirst,
+} from '$lib/topOfMind.js'
 import { buildSurveySections, type SurveyPage } from './sections.js'
 
 export type { SurveyPage }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+function isEmptyAnswer(v: AnswerValue | undefined): boolean {
+  return (
+    v === null ||
+    v === undefined ||
+    (typeof v === 'string' && v.trim() === '') ||
+    (Array.isArray(v) && v.length === 0) ||
+    (isTopOfMindAnswer(v) && isTopOfMindEmpty(v))
+  )
+}
+
 function isAnsweredValue(v: AnswerValue | undefined): boolean {
   if (v === null || v === undefined) return false
   if (typeof v === 'string') return v.trim() !== '' && v !== '__uploading__'
   if (Array.isArray(v)) return v.length > 0
+  if (isTopOfMindAnswer(v)) return !isTopOfMindEmpty(v)
   if (typeof v === 'object') {
     const c = v as { firstName?: string; lastName?: string; phone?: string; email?: string }
     return [c.firstName, c.lastName, c.phone, c.email].some((x) => typeof x === 'string' && x.trim() !== '')
@@ -158,12 +173,21 @@ export class SurveyRunner {
   )
   isScrollMode = $derived(this.effectiveDisplayMode === 'scroll')
 
+  // Top of Mind in paged mode: stage 2 (first pick made, now the rest) reads as
+  // its own question, so "Sebelumnya" first returns to stage 1. This is the id
+  // of that question when the current page is exactly it, else null.
+  tomStage2QuestionId = $derived.by<string | null>(() => {
+    if (this.effectiveDisplayMode === 'scroll') return null
+    const page = this.currentPage
+    if (!page || page.questions.length !== 1) return null
+    const q = page.questions[0]
+    return isTopOfMindQuestion(q) && topOfMindFirst(this.answers[q.id]) !== '' ? q.id : null
+  })
+
   // M1 No-Back — penjelasan kanonik; tempat lain merujuk ke sini, tidak mengulang.
   //
   // Ini menjawab **izin**, bukan kemungkinan: "apakah mundur diperbolehkan", bukan
-  // "apakah ada halaman sebelumnya". Yang kedua tetap urusan pemanggil —
-  // `SurveyStage` mengecek `currentIndex > 0`, dan handler roda/sentuh/papan ketik
-  // sudah pulang lebih awal saat mode gulir.
+  // "apakah ada tempat untuk mundur".
   //
   // 🔴 `!== false`, bukan `=== true`. Survei dari singgahan localStorage lama tidak
   // punya field `allowBack`, dan `undefined` harus berarti boleh mundur — kalau
@@ -175,7 +199,21 @@ export class SurveyRunner {
   // ketik di layar wawancara. (Tombol "Edit" di rekap TIDAK terpengaruh — ia lewat
   // `jumpTo`, bukan `handleBack`.) Petugas wawancara memang perlu mengoreksi salah
   // input; larangan ini untuk responden.
-  canGoBack = $derived(!this._enforceAllowBack || this.settings.allowBack !== false)
+  private backAllowed = $derived(!this._enforceAllowBack || this.settings.allowBack !== false)
+
+  // 🔴 DUA pertanyaan yang berbeda, dan keduanya harus benar — karena itu AND, bukan
+  // salah satu. `backAllowed` menjawab "diizinkan?" (M1 No-Back); ruas kanan
+  // menjawab "ada tempat untuk mundur?" (halaman sebelumnya, ATAU tahap 2 Top of
+  // Mind yang mundurnya ke tahap 1 di halaman yang sama — sehingga jawabannya bisa
+  // YA bahkan di indeks 0).
+  //
+  // Menjatuhkan salah satu ruas menghasilkan dua cacat yang berlawanan: tanpa ruas
+  // kiri, survei No-Back kehilangan larangannya; tanpa ruas kanan, mundur "berhasil"
+  // di tempat yang tidak punya tujuan. `handleBack` memakai ini sebagai SATU-SATUNYA
+  // gerbang untuk kelima jalan mundur, jadi definisi di sini menanggung keduanya.
+  canGoBack = $derived(
+    this.backAllowed && (this.currentIndex > 0 || this.tomStage2QuestionId !== null),
+  )
 
   // ---- Derived: pagination ----
   // one_per_page: each standalone question is its own page; each group is one
@@ -233,7 +271,19 @@ export class SurveyRunner {
 
   // ---- Validation ----
   private validateOne(q: Question, answer: AnswerValue): string | null {
-    if (q.required) {
+    // Pilihan Bertingkat D-1: a required dependent the respondent cannot answer
+    // is treated as satisfied, so it never traps them. That is the case when the
+    // parent is answered but leaves no mapped option ('empty'), and when the
+    // parent is unanswered ('waiting') — e.g. a skip rule jumped over it, or an
+    // optional parent was left blank. A required parent still blocks via its
+    // own check. "Lainnya" stays optional.
+    const depStatus = isEmptyAnswer(answer) ? visibleOptions(q, this.answers, this.questions).status : 'inactive'
+    const requiredHere = q.required && depStatus !== 'empty' && depStatus !== 'waiting'
+    if (requiredHere) {
+      // Top of Mind: stage 1 (the first pick) is what "required" means; stage 2
+      // is always optional. A plain array here (draft saved before the toggle)
+      // has no first pick, so it is asked again.
+      if (isTopOfMindQuestion(q) && (answer == null || isTopOfMindEmpty(answer))) return TOM_REQUIRED_ERROR
       if (answer === null || answer === undefined) return 'Pertanyaan ini wajib diisi.'
       if (typeof answer === 'string' && answer.trim() === '') return 'Pertanyaan ini wajib diisi.'
       if (Array.isArray(answer) && answer.length === 0) return 'Pilih minimal satu jawaban.'
@@ -263,12 +313,8 @@ export class SurveyRunner {
       if (!allAnswered) return 'Mohon lengkapi semua baris.'
     }
 
-    const isEmpty =
-      answer === null ||
-      answer === undefined ||
-      (typeof answer === 'string' && answer.trim() === '') ||
-      (Array.isArray(answer) && answer.length === 0)
-    if (!q.required && isEmpty && q.type !== 'file_upload') return null
+    const isEmpty = isEmptyAnswer(answer)
+    if (!requiredHere && isEmpty && q.type !== 'file_upload') return null
 
     if (!isEmpty) {
       let strVal = ''
@@ -332,12 +378,7 @@ export class SurveyRunner {
     const q = this.currentPage?.questions.find((x) => x.id === qid)
     if (!q) return
     const answer = this.answers[qid]
-    const isEmpty =
-      answer === null ||
-      answer === undefined ||
-      (typeof answer === 'string' && answer.trim() === '') ||
-      (Array.isArray(answer) && answer.length === 0)
-    if (isEmpty) return
+    if (isEmptyAnswer(answer)) return
     const err = this.validateOne(q, answer)
     if (err) {
       this.questionErrors = { ...this.questionErrors, [qid]: err }
@@ -400,6 +441,13 @@ export class SurveyRunner {
     if (!this.canGoBack) return
     this.cancelAutoAdvance()
     this.questionErrors = {}
+    // Top of Mind (paged): back out of stage 2 first — clearing the first pick
+    // clears the rest with it, which is the same reset a re-pick does.
+    if (this.tomStage2QuestionId) {
+      this.handleAnswer(this.tomStage2QuestionId, null)
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
     // When skip logic is active, use the navigation history to retrace the
     // actual path the user followed. Without skip rules, simple decrement
     // is sufficient (the two are equivalent in that case).
@@ -416,16 +464,16 @@ export class SurveyRunner {
     const prev = this.answers[qid]
     const next: Answers = { ...this.answers, [qid]: value }
 
-    // Daftar Pilihan Bersaring: a filtered dropdown's answer is only valid for
-    // the source answers it was picked under. When a SOURCE changes value, drop
-    // every dependent answer (screen + drafts) so a stale pick can never be
+    // Daftar Pilihan Bersaring + Pilihan Bertingkat: a dependent answer is only
+    // valid for the source answers it was picked under. When a SOURCE changes
+    // value, drop every TRANSITIVE dependent (Kota → Mall → Brand, also through
+    // catalog filters) on screen + drafts, so a stale pick can never be
     // submitted — the backend would 422 it anyway (OPTION_OUT_OF_FILTER).
     const cleared: string[] = []
     if (!answerValuesEqual(prev, value)) {
-      for (const dep of getFilterDependents(qid, this.questions)) {
-        if (dep.id === qid) continue
-        delete next[dep.id]
-        cleared.push(dep.id)
+      for (const depId of collectDependents(qid, this.questions)) {
+        delete next[depId]
+        cleared.push(depId)
       }
     }
 
@@ -527,11 +575,17 @@ export class SurveyRunner {
   }
 
   loadFrom = (state: { answers: Answers; currentIndex: number; accumulatedTimeMs?: number }) => {
-    this.answers = state.answers
+    // Draft self-heal (Pilihan Bertingkat §2.3): the survey may have changed
+    // since the draft was saved, so drop dependent answers that are no longer
+    // visible under the drafted parent answers (cascading) and let the page
+    // trim the server draft exactly like handleAnswer does.
+    const { answers, cleared } = pruneDependentAnswers(state.answers ?? {}, this.questions)
+    this.answers = answers
     const maxIdx = Math.max(0, this.surveyPages.length - 1)
     this.currentIndex = Math.min(state.currentIndex, maxIdx)
     this.accumulatedTimeMs = state.accumulatedTimeMs || 0
     this.lastActiveTime = Date.now()
+    if (cleared.length > 0) this._onDependentsCleared?.(cleared)
   }
 
   getDurationSeconds = () => {
@@ -670,15 +724,28 @@ export class SurveyRunner {
 
     if (q.type === 'single_choice' || q.type === 'checkbox' || q.type === 'image_choice') {
       if (!q.options) return
-      const standard = q.options.filter((o) => !o.isOther)
-      const other = q.options.find((o) => o.isOther)
+      // Pilihan Bertingkat: letters address only the options on screen.
+      const cur = this.answers[q.id]
+      const tom = isTopOfMindQuestion(q)
+      const tomFirst = tom ? topOfMindFirst(cur) : ''
+      const visible = visibleOptions(q, this.answers, this.questions).options
+      // Top of Mind stage 2 (keyboard only runs in paged mode): the list on
+      // screen is the remaining options — the first pick is named above it.
+      const shown = tom && tomFirst !== '' ? remainingOptions(visible, tomFirst) : visible
+      const standard = shown.filter((o) => !o.isOther)
+      const other = shown.find((o) => o.isOther)
       const opts = other ? [...standard, other] : standard
       const idx = key.charCodeAt(0) - 65
       if (idx < 0 || idx >= opts.length) return
       const opt = opts[idx]
       e.preventDefault()
 
-      if (q.type === 'checkbox') {
+      if (tom) {
+        // "Lainnya" needs typed text — leave it to the pointer/touch flow.
+        if (opt.isOther) return
+        if (tomFirst === '') this.handleAnswer(q.id, setTopOfMindFirst(cur, opt.label))
+        else this.handleAnswer(q.id, toggleTopOfMindRest(cur, opt.label, q.maxSelections))
+      } else if (q.type === 'checkbox') {
         const current = Array.isArray(this.answers[q.id]) ? [...(this.answers[q.id] as string[])] : []
         const existingIdx = current.indexOf(opt.label)
         if (existingIdx >= 0) current.splice(existingIdx, 1)

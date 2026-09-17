@@ -29,8 +29,158 @@ const opts = (labels: string[], withOther = false) => [
   ...(withOther ? [{ id: 'o-other', label: 'Lainnya', sortOrder: labels.length, isOther: true }] : []),
 ]
 
+// ── Pilihan Bertingkat demo: Kota → Mall → Brand ─────────────────────────────
+// Kota options carry a `value` (so their key is the code), Mall and Brand use
+// their labels as keys. "Trans Studio Mall Makassar" has no brand mapped on
+// purpose, to show the "Tidak ada pilihan untuk …" state (D-1: still passable).
+const KOTA = [
+  { label: 'Jakarta', value: 'JKT' },
+  { label: 'Bandung', value: 'BDG' },
+  { label: 'Surabaya', value: 'SBY' },
+  { label: 'Medan', value: 'MDN' },
+  { label: 'Makassar', value: 'MKS' },
+]
+const MALL_BY_KOTA: Record<string, string[]> = {
+  JKT: ['Grand Indonesia', 'Plaza Senayan', 'Pondok Indah Mall'],
+  BDG: ['Paris Van Java', '23 Paskal'],
+  SBY: ['Tunjungan Plaza', 'Pakuwon Mall'],
+  MDN: ['Sun Plaza', 'Delipark'],
+  MKS: ['Trans Studio Mall Makassar'],
+}
+const MALLS_BY_BRAND: Record<string, string[]> = {
+  Uniqlo: ['Grand Indonesia', 'Pondok Indah Mall', 'Paris Van Java', 'Tunjungan Plaza', 'Pakuwon Mall', 'Delipark'],
+  Zara: ['Grand Indonesia', 'Plaza Senayan', 'Tunjungan Plaza'],
+  'H&M': ['Grand Indonesia', 'Pondok Indah Mall', 'Paris Van Java', 'Tunjungan Plaza', 'Sun Plaza'],
+  Starbucks: ['Grand Indonesia', 'Plaza Senayan', 'Pondok Indah Mall', 'Paris Van Java', '23 Paskal', 'Tunjungan Plaza', 'Pakuwon Mall', 'Delipark'],
+  Gramedia: ['Pondok Indah Mall', '23 Paskal', 'Tunjungan Plaza', 'Sun Plaza'],
+  Sephora: ['Grand Indonesia', 'Plaza Senayan', 'Tunjungan Plaza'],
+}
+
+function cascadeBlock(): Question[] {
+  const malls = Object.values(MALL_BY_KOTA).flat()
+  const mallAllowed: Record<string, string[]> = {}
+  for (const [kota, list] of Object.entries(MALL_BY_KOTA)) {
+    for (const m of list) mallAllowed[m] = [...(mallAllowed[m] ?? []), kota]
+  }
+  return [
+    q({
+      id: 'cascade-kota',
+      type: 'single_choice',
+      title: 'Di <b>kota</b> mana Anda paling sering berbelanja?',
+      titlePlain: 'Di kota mana Anda paling sering berbelanja?',
+      required: true,
+      options: KOTA.map((k, i) => ({ id: `o-kota-${k.value}`, label: k.label, value: k.value, sortOrder: i })),
+    }),
+    q({
+      id: 'cascade-mall',
+      type: 'dropdown',
+      title: 'Mal mana yang paling sering Anda kunjungi?',
+      required: true,
+      options: opts(malls, true),
+      dependsOn: { sourceQuestionId: 'cascade-kota', allowed: mallAllowed },
+    }),
+    q({
+      id: 'cascade-brand',
+      type: 'single_choice',
+      title: 'Gerai apa yang paling sering Anda datangi di mal tersebut?',
+      required: true,
+      options: opts(Object.keys(MALLS_BY_BRAND), true),
+      dependsOn: { sourceQuestionId: 'cascade-mall', allowed: { ...MALLS_BY_BRAND } },
+    }),
+  ]
+}
+
+// ── Top of Mind demo: two-stage checkbox in one card ─────────────────────────
+// First "mana yang pertama terlintas?" (one pick), then the rest with that
+// pick excluded. `tom-1` has "Lainnya" and is required; `tom-2` shows the
+// maxSelections cap (3 total → 2 more in stage 2).
+function topOfMindBlock(): Question[] {
+  return [
+    q({
+      id: 'tom-1',
+      type: 'checkbox',
+      topOfMind: true,
+      required: true,
+      title: 'Merek <b>air mineral</b> apa saja yang Anda ketahui?',
+      titlePlain: 'Merek air mineral apa saja yang Anda ketahui?',
+      options: opts(['Aqua', 'Le Minerale', 'Cleo', 'Prima', 'Nestlé Pure Life'], true),
+    }),
+    q({
+      id: 'tom-2',
+      type: 'checkbox',
+      topOfMind: true,
+      maxSelections: 3,
+      title: 'Aplikasi belanja online apa yang Anda kenal? (maks 3)',
+      options: opts(['Tokopedia', 'Shopee', 'Lazada', 'Blibli', 'TikTok Shop']),
+    }),
+  ]
+}
+
+// ── Matrix demo: wide grids that used to force horizontal scrolling ──────────
+// Served alone at `/s/mock-matrix` so the matrix layouts can be tested without
+// clicking through the whole demo. Covers: 5-col Likert with long labels,
+// 7-col agreement scale, 10-col numeric scale, and many rows.
+const rowsOf = (labels: string[]) => labels.map((label, i) => ({ id: `r-${i}`, label, sortOrder: i }))
+const colsOf = (labels: string[]) => labels.map((label, i) => ({ id: `c-${i}`, label, sortOrder: i }))
+
+function matrixBlock(): Question[] {
+  return [
+    q({
+      id: 'matrix-likert5',
+      type: 'matrix',
+      required: true,
+      title: 'Seberapa puas Anda dengan layanan kami?',
+      matrixRows: rowsOf(['Kecepatan pelayanan', 'Keramahan petugas', 'Kebersihan ruang tunggu', 'Kejelasan informasi biaya']),
+      matrixCols: colsOf(['Sangat tidak puas', 'Tidak puas', 'Cukup puas', 'Puas', 'Sangat puas']),
+    }),
+    q({
+      id: 'matrix-agree7',
+      type: 'matrix',
+      title: 'Seberapa setuju Anda dengan pernyataan berikut?',
+      matrixRows: rowsOf([
+        'Aplikasi ini mudah digunakan tanpa perlu bantuan orang lain',
+        'Saya akan merekomendasikan aplikasi ini kepada rekan kerja',
+        'Fitur yang tersedia sudah sesuai dengan kebutuhan saya',
+      ]),
+      matrixCols: colsOf([
+        'Sangat tidak setuju', 'Tidak setuju', 'Agak tidak setuju', 'Netral',
+        'Agak setuju', 'Setuju', 'Sangat setuju',
+      ]),
+    }),
+    q({
+      id: 'matrix-scale10',
+      type: 'matrix',
+      title: 'Beri nilai 1–10 untuk tiap kanal layanan.',
+      matrixRows: rowsOf(['Call center', 'WhatsApp', 'Email', 'Kantor cabang', 'Aplikasi mobile', 'Situs web']),
+      matrixCols: colsOf(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']),
+    }),
+    q({
+      id: 'matrix-freq',
+      type: 'matrix',
+      title: 'Seberapa sering Anda menggunakan moda transportasi berikut?',
+      matrixRows: rowsOf([
+        'Sepeda motor pribadi', 'Mobil pribadi', 'Ojek online', 'Taksi online', 'Bus kota / TransJakarta',
+        'KRL / Commuter Line', 'MRT / LRT', 'Angkot', 'Sepeda', 'Jalan kaki',
+      ]),
+      matrixCols: colsOf(['Tidak pernah', 'Jarang', '1–2 kali seminggu', '3–5 kali seminggu', 'Setiap hari', 'Tidak tahu']),
+    }),
+  ]
+}
+
 export function buildMockSurvey(slug: string): Survey {
   order = 0
+  if (slug === 'mock-matrix') {
+    const survey = buildMockSurvey('mock')
+    order = 0
+    return {
+      ...survey,
+      title: 'Demo Matriks (Mock)',
+      questions: [
+        ...matrixBlock(),
+        q({ id: 'closing', type: 'closing_page', title: 'Terima kasih!', description: 'Demo matriks selesai.' }),
+      ],
+    }
+  }
   return {
     id: 'mock-survey-1',
     title: 'Survei Demo (Mock)',
@@ -60,6 +210,10 @@ export function buildMockSurvey(slug: string): Survey {
         title: 'Bagian 1: Tentang Anda',
         description: 'Beberapa pertanyaan singkat mengenai data diri.',
       }),
+      // Placed first so the Top of Mind and Pilihan Bertingkat demos are
+      // reachable right away.
+      ...topOfMindBlock(),
+      ...cascadeBlock(),
       q({ id: 'short-1', type: 'short_text', title: 'Siapa nama panggilan Anda?', placeholder: 'Misal: Budi', required: true }),
       q({ id: 'long-1', type: 'long_text', title: 'Ceritakan sedikit tentang keseharian Anda.' }),
       q({ id: 'email-1', type: 'email', title: 'Alamat email Anda?' }),

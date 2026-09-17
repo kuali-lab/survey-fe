@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Question, Answers, AnswerValue, QuestionOption, ContactInfo } from '$lib/types.js'
+  import { isTopOfMindAnswer, topOfMindRest } from '$lib/topOfMind.js'
 
   type Props = {
     questions: Question[]
@@ -48,6 +49,10 @@
         return String(a)
       }
       case 'checkbox': {
+        if (isTopOfMindAnswer(a)) {
+          const rest = topOfMindRest(a)
+          return rest.length > 0 ? `★ ${a.first} · ${rest.join(', ')}` : `★ ${a.first}`
+        }
         if (Array.isArray(a)) return a.join(', ')
         return String(a)
       }

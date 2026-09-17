@@ -241,6 +241,7 @@
                   slug={data.slug}
                   answers={runner.answers}
                   questions={runner.questions}
+                  paged
                 />
               {/each}
             </div>
@@ -256,11 +257,15 @@
       {/if}
 
       <div class="nav">
-        <!-- `runner.canGoBack` hari ini selalu true di sini — runner surveyor
-             mematikan penegakan M1 lewat `enforceAllowBack: false`. Ditulis tetap
-             supaya aturan kosmetiknya seragam dengan `SurveyStage`: kalau kelak
-             surveyor ikut ditegakkan, tombolnya ikut hilang tanpa perlu diingat. -->
-        {#if runner.currentIndex > 0 && settings.showNavArrows && runner.canGoBack}
+        <!-- Penegakan M1 di sini selalu mati — runner surveyor memasang
+             `enforceAllowBack: false`. Kondisinya ditulis tetap supaya aturan
+             kosmetiknya seragam dengan `SurveyStage`: kalau kelak surveyor ikut
+             ditegakkan, tombolnya ikut hilang tanpa perlu diingat.
+
+             🔴 Tanpa penjaga `currentIndex > 0`, sama seperti `SurveyStage`:
+             `canGoBack` sudah memuat "ada tempat untuk mundur", dan jawabannya
+             bisa YA di indeks 0 (Top of Mind tahap 2 di halaman pertama). -->
+        {#if runner.canGoBack && settings.showNavArrows}
           <NavButton label="Sebelumnya" onClick={runner.handleBack} variant="secondary" />
         {/if}
         <div class="nav-right">
