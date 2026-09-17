@@ -107,9 +107,13 @@
   <div class="repeat-group">
     {#each cards as kartu, ci (ci)}
       <div class="kartu">
-        <div class="kartu-head">
-          <span class="kartu-no">{ci + 1}</span>
-          {#if cards.length > 1}
+        <!-- Kartu tunggal tidak diberi nomor. Angka "1" pada satu-satunya kartu
+             menyiratkan ada kartu lain di suatu tempat, dan responden mencari
+             sesuatu yang belum ada. Nomor muncul begitu kartu kedua lahir —
+             saat ia benar-benar membedakan satu jawaban dari yang lain. -->
+        {#if cards.length > 1}
+          <div class="kartu-head">
+            <span class="kartu-no">{ci + 1}</span>
             <button
               type="button"
               class="repeat-remove"
@@ -118,8 +122,8 @@
             >
               &times;
             </button>
-          {/if}
-        </div>
+          </div>
+        {/if}
         <div class="kartu-grid" style="--kolom-kartu: {kolomKartu}">
           {#each question.fields ?? [] as f (f.id)}
             <div class="kartu-field">
@@ -191,14 +195,19 @@
   /* Repeat group: satu kartu = satu record. Bingkainya sengaja terlihat —
      tanpa batas visual, empat field dua kartu terbaca sebagai delapan isian
      lepas, dan responden kehilangan jejak kendaraan mana yang sedang diisi. */
+  /* 🔴 Latarnya `--canvas` (putih), BUKAN `--surface`. `--surface` bernilai
+     #f7f7f8 — abu yang sama dengan latar `.text-input`, sehingga kartu dan kotak
+     isian di dalamnya melebur jadi satu bidang abu dan batas kartunya hilang.
+     Kartu putih membuat kotak abu di dalamnya justru menonjol, dan saat difokus
+     kotak itu berubah putih ber-outline seperti pertanyaan lain. */
   .kartu {
-    border: 1px solid var(--border, #e5e7eb);
+    border: 1px solid var(--canvas-softer, #ebebeb);
     border-radius: 12px;
-    padding: 12px 14px 14px;
+    padding: 14px;
     display: flex;
     flex-direction: column;
     gap: 10px;
-    background: var(--surface, #fff);
+    background: var(--canvas, #fff);
   }
 
   .kartu-head {
