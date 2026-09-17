@@ -59,6 +59,10 @@
   const grup = $derived(isRepeatGroup(question))
   const cards = $derived(toCards(value))
   const batasKartu = $derived(effectiveMaxCards(question))
+  // Tata letak isian, diset pembuat survei. Apa pun selain 2 dibaca 1: nilai
+  // asing dari klien lain tidak boleh melahirkan grid yang tidak pernah
+  // dirancang, dan di layar sempit grid-nya tetap runtuh jadi satu kolom.
+  const kolomKartu = $derived(question.fieldsPerRow === 2 ? 2 : 1)
 
   // 🔴 Kartu diganti UTUH, bukan disunting di tempat. Objek kartu ikut menjadi
   // nilai jawaban yang dikirim ke atas; memutasinya langsung membuat Svelte tidak
@@ -116,22 +120,24 @@
             </button>
           {/if}
         </div>
-        {#each question.fields ?? [] as f (f.id)}
-          <div class="kartu-field">
-            <span class="kartu-label">{f.titlePlain || f.title}</span>
-            <QuestionInput
-              question={f}
-              value={kartu[f.id] ?? ''}
-              onChange={(v) => ubahField(ci, f.id, v)}
-              {onBlur}
-              {slug}
-              {answers}
-              {questions}
-              {pratinjau}
-              {paged}
-            />
-          </div>
-        {/each}
+        <div class="kartu-grid" style="--kolom-kartu: {kolomKartu}">
+          {#each question.fields ?? [] as f (f.id)}
+            <div class="kartu-field">
+              <span class="kartu-label">{f.titlePlain || f.title}</span>
+              <QuestionInput
+                question={f}
+                value={kartu[f.id] ?? ''}
+                onChange={(v) => ubahField(ci, f.id, v)}
+                {onBlur}
+                {slug}
+                {answers}
+                {questions}
+                {pratinjau}
+                {paged}
+              />
+            </div>
+          {/each}
+        </div>
       </div>
     {/each}
 
@@ -216,10 +222,30 @@
     color: var(--muted, #6b7280);
   }
 
+  /* Tata letak isian, diset pembuat survei (1 atau 2 kolom).
+     🔴 `minmax(0, 1fr)`, bukan `1fr`: bawaan grid adalah `min-width: auto`,
+     jadi satu isian berisi teks panjang tanpa spasi akan MELEBARKAN kolomnya
+     dan mendorong kartu melewati tepi layar — tanpa galat, hanya scroll
+     horizontal yang tiba-tiba ada di ponsel. */
+  .kartu-grid {
+    display: grid;
+    grid-template-columns: repeat(var(--kolom-kartu, 1), minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  /* Di layar sempit dua kolom selalu terlalu sesak untuk kotak teks, berapa pun
+     yang dipilih pembuat survei. Runtuh jadi satu kolom. */
+  @media (max-width: 520px) {
+    .kartu-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
   .kartu-field {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    min-width: 0;
   }
 
   .kartu-label {
