@@ -106,6 +106,8 @@ export interface Question {
   // FITURNYA MATI. Pengulangan tanpa batas tidak boleh ada sama sekali — satu
   // kiriman akan menulis baris sebanyak yang ditentukan pengirim.
   maxRepeat?: number
+  // Grup Jawaban: jumlah kolom isian di dalam satu kartu (1 atau 2; tak terisi = 1).
+  fieldsPerRow?: number
 
   // Field di dalam satu KARTU repeat group (Ihatec M5). Kosong/absen untuk
   // setiap pertanyaan biasa.
