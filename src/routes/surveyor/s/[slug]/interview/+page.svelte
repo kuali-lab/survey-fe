@@ -264,8 +264,15 @@
 
              🔴 Tanpa penjaga `currentIndex > 0`, sama seperti `SurveyStage`:
              `canGoBack` sudah memuat "ada tempat untuk mundur", dan jawabannya
-             bisa YA di indeks 0 (Top of Mind tahap 2 di halaman pertama). -->
-        {#if runner.canGoBack && settings.showNavArrows}
+             bisa YA di indeks 0 (Top of Mind tahap 2 di halaman pertama).
+
+             🔴 Penjaga `settings.showNavArrows` ikut DIHAPUS 17 Sep 2026 (H-64),
+             dan justru demi keseragaman yang dijanjikan paragraf pertama di atas:
+             `SurveyStage` sudah melepasnya, jadi mempertahankannya di sini akan
+             membuat PETUGAS WAWANCARA kehilangan tombol mundur pada survei lama
+             yang kebetulan menyimpan `showNavArrows: false`, sementara responden
+             di survei yang sama tetap punya. Persis kebalikan dari niat aslinya. -->
+        {#if runner.canGoBack}
           <NavButton label="Sebelumnya" onClick={runner.handleBack} variant="secondary" />
         {/if}
         <div class="nav-right">

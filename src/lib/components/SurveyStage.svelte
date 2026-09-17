@@ -37,7 +37,11 @@
     pratinjau = false,
   }: {
     runner: SurveyRunner
-    settings: { showProgress?: boolean; showNumbers?: boolean; showNavArrows?: boolean }
+    // `showNavArrows` tidak lagi dibaca komponen ini (H-64). Ia tetap ada di
+    // objek pengaturan yang dikirim backend — kolomnya sengaja dipertahankan —
+    // tapi tidak lagi dideklarasikan di sini supaya tidak terbaca seperti tombol
+    // yang masih hidup oleh pembaca berikutnya.
+    settings: { showProgress?: boolean; showNumbers?: boolean }
     questionErrors?: Record<string, string>
     slug?: string
     submitError?: string | null
@@ -129,8 +133,16 @@
         `runner.canGoBack` di sini KOSMETIK, bukan penegakan: tombol mati yang
         terlihat adalah UX buruk. Penegakan No-Back hidup di `handleBack` dalam
         runner, yang juga menutup roda tetikus, gestur sentuh, dan papan ketik —
-        jangan pernah membalik peran keduanya. `showNavArrows` tetap sakelar
-        terpisah dan tidak digabung ke sini.
+        jangan pernah membalik peran keduanya.
+
+        🔴 Penjaga `settings.showNavArrows` DIHAPUS 17 Sep 2026 (keputusan user,
+        H-64). Ia menyembunyikan tombol ini saja — tombol maju di bawah tidak
+        pernah ikut digerbang, walau label sakelarnya menjanjikan "prev/next" —
+        sehingga satu-satunya keadaan yang ia hasilkan adalah jalur mundur yang
+        HIDUP lewat roda/usap/papan ketik tapi tanpa kontrol yang terlihat. Di
+        mode gulir ia bahkan tak berefek sama sekali, karena `canGoBack` di sana
+        permanen `false`. Visibilitas panah kini mengikuti "Izinkan Kembali",
+        yang menjawab pertanyaan yang sama dengan jangkauan lebih luas.
 
         🔴 `currentIndex > 0` sengaja TIDAK lagi diuji di sini. Sejak Top of Mind,
         `canGoBack` sudah memuat pertanyaan "ada tempat untuk mundur?" — dan
@@ -138,7 +150,7 @@
         halaman pertama dan respondennya ada di tahap 2. Menambahkan kembali
         penjaga indeks di sini akan menghilangkan tombol mundur tahap-2 itu.
       -->
-      {#if runner.canGoBack && settings.showNavArrows}
+      {#if runner.canGoBack}
         <NavButton
           label="Sebelumnya"
           onClick={runner.handleBack}

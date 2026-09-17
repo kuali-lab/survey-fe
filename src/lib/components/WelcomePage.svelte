@@ -1,5 +1,6 @@
 <script lang="ts">
   import { isCustomLogo, resolveLogoUrl } from '$lib/branding.js'
+  import { resolveMediaUrl } from '$lib/mediaUrl.js'
 
   let {
     title,
@@ -24,8 +25,12 @@
     logoUrl?: string | null
   } = $props()
 
-  const logoSrc = $derived(resolveLogoUrl(logoUrl))
-  const logoAlt = $derived(isCustomLogo(logoUrl) ? 'Logo survei' : 'Logika Statistik')
+  // Absolut dulu: URL media relatif dari backend menunjuk ke origin survey-fe
+  // kalau tidak diselesaikan terhadap origin API. `src` dan `alt` tetap lahir
+  // dari nilai yang SAMA, jadi keduanya tidak bisa menyimpang.
+  const logoMedia = $derived(resolveMediaUrl(logoUrl))
+  const logoSrc = $derived(resolveLogoUrl(logoMedia))
+  const logoAlt = $derived(isCustomLogo(logoMedia) ? 'Logo survei' : 'Logika Statistik')
   const layout = $derived(imageLayout ?? 'center')
   const isInline = $derived(layout === 'left' || layout === 'right')
 </script>
@@ -95,9 +100,21 @@
     z-index: 10;
   }
 
+  /* Kotak TERBATAS, bukan kunci tinggi.
+     Versi sebelumnya mengunci tinggi 36px dengan lebar bebas, sehingga massa
+     visual logo sepenuhnya ditentukan rasio aspeknya: wordmark 400×40 memakai
+     ~360×36px, sedangkan logo PERSEGI menciut jadi 36×36 — mungil di sebelah
+     wordmark platform yang 173×35. Logo kecil juga tidak terbantu dengan
+     mengunggah berkas lebih besar, karena tingginya toh dipaksa 36px.
+     Kotak tetap + object-fit membuat setiap bentuk memakai ruang yang setara:
+     yang kecil ikut diperbesar sampai memenuhi kotak, yang lebar dibatasi, dan
+     rasionya tidak pernah berubah. Ukuran ini WAJIB sama dengan pratinjau di
+     modal branding — pratinjau yang berbeda ukuran adalah pratinjau yang bohong. */
   .logo-img {
+    width: 140px;
     height: 36px;
-    width: auto;
+    object-fit: contain;
+    object-position: left center;
     display: block;
   }
 
@@ -112,6 +129,7 @@
       margin-bottom: 4px;
     }
     .logo-img {
+      width: 104px;
       height: 26px;
     }
   }

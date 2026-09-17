@@ -9,6 +9,7 @@
     shouldEmitPlatformOgTags,
     toAbsoluteUrl,
   } from '$lib/branding.js'
+  import { resolveMediaUrl } from '$lib/mediaUrl.js'
 
   let { children } = $props()
 
@@ -41,8 +42,16 @@
   //
   // Dibatasi ke rute responden: kelima rute surveyor ikut memuat objek survei
   // ke `page.data`, dan cangkang surveyor sengaja tetap merek platform.
+  //
+  // 🔴 Dijadikan absolut terhadap origin API. Backend mengirim URL media relatif
+  // (`/api/v1/media/…`) selama `MEDIA_CDN_URL` tidak diset — dan `href` relatif
+  // di sini diselesaikan terhadap origin survey-fe, sehingga permintaan favicon
+  // mendarat di SPA dan mengembalikan HTML, bukan gambar. Gejalanya: tab kosong
+  // tanpa satu pun galat yang terlihat.
   const surveyFaviconUrl = $derived(
-    isRespondentRoute(page.route.id) ? resolveFaviconUrl(page.data.survey?.settings) : null,
+    isRespondentRoute(page.route.id)
+      ? resolveMediaUrl(resolveFaviconUrl(page.data.survey?.settings))
+      : null,
   )
 
   // Rute survei memancarkan gambar sosialnya sendiri. Tata letak diam di sana,

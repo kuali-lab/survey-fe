@@ -1,5 +1,6 @@
 <script lang="ts">
   import { isCustomLogo, resolveLogoUrl } from '$lib/branding.js'
+  import { resolveMediaUrl } from '$lib/mediaUrl.js'
 
   let {
     title,
@@ -18,8 +19,10 @@
     logoUrl?: string | null
   } = $props()
 
-  const logoSrc = $derived(resolveLogoUrl(logoUrl))
-  const logoAlt = $derived(isCustomLogo(logoUrl) ? 'Logo survei' : 'Logika Statistik')
+  // Sama seperti WelcomePage: jadikan absolut sekali, pakai untuk `src` dan `alt`.
+  const logoMedia = $derived(resolveMediaUrl(logoUrl))
+  const logoSrc = $derived(resolveLogoUrl(logoMedia))
+  const logoAlt = $derived(isCustomLogo(logoMedia) ? 'Logo survei' : 'Logika Statistik')
   const layout = $derived(imageLayout ?? 'center')
   const isInline = $derived(layout === 'left' || layout === 'right')
 </script>
@@ -92,9 +95,14 @@
     z-index: 10;
   }
 
+  /* Kotak yang SAMA PERSIS dengan WelcomePage — lihat alasannya di sana.
+     Logo yang berubah ukuran antara layar pembuka dan layar penutup terbaca
+     seperti dua merek, bukan satu. */
   .logo-img {
+    width: 140px;
     height: 36px;
-    width: auto;
+    object-fit: contain;
+    object-position: left center;
     display: block;
   }
 
@@ -180,6 +188,14 @@
     .body {
       align-items: center;
       text-align: center;
+    }
+    /* Paritas dengan WelcomePage, yang sudah menyusutkan logonya di lebar ini.
+       Sebelumnya hanya halaman pembuka yang menyusut, jadi logo yang sama
+       tampil 36px di layar penutup dan 26px di layar pembuka pada ponsel yang
+       sama — selisih yang tidak disengaja siapa pun. */
+    .logo-img {
+      width: 104px;
+      height: 26px;
     }
   }
 
