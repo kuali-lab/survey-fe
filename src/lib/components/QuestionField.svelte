@@ -1,7 +1,16 @@
 <script lang="ts">
   import type { Question, AnswerValue, Answers } from '$lib/types.js'
   import QuestionInput from './QuestionInput.svelte'
-  import { canAddRow, effectiveMaxRepeat, questionRepeats, toRows } from '$lib/repeat.js'
+  import {
+    canAddCard,
+    canAddRow,
+    effectiveMaxCards,
+    effectiveMaxRepeat,
+    isRepeatGroup,
+    questionRepeats,
+    toCards,
+    toRows,
+  } from '$lib/repeat.js'
 
   // Satu-satunya tugas komponen ini: memutuskan pertanyaan ini dirender sekali
   // atau berkali-kali. QuestionInput tidak diubah sama sekali — ia tetap
@@ -46,6 +55,30 @@
   const rows = $derived(toRows(value))
   const batas = $derived(effectiveMaxRepeat(question))
 
+  // Repeat group (Ihatec M5): yang berulang KARTU-nya, bukan satu nilai.
+  const grup = $derived(isRepeatGroup(question))
+  const cards = $derived(toCards(value))
+  const batasKartu = $derived(effectiveMaxCards(question))
+
+  // 🔴 Kartu diganti UTUH, bukan disunting di tempat. Objek kartu ikut menjadi
+  // nilai jawaban yang dikirim ke atas; memutasinya langsung membuat Svelte tidak
+  // melihat perubahan, dan jawaban yang tampil di layar bisa berbeda dari yang
+  // benar-benar terkirim.
+  function ubahField(kartuIdx: number, fieldId: string, v: AnswerValue) {
+    const teks = typeof v === 'string' ? v : v == null ? '' : String(v)
+    onChange(cards.map((k, i) => (i === kartuIdx ? { ...k, [fieldId]: teks } : k)))
+  }
+
+  function tambahKartu() {
+    onChange([...cards, {}])
+  }
+
+  function hapusKartu(i: number) {
+    const sisa = cards.filter((_, idx) => idx !== i)
+    // Selalu sisakan satu kartu — nol kartu berarti tidak ada tempat mengisi.
+    onChange(sisa.length > 0 ? sisa : [{}])
+  }
+
   function ubahBaris(i: number, v: AnswerValue) {
     const teks = typeof v === 'string' ? v : v == null ? '' : String(v)
     onChange(rows.map((r, idx) => (idx === i ? teks : r)))
@@ -63,7 +96,52 @@
   }
 </script>
 
-{#if berulang}
+{#if grup}
+  <!-- Repeat group: satu KARTU berisi seluruh field, dan kartunya yang ditambah.
+       Field dirender lewat `QuestionInput` yang sama seperti pertanyaan biasa,
+       jadi aturan per-tipe (placeholder, batas panjang) berlaku apa adanya. -->
+  <div class="repeat-group">
+    {#each cards as kartu, ci (ci)}
+      <div class="kartu">
+        <div class="kartu-head">
+          <span class="kartu-no">{ci + 1}</span>
+          {#if cards.length > 1}
+            <button
+              type="button"
+              class="repeat-remove"
+              onclick={() => hapusKartu(ci)}
+              aria-label="Hapus jawaban ke-{ci + 1}"
+            >
+              &times;
+            </button>
+          {/if}
+        </div>
+        {#each question.fields ?? [] as f (f.id)}
+          <div class="kartu-field">
+            <span class="kartu-label">{f.titlePlain || f.title}</span>
+            <QuestionInput
+              question={f}
+              value={kartu[f.id] ?? ''}
+              onChange={(v) => ubahField(ci, f.id, v)}
+              {onBlur}
+              {slug}
+              {answers}
+              {questions}
+              {pratinjau}
+              {paged}
+            />
+          </div>
+        {/each}
+      </div>
+    {/each}
+
+    {#if canAddCard(question, cards)}
+      <button type="button" class="repeat-add" onclick={tambahKartu}>+ Tambah jawaban</button>
+    {:else}
+      <p class="repeat-limit">Maksimal {batasKartu} jawaban.</p>
+    {/if}
+  </div>
+{:else if berulang}
   <div class="repeat-group">
     {#each rows as row, i (i)}
       <div class="repeat-row">
@@ -104,6 +182,52 @@
 {/if}
 
 <style>
+  /* Repeat group: satu kartu = satu record. Bingkainya sengaja terlihat —
+     tanpa batas visual, empat field dua kartu terbaca sebagai delapan isian
+     lepas, dan responden kehilangan jejak kendaraan mana yang sedang diisi. */
+  .kartu {
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 12px;
+    padding: 12px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--surface, #fff);
+  }
+
+  .kartu-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  /* Nomor kartu, bukan nomor soal. Pertanyaannya tetap satu. */
+  .kartu-no {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    background: var(--canvas, #f3f4f6);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted, #6b7280);
+  }
+
+  .kartu-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .kartu-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted, #6b7280);
+  }
+
   .repeat-group {
     display: flex;
     flex-direction: column;
