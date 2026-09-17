@@ -81,6 +81,15 @@ export interface Question {
   // Region ("Wilayah") question: how many administrative levels to ask for.
   // 1=Provinsi, 2=+Kabupaten/Kota, 3=+Kecamatan, 4=+Desa. Undefined → treat as 2.
   regionDepth?: number
+  // Berapa banyak jawaban yang boleh diberikan satu responden untuk pertanyaan ini
+  // (Ihatec M5). undefined = pertanyaannya TIDAK berulang; >= 2 = boleh menambah
+  // sampai sebanyak itu.
+  //
+  // 🔴 undefined di sini berarti kebalikan dari tetangganya di atas: pada
+  // maxLength/maxSelections undefined berarti "tak dibatasi", di sini ia berarti
+  // FITURNYA MATI. Pengulangan tanpa batas tidak boleh ada sama sekali — satu
+  // kiriman akan menulis baris sebanyak yang ditentukan pengirim.
+  maxRepeat?: number
 
   // Relational config
   hasAsyncOptions?: boolean
