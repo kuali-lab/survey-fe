@@ -1,5 +1,6 @@
 <script lang="ts">
   import { isCustomLogo, resolveLogoUrl } from '$lib/branding.js'
+  import { resolveMediaUrl } from '$lib/mediaUrl.js'
 
   let {
     title,
@@ -24,8 +25,12 @@
     logoUrl?: string | null
   } = $props()
 
-  const logoSrc = $derived(resolveLogoUrl(logoUrl))
-  const logoAlt = $derived(isCustomLogo(logoUrl) ? 'Logo survei' : 'Logika Statistik')
+  // Absolut dulu: URL media relatif dari backend menunjuk ke origin survey-fe
+  // kalau tidak diselesaikan terhadap origin API. `src` dan `alt` tetap lahir
+  // dari nilai yang SAMA, jadi keduanya tidak bisa menyimpang.
+  const logoMedia = $derived(resolveMediaUrl(logoUrl))
+  const logoSrc = $derived(resolveLogoUrl(logoMedia))
+  const logoAlt = $derived(isCustomLogo(logoMedia) ? 'Logo survei' : 'Logika Statistik')
   const layout = $derived(imageLayout ?? 'center')
   const isInline = $derived(layout === 'left' || layout === 'right')
 </script>

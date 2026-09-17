@@ -1,5 +1,6 @@
 <script lang="ts">
   import { isCustomLogo, resolveLogoUrl } from '$lib/branding.js'
+  import { resolveMediaUrl } from '$lib/mediaUrl.js'
 
   let {
     title,
@@ -18,8 +19,10 @@
     logoUrl?: string | null
   } = $props()
 
-  const logoSrc = $derived(resolveLogoUrl(logoUrl))
-  const logoAlt = $derived(isCustomLogo(logoUrl) ? 'Logo survei' : 'Logika Statistik')
+  // Sama seperti WelcomePage: jadikan absolut sekali, pakai untuk `src` dan `alt`.
+  const logoMedia = $derived(resolveMediaUrl(logoUrl))
+  const logoSrc = $derived(resolveLogoUrl(logoMedia))
+  const logoAlt = $derived(isCustomLogo(logoMedia) ? 'Logo survei' : 'Logika Statistik')
   const layout = $derived(imageLayout ?? 'center')
   const isInline = $derived(layout === 'left' || layout === 'right')
 </script>

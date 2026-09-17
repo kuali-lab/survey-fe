@@ -1,5 +1,6 @@
 <script lang="ts">
   import { isCustomLogo, resolveLogoUrl } from '$lib/branding.js'
+  import { resolveMediaUrl } from '$lib/mediaUrl.js'
 
   let {
     height = 28,
@@ -19,8 +20,12 @@
   // Keputusan "logo survei atau logo platform" tetap milik `branding.ts`, satu
   // tempat untuk seluruh aturan cadangan. `src` dan teks alternatif lahir dari
   // cabang yang sama, jadi keduanya tidak bisa menyimpang secara konstruksi.
-  const isCustom = $derived(isCustomLogo(logoUrl))
-  const logoSrc = $derived(resolveLogoUrl(logoUrl))
+  // URL media dijadikan absolut LEBIH DULU, sekali, lalu dipakai kedua cabang.
+  // Backend mengirimnya relatif saat CDN tidak diset, dan URL relatif di sini
+  // akan diselesaikan terhadap origin survey-fe — bukan origin API.
+  const logoMedia = $derived(resolveMediaUrl(logoUrl))
+  const isCustom = $derived(isCustomLogo(logoMedia))
+  const logoSrc = $derived(resolveLogoUrl(logoMedia))
 </script>
 
 {#if isCustom}
