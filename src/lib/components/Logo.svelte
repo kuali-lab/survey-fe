@@ -29,7 +29,22 @@
 </script>
 
 {#if isCustom}
-  <img src={logoSrc} alt="Logo survei" {height} />
+  <!-- Kotak terbatas dengan rasio yang SAMA dengan halaman pembuka/penutup
+       (140×36 ≈ 3,9:1), diskalakan ke tinggi yang diminta pemanggil. Tanpa batas
+       lebar, logo yang sangat lebar melar melewati cangkang halaman gerbang;
+       tanpa lebar tetap, logo kecil tampil mungil alih-alih memenuhi ruangnya.
+       Gaya ditulis inline karena aturannya diturunkan dari prop `height` — satu
+       ekspresi, bukan tabel kelas yang harus dijaga sinkron dengan prop. -->
+  <!-- Atribut `height` DIPERTAHANKAN di samping `style`: ia kontrak yang sudah
+       dipakai pemanggil (dan dikunci uji), dan ia memberi peramban tinggi
+       intrinsik sebelum CSS terpasang — tanpa itu tata letak melompat saat muat.
+       `style` yang menentukan hasil akhirnya. -->
+  <img
+    src={logoSrc}
+    alt="Logo survei"
+    {height}
+    style="width: {Math.round(height * 3.9)}px; height: {height}px; object-fit: contain; object-position: left center; display: block;"
+  />
 <!-- Blok <svg> di bawah sengaja dibiarkan rata kolom 0, tidak ikut diindentasi
      ke dalam {:else}: dengan begitu diff-nya terhadap versi pra-M2 tetap nol,
      dan "logo platform tidak berubah satu byte pun" bisa diaudit ulang kapan

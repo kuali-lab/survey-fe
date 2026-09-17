@@ -95,9 +95,14 @@
     z-index: 10;
   }
 
+  /* Kotak yang SAMA PERSIS dengan WelcomePage — lihat alasannya di sana.
+     Logo yang berubah ukuran antara layar pembuka dan layar penutup terbaca
+     seperti dua merek, bukan satu. */
   .logo-img {
+    width: 140px;
     height: 36px;
-    width: auto;
+    object-fit: contain;
+    object-position: left center;
     display: block;
   }
 
@@ -183,6 +188,14 @@
     .body {
       align-items: center;
       text-align: center;
+    }
+    /* Paritas dengan WelcomePage, yang sudah menyusutkan logonya di lebar ini.
+       Sebelumnya hanya halaman pembuka yang menyusut, jadi logo yang sama
+       tampil 36px di layar penutup dan 26px di layar pembuka pada ponsel yang
+       sama — selisih yang tidak disengaja siapa pun. */
+    .logo-img {
+      width: 104px;
+      height: 26px;
     }
   }
 
