@@ -1,6 +1,9 @@
 <script lang="ts">
   import type { Question, AnswerValue, Answers } from '$lib/types.js'
-  import QuestionInput from './QuestionInput.svelte'
+  // QuestionField, bukan QuestionInput langsung: ia yang memutuskan pertanyaan
+  // ini dirender sekali atau satu kali per pengulangan (Ihatec M5). Untuk
+  // pertanyaan yang tidak berulang ia meneruskan apa adanya.
+  import QuestionField from './QuestionField.svelte'
 
   let {
     question,
@@ -58,7 +61,7 @@
           <img src={question.imageUrl} alt={question.titlePlain ?? ''} class="inline-img" />
         </div>
         <div class="inline-input-wrap">
-          <QuestionInput
+          <QuestionField
             {question}
             value={answer}
             onChange={onAnswer}
@@ -75,7 +78,7 @@
         <img src={question.imageUrl} alt={question.titlePlain ?? ''} />
       </div>
       <div class="input-wrap">
-        <QuestionInput
+        <QuestionField
           {question}
           value={answer}
           onChange={onAnswer}
@@ -88,7 +91,7 @@
     {/if}
   {:else}
     <div class="input-wrap">
-      <QuestionInput
+      <QuestionField
         {question}
         value={answer}
         onChange={onAnswer}

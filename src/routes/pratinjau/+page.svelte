@@ -137,6 +137,7 @@
         imageLayout={welcomeQuestion?.imageLayout ?? 'center'}
         ctaText={'Mulai Pratinjau'}
         onStart={mulai}
+        logoUrl={survey?.settings?.logoUrl ?? null}
       />
     </div>
 
@@ -158,6 +159,7 @@
           ?? 'Sampai di sini yang akan dilihat responden. Jawaban pratinjau tidak dikirim ke mana pun.'}
         imageUrl={closingQuestion?.imageUrl ?? null}
         imageLayout={closingQuestion?.imageLayout ?? 'center'}
+        logoUrl={survey?.settings?.logoUrl ?? null}
       />
       <button class="ulangi" type="button" onclick={mulai}>Ulangi dari awal</button>
     </div>

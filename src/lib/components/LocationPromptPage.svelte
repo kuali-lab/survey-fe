@@ -7,7 +7,8 @@
     ctaText = 'Izinkan & kirim jawaban',
     onStart,
     error = null,
-    loading = false
+    loading = false,
+    logoUrl = null
   }: {
     title?: string
     description?: string
@@ -15,12 +16,27 @@
     onStart: () => void
     error?: string | null
     loading?: boolean
+    /**
+     * Logo per survei (M2/K29). `null`/absen = logo platform, seperti sebelumnya.
+     *
+     * 🔴 Layar ini MEMINTA IZIN GPS, dan ia tetap ikut berbranding atas
+     * keputusan sadar user (K31). Keberatannya diajukan lebih dulu: logo
+     * pelanggan di layar izin membuat permintaan tampak berasal dari
+     * pelanggan, padahal platform yang meminta akses perangkat dan memegang
+     * datanya. User memilih ikut dengan konsekuensi itu dinyatakan di muka.
+     *
+     * Kalau kelak dipersoalkan, jalan keluarnya menambah baris atribusi
+     * ("dikelola oleh Logika Statistik"), BUKAN mencabut logonya. Duduk
+     * perkara lengkapnya di repo `docs`:
+     * `Ihatec/Dev v1.0/Docs v1 - Foundation Planning/01. Plan/02-flow-branding-logo-favicon.md` §2.1
+     */
+    logoUrl?: string | null
   } = $props()
 </script>
 
 <div class="gate">
   <div class="logo-bar">
-    <Logo height={24} />
+    <Logo height={24} {logoUrl} />
   </div>
 
   <div class="icon-circle" aria-hidden="true">

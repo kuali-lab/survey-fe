@@ -4,9 +4,12 @@
   let {
     state,
     title = '',
+    logoUrl = null,
   }: {
     state: 'done' | 'expired' | 'device'
     title?: string
+    /** Logo per survei (M2/K29). `null`/absen = logo platform, seperti sebelumnya. */
+    logoUrl?: string | null
   } = $props()
 
   const cfg = $derived(
@@ -41,7 +44,7 @@
 
 <div class="blocked">
   <div class="logo-bar">
-    <Logo height={24} />
+    <Logo height={24} {logoUrl} />
   </div>
 
   <div class="icon-circle" data-tone={cfg.tone} aria-hidden="true">

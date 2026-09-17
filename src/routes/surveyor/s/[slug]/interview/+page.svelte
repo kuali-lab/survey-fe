@@ -256,7 +256,11 @@
       {/if}
 
       <div class="nav">
-        {#if runner.currentIndex > 0 && settings.showNavArrows}
+        <!-- `runner.canGoBack` hari ini selalu true di sini — runner surveyor
+             mematikan penegakan M1 lewat `enforceAllowBack: false`. Ditulis tetap
+             supaya aturan kosmetiknya seragam dengan `SurveyStage`: kalau kelak
+             surveyor ikut ditegakkan, tombolnya ikut hilang tanpa perlu diingat. -->
+        {#if runner.currentIndex > 0 && settings.showNavArrows && runner.canGoBack}
           <NavButton label="Sebelumnya" onClick={runner.handleBack} variant="secondary" />
         {/if}
         <div class="nav-right">
