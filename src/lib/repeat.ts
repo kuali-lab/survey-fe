@@ -86,8 +86,33 @@ export function repeatValuesOf(value: AnswerValue | undefined): string[] {
   return out
 }
 
-/** Apakah responden masih boleh menambah satu jawaban lagi. */
-export function canAddRepeat(q: Question, values: readonly string[]): boolean {
+/**
+ * Nilai jawaban menjadi daftar BARIS yang terlihat di layar.
+ *
+ * Berbeda dari `repeatValuesOf`, baris kosong DIPERTAHANKAN: responden harus
+ * bisa mengosongkan baris ke-2 lalu mengetiknya lagi, dan kalau barisnya
+ * dirapatkan saat itu juga, kolom yang sedang diketik lenyap di bawah kursor.
+ * Perapatan terjadi di backend saat submit, dengan aturan yang sama.
+ *
+ * Selalu memulangkan minimal satu baris, supaya selalu ada yang bisa diisi.
+ */
+export function toRows(value: AnswerValue | undefined): string[] {
+  if (value == null) return ['']
+  const arr: unknown[] = Array.isArray(value) ? value : [value]
+  const rows = arr
+    .filter((v): v is string | number => typeof v === 'string' || typeof v === 'number')
+    .map((v) => String(v))
+  return rows.length > 0 ? rows : ['']
+}
+
+/**
+ * Apakah responden masih boleh menambah satu baris lagi.
+ *
+ * 🔴 Yang dihitung BARIS, bukan jawaban terisi. Kalau yang dihitung jawaban
+ * terisi, responden bisa menekan "Tambah" berkali-kali selama baris barunya
+ * masih kosong, dan membuat baris sebanyak yang ia mau.
+ */
+export function canAddRow(q: Question, rows: readonly string[]): boolean {
   const max = effectiveMaxRepeat(q)
-  return max > 0 && values.length < max
+  return max > 0 && rows.length < max
 }

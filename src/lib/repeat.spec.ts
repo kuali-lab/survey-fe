@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import type { Question } from './types.js'
-import { canAddRepeat, effectiveMaxRepeat, questionRepeats, repeatValuesOf } from './repeat.js'
+import {
+  canAddRow,
+  effectiveMaxRepeat,
+  questionRepeats,
+  repeatValuesOf,
+  toRows,
+} from './repeat.js'
 
 function q(partial: Partial<Question> & { id: string; type: Question['type'] }): Question {
   return {
@@ -69,19 +75,40 @@ describe('repeatValuesOf', () => {
   })
 })
 
-describe('canAddRepeat', () => {
-  it('boleh menambah selama masih di bawah batas', () => {
-    const soal = q({ id: 'a', type: 'short_text', maxRepeat: 3 })
-    expect(canAddRepeat(soal, ['Ani'])).toBe(true)
-    expect(canAddRepeat(soal, ['Ani', 'Budi'])).toBe(true)
+// toRows dan canAddRow adalah kontrak untuk UI responden. Keduanya ditaruh di
+// modul ini, bukan di dalam .svelte, karena suite survey-fe seluruhnya SSR
+// (H-46): logika di dalam komponen tidak akan pernah tersentuh uji.
+describe('toRows', () => {
+  // Baris kosong DIPERTAHANKAN di sini, berbeda dari repeatValuesOf. Responden
+  // harus bisa mengosongkan baris ke-2 lalu mengetiknya lagi; kalau barisnya
+  // dirapatkan saat itu juga, kolom yang sedang diketik lenyap di bawah kursor.
+  // Perapatan terjadi di backend saat submit, dengan aturan yang sama.
+  it('mempertahankan baris kosong yang sedang diketik', () => {
+    expect(toRows(['Ani', '', 'Budi'])).toEqual(['Ani', '', 'Budi'])
   })
 
-  it('berhenti tepat di batas', () => {
-    const soal = q({ id: 'a', type: 'short_text', maxRepeat: 3 })
-    expect(canAddRepeat(soal, ['Ani', 'Budi', 'Cici'])).toBe(false)
+  it('selalu memberi minimal satu baris supaya ada yang bisa diisi', () => {
+    expect(toRows(null)).toEqual([''])
+    expect(toRows([])).toEqual([''])
   })
 
-  it('pertanyaan yang tidak berulang tidak pernah boleh menambah', () => {
-    expect(canAddRepeat(q({ id: 'a', type: 'short_text' }), [])).toBe(false)
+  it('nilai skalar lama menjadi satu baris', () => {
+    expect(toRows('Ani')).toEqual(['Ani'])
   })
 })
+
+describe('canAddRow', () => {
+  // Penjaganya menghitung BARIS, bukan jawaban terisi: kalau yang dihitung
+  // jawaban terisi, responden bisa menekan "Tambah" berkali-kali selama baris
+  // barunya masih kosong dan membuat baris sebanyak yang ia mau.
+  it('berhenti saat jumlah baris mencapai batas, walau sebagian kosong', () => {
+    const soal = q({ id: 'a', type: 'short_text', maxRepeat: 3 })
+    expect(canAddRow(soal, ['Ani', '', ''])).toBe(false)
+    expect(canAddRow(soal, ['Ani', ''])).toBe(true)
+  })
+
+  it('pertanyaan yang tidak berulang tidak pernah boleh menambah baris', () => {
+    expect(canAddRow(q({ id: 'a', type: 'short_text' }), [''])).toBe(false)
+  })
+})
+
