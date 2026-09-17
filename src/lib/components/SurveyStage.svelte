@@ -105,6 +105,7 @@
                 answers={runner.answers}
                 questions={runner.questions}
                 {pratinjau}
+                paged
               />
             {/each}
           </div>
@@ -124,7 +125,7 @@
     {/if}
 
     <div class="nav">
-      {#if runner.currentIndex > 0 && settings.showNavArrows}
+      {#if runner.canGoBack && settings.showNavArrows}
         <NavButton
           label="Sebelumnya"
           onClick={runner.handleBack}

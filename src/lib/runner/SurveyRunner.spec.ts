@@ -293,17 +293,46 @@ describe('SurveyRunner — Top of Mind', () => {
     const r = makeTomRunner({ maxSelections: 3 })
     keyPress(r, 'b') // stage 1 → Cleo
     expect(r.answers.brand).toEqual({ first: 'Cleo', selected: ['Cleo'] })
-    // stage 2 list on screen is [Cleo, Aqua, Prima, Lainnya] — Cleo pinned first
-    keyPress(r, 'c') // Prima
+    // paged stage 2 shows the remaining options only: [Aqua, Prima, Lainnya]
+    keyPress(r, 'b') // Prima
     expect(r.answers.brand).toEqual({ first: 'Cleo', selected: ['Cleo', 'Prima'] })
-    keyPress(r, 'b') // Aqua
+    keyPress(r, 'a') // Aqua
     expect(r.answers.brand).toEqual({ first: 'Cleo', selected: ['Cleo', 'Prima', 'Aqua'] })
-    keyPress(r, 'd') // Lainnya needs text — ignored
+    keyPress(r, 'c') // Lainnya needs text — ignored
     expect(r.answers.brand).toEqual({ first: 'Cleo', selected: ['Cleo', 'Prima', 'Aqua'] })
-    keyPress(r, 'c') // toggle Prima off
+    keyPress(r, 'b') // toggle Prima off
     expect(r.answers.brand).toEqual({ first: 'Cleo', selected: ['Cleo', 'Aqua'] })
-    keyPress(r, 'a') // the pinned first → clears everything
+  })
+
+  it('paged: "Sebelumnya" from stage 2 returns to stage 1 instead of the previous page', async () => {
+    const r = makeTomRunner()
+    expect(r.canGoBack).toBe(false) // first page, nothing picked
+    r.handleAnswer('brand', { first: 'Aqua', selected: ['Aqua', 'Cleo'] })
+    expect(r.tomStage2QuestionId).toBe('brand')
+    expect(r.canGoBack).toBe(true)
+    r.handleBack()
     expect(r.answers.brand).toBeNull()
+    expect(r.currentIndex).toBe(0)
+    expect(r.canGoBack).toBe(false)
+  })
+
+  it('paged: back from a later page is a normal page change when stage 2 is not on screen', async () => {
+    const r = makeTomRunner()
+    r.handleAnswer('brand', { first: 'Aqua', selected: ['Aqua'] })
+    await r.handleNext()
+    expect(r.currentIndex).toBe(1)
+    r.handleBack()
+    expect(r.currentIndex).toBe(0)
+    expect(r.answers.brand).toEqual({ first: 'Aqua', selected: ['Aqua'] }) // intact: lands on stage 2
+  })
+
+  it('scroll mode: back never touches the answer', () => {
+    const r = makeTomRunner({ displayMode: 'scroll' })
+    r.handleAnswer('brand', { first: 'Aqua', selected: ['Aqua'] })
+    expect(r.tomStage2QuestionId).toBeNull()
+    expect(r.canGoBack).toBe(false)
+    r.handleBack()
+    expect(r.answers.brand).toEqual({ first: 'Aqua', selected: ['Aqua'] })
   })
 
   it('scroll-mode progress counts a first-pick-only answer as answered', () => {

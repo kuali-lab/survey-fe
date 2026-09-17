@@ -13,7 +13,8 @@
     answers = {},
     questions = [],
     // Diteruskan apa adanya ke QuestionInput — lihat alasannya di sana.
-    pratinjau = false
+    pratinjau = false,
+    paged = false
   }: {
     question: Question
     questionNumber: string
@@ -27,6 +28,7 @@
     answers?: Answers
     questions?: Question[]
     pratinjau?: boolean
+    paged?: boolean
   } = $props()
 </script>
 
@@ -67,6 +69,7 @@
             {answers}
             {questions}
             {pratinjau}
+            {paged}
           />
         </div>
       </div>
@@ -83,6 +86,7 @@
           {answers}
           {questions}
           {pratinjau}
+          {paged}
         />
       </div>
     {/if}
@@ -96,6 +100,7 @@
         {answers}
         {questions}
         {pratinjau}
+        {paged}
       />
     </div>
   {/if}
