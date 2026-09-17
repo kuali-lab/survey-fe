@@ -6,6 +6,8 @@
   import { serverMessageOf } from '$lib/submitError.js'
   import { page } from '$app/stores'
   import { goto } from '$app/navigation'
+  import { env } from '$env/dynamic/public'
+  import { resolveOgImageUrl } from '$lib/branding.js'
   import { onMount, tick, untrack } from 'svelte'
 
   import WelcomePage from '$lib/components/WelcomePage.svelte'
@@ -295,6 +297,11 @@
     survey?.questions.find((q) => q.type === 'closing_page') ?? null,
   )
   const settings = $derived(survey?.settings ?? { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' as const })
+  // Logo per survei (M2/K29), dioper ke tujuh permukaan yang dimiliki survei.
+  // Dibaca dari `survey` langsung, bukan dari `settings` di atas: literal
+  // cadangan `settings` tidak punya `logoUrl`, jadi `settings.logoUrl` tidak
+  // lolos typecheck.
+  const logoUrl = $derived(survey?.settings?.logoUrl ?? null)
 
   async function handleStart() {
     validationError = null
@@ -529,8 +536,17 @@
   const metaDescription = $derived(
     (welcomeQuestion?.descriptionPlain ?? survey?.title ?? 'Isi survei dari Logika Statistik — platform riset dan analisis statistik.').slice(0, 160),
   )
+  // Urutan gambar pratinjau tautan: gambar OG survei → gambar sampul halaman
+  // pembuka (perilaku yang sudah ada) → aset bawaan platform 1200×630.
+  //
+  // Basisnya PUBLIC_SITE_URL, dengan origin permintaan sebagai cadangan:
+  // crawler tidak mengurai path relatif, jadi hasilnya wajib absolut.
   const ogImage = $derived(
-    welcomeQuestion?.imageUrl ?? `${$page.url.origin}/logo-logika-teta.png`,
+    resolveOgImageUrl({
+      settings: survey?.settings,
+      welcomeImageUrl: welcomeQuestion?.imageUrl ?? null,
+      base: env.PUBLIC_SITE_URL || $page.url.origin,
+    }),
   )
   const canonicalUrl = $derived(
     `${$page.url.origin}/s/${data.slug}`,
@@ -583,7 +599,11 @@
   <meta name="twitter:title" content={pageTitle} />
   <meta name="twitter:description" content={metaDescription} />
   <meta name="twitter:image" content={ogImage} />
-  <meta name="twitter:card" content={welcomeQuestion?.imageUrl ? 'summary_large_image' : 'summary'} />
+  <!-- Selalu `summary_large_image`: tiap cabang `ogImage` kini menghasilkan
+       gambar yang memang diperuntukkan sebagai pratinjau, dan bawaannya
+       1200×630. Dulu ia bergantung pada ada-tidaknya gambar sampul, sementara
+       app.html menetapkan `summary` tanpa syarat — dua sumber, pemenang tak pasti. -->
+  <meta name="twitter:card" content="summary_large_image" />
 </svelte:head>
 
 <svelte:window
@@ -597,7 +617,11 @@
 <div class="page" class:page-question={viewState === 'question'}>
   {#if inviteBlocked}
     <div class="centered-wrap">
-      <InviteBlockedPage state={inviteBlocked} title={survey?.title ?? ''} />
+      <InviteBlockedPage
+        state={inviteBlocked}
+        title={survey?.title ?? ''}
+        {logoUrl}
+      />
     </div>
 
   {:else if viewState === 'loading'}
@@ -645,6 +669,7 @@
           ctaText={'Mulai Survei'}
           onStart={handleStart}
           error={validationError}
+          {logoUrl}
         />
       {/if}
     </div>
@@ -658,6 +683,7 @@
         onComplete={onSelfieComplete}
         onDenied={onSelfieDenied}
         loading={submitting}
+        {logoUrl}
       />
     </div>
 
@@ -669,6 +695,7 @@
       <SelfieDeniedPage
         onRetry={() => { viewState = 'selfie_capture' }}
         loading={false}
+        {logoUrl}
       />
     </div>
 
@@ -681,6 +708,7 @@
         onStart={fetchLocationThenSubmit}
         loading={locationRequesting}
         error={validationError}
+        {logoUrl}
       />
     </div>
 
@@ -692,6 +720,7 @@
       <LocationDeniedPage
         onRetry={fetchLocationThenSubmit}
         loading={locationRequesting}
+        {logoUrl}
       />
     </div>
 
@@ -758,6 +787,7 @@
         description={closingQuestion?.description ?? null}
         imageUrl={closingQuestion?.imageUrl ?? null}
         imageLayout={closingQuestion?.imageLayout ?? 'center'}
+        {logoUrl}
       />
     </div>
   {/if}

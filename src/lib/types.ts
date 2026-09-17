@@ -93,6 +93,15 @@ export interface Question {
   // Region ("Wilayah") question: how many administrative levels to ask for.
   // 1=Provinsi, 2=+Kabupaten/Kota, 3=+Kecamatan, 4=+Desa. Undefined → treat as 2.
   regionDepth?: number
+  // Berapa banyak jawaban yang boleh diberikan satu responden untuk pertanyaan ini
+  // (Ihatec M5). undefined = pertanyaannya TIDAK berulang; >= 2 = boleh menambah
+  // sampai sebanyak itu.
+  //
+  // 🔴 undefined di sini berarti kebalikan dari tetangganya di atas: pada
+  // maxLength/maxSelections undefined berarti "tak dibatasi", di sini ia berarti
+  // FITURNYA MATI. Pengulangan tanpa batas tidak boleh ada sama sekali — satu
+  // kiriman akan menulis baris sebanyak yang ditentukan pengirim.
+  maxRepeat?: number
 
   // Relational config
   hasAsyncOptions?: boolean
@@ -132,6 +141,26 @@ export interface SurveySettings {
   requireLocation?: boolean
   requireSelfie?: boolean
   oneResponsePerDevice?: boolean
+  /**
+   * Responden boleh kembali ke pertanyaan sebelumnya (M1 No-Back).
+   *
+   * 🔴 Opsional dengan sengaja: `fetchSurvey` menyinggahkan objek survei ke
+   * localStorage, dan salinan lama tidak punya field ini. Ketiadaan field
+   * berarti BOLEH kembali — bukan dilarang.
+   */
+  allowBack?: boolean
+  /**
+   * Branding per survei yang dilihat responden (M2): logo di halaman
+   * pembuka/penutup, favicon tab, dan gambar pratinjau tautan.
+   *
+   * 🔴 Ketiganya opsional dengan alasan yang sama seperti `allowBack`:
+   * `fetchSurvey` menyinggahkan objek survei ke localStorage, dan salinan lama
+   * tidak punya kunci ini. Ketiadaan field berarti PAKAI ASET PLATFORM — bukan
+   * kosong. Aturannya dipusatkan di `$lib/branding.ts`.
+   */
+  logoUrl?: string | null
+  faviconUrl?: string | null
+  ogImageUrl?: string | null
   displayMode: 'scroll' | 'one_per_page'
 }
 

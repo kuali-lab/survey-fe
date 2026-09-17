@@ -1,25 +1,32 @@
 <script lang="ts">
+  import { isCustomLogo, resolveLogoUrl } from '$lib/branding.js'
+
   let {
     title,
     titlePlain = '',
     description,
     imageUrl,
-    imageLayout = 'center'
+    imageLayout = 'center',
+    logoUrl = null
   }: {
     title: string
     titlePlain?: string
     description: string | null
     imageUrl: string | null
     imageLayout?: string | null
+    /** Logo per survei (M2). `null`/absen = logo platform, seperti sebelumnya. */
+    logoUrl?: string | null
   } = $props()
 
+  const logoSrc = $derived(resolveLogoUrl(logoUrl))
+  const logoAlt = $derived(isCustomLogo(logoUrl) ? 'Logo survei' : 'Logika Statistik')
   const layout = $derived(imageLayout ?? 'center')
   const isInline = $derived(layout === 'left' || layout === 'right')
 </script>
 
 <div class="closing" class:layout-inline={isInline} class:layout-right={layout === 'right'}>
   <div class="logo-bar">
-    <img src="/logo-logika-teta.svg" alt="Logika Statistik" class="logo-img" />
+    <img src={logoSrc} alt={logoAlt} class="logo-img" />
   </div>
 
   {#if layout === 'center'}

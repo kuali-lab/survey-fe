@@ -1,7 +1,35 @@
 <script lang="ts">
-  let { height = 28 }: { height?: number } = $props()
+  import { isCustomLogo, resolveLogoUrl } from '$lib/branding.js'
+
+  let {
+    height = 28,
+    logoUrl = null,
+  }: {
+    height?: number
+    /**
+     * Logo per survei (M2/K29). Bersifat ADITIF: bawaannya `null`, dan `null`
+     * tetap merender SVG platform yang sudah ada. Komponen ini dipakai 10
+     * berkas dan lima di antaranya sengaja tetap merek platform (cangkang
+     * surveyor, halaman awal situs, penampil berkas), jadi pemanggil lama nol
+     * perubahan perilaku sampai ada yang benar-benar mengoper logo.
+     */
+    logoUrl?: string | null
+  } = $props()
+
+  // Keputusan "logo survei atau logo platform" tetap milik `branding.ts`, satu
+  // tempat untuk seluruh aturan cadangan. `src` dan teks alternatif lahir dari
+  // cabang yang sama, jadi keduanya tidak bisa menyimpang secara konstruksi.
+  const isCustom = $derived(isCustomLogo(logoUrl))
+  const logoSrc = $derived(resolveLogoUrl(logoUrl))
 </script>
 
+{#if isCustom}
+  <img src={logoSrc} alt="Logo survei" {height} />
+<!-- Blok <svg> di bawah sengaja dibiarkan rata kolom 0, tidak ikut diindentasi
+     ke dalam {:else}: dengan begitu diff-nya terhadap versi pra-M2 tetap nol,
+     dan "logo platform tidak berubah satu byte pun" bisa diaudit ulang kapan
+     saja hanya dengan membandingkan blok ini. -->
+{:else}
 <svg
   height={height}
   viewBox="0 0 173 35"
@@ -29,3 +57,4 @@
     </clipPath>
   </defs>
 </svg>
+{/if}

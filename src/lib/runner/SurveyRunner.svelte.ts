@@ -66,6 +66,7 @@ const DEFAULT_SETTINGS: SurveySettings = {
   showBranding: true,
   showNavArrows: true,
   showNumbers: true,
+  allowBack: true,
   displayMode: 'one_per_page',
 }
 
@@ -104,6 +105,14 @@ export type RunnerOptions = {
    * local drafts already follow `answers` reactively.
    */
   onDependentsCleared?: (clearedIds: string[]) => void
+  /**
+   * Tegakkan `settings.allowBack` — larangan kembali ke pertanyaan sebelumnya
+   * (M1 No-Back). Bawaannya `true`, jadi alur responden terkena larangan tanpa
+   * perlu menyalakan apa pun; alur surveyor mematikannya.
+   *
+   * Alasan lengkapnya ada satu tempat saja: lihat komentar `canGoBack`.
+   */
+  enforceAllowBack?: boolean
 }
 
 export class SurveyRunner {
@@ -128,6 +137,7 @@ export class SurveyRunner {
   private _onFinish!: () => void | Promise<void>
   private _lastButtonLabel!: string | undefined
   private _autoSubmit = true
+  private _enforceAllowBack = true
   private _onDependentsCleared: ((clearedIds: string[]) => void) | undefined
 
   constructor(opts: RunnerOptions) {
@@ -136,6 +146,7 @@ export class SurveyRunner {
     this._autoSubmit = opts.autoSubmit ?? true
     this._lastButtonLabel = opts.lastButtonLabel
     this._onDependentsCleared = opts.onDependentsCleared
+    this._enforceAllowBack = opts.enforceAllowBack ?? true
   }
 
   /** Update the onFinish callback. Used by the surveyor flow where each
@@ -172,7 +183,37 @@ export class SurveyRunner {
     const q = page.questions[0]
     return isTopOfMindQuestion(q) && topOfMindFirst(this.answers[q.id]) !== '' ? q.id : null
   })
-  canGoBack = $derived(this.currentIndex > 0 || this.tomStage2QuestionId !== null)
+
+  // M1 No-Back — penjelasan kanonik; tempat lain merujuk ke sini, tidak mengulang.
+  //
+  // Ini menjawab **izin**, bukan kemungkinan: "apakah mundur diperbolehkan", bukan
+  // "apakah ada tempat untuk mundur".
+  //
+  // 🔴 `!== false`, bukan `=== true`. Survei dari singgahan localStorage lama tidak
+  // punya field `allowBack`, dan `undefined` harus berarti boleh mundur — kalau
+  // tidak, responden dengan singgahan lama kehilangan tombol mundurnya.
+  //
+  // 🔴 Alur SURVEYOR dikecualikan lewat `enforceAllowBack: false`. Runner ini dipakai
+  // bersama responden dan surveyor; yang terkunci kalau penegakan dibiarkan menyala
+  // di sana adalah tombol "Sebelumnya" surveyor beserta gestur roda/sentuh/papan
+  // ketik di layar wawancara. (Tombol "Edit" di rekap TIDAK terpengaruh — ia lewat
+  // `jumpTo`, bukan `handleBack`.) Petugas wawancara memang perlu mengoreksi salah
+  // input; larangan ini untuk responden.
+  private backAllowed = $derived(!this._enforceAllowBack || this.settings.allowBack !== false)
+
+  // 🔴 DUA pertanyaan yang berbeda, dan keduanya harus benar — karena itu AND, bukan
+  // salah satu. `backAllowed` menjawab "diizinkan?" (M1 No-Back); ruas kanan
+  // menjawab "ada tempat untuk mundur?" (halaman sebelumnya, ATAU tahap 2 Top of
+  // Mind yang mundurnya ke tahap 1 di halaman yang sama — sehingga jawabannya bisa
+  // YA bahkan di indeks 0).
+  //
+  // Menjatuhkan salah satu ruas menghasilkan dua cacat yang berlawanan: tanpa ruas
+  // kiri, survei No-Back kehilangan larangannya; tanpa ruas kanan, mundur "berhasil"
+  // di tempat yang tidak punya tujuan. `handleBack` memakai ini sebagai SATU-SATUNYA
+  // gerbang untuk kelima jalan mundur, jadi definisi di sini menanggung keduanya.
+  canGoBack = $derived(
+    this.backAllowed && (this.currentIndex > 0 || this.tomStage2QuestionId !== null),
+  )
 
   // ---- Derived: pagination ----
   // one_per_page: each standalone question is its own page; each group is one
@@ -392,6 +433,12 @@ export class SurveyRunner {
   }
 
   handleBack = () => {
+    // Penjaga M1 ada DI SINI, bukan di komponen halaman. handleBack adalah muara
+    // semua jalan mundur — tombol responden, tombol surveyor, roda tetikus, gestur
+    // sentuh, papan ketik — jadi untuk alur RESPONDEN satu penjaga menutup semuanya,
+    // sementara menyembunyikan tombol hanya menutup satu. Alur surveyor tidak ikut
+    // tertutup: ia mematikan penegakan lewat `enforceAllowBack` (lihat `canGoBack`).
+    if (!this.canGoBack) return
     this.cancelAutoAdvance()
     this.questionErrors = {}
     // Top of Mind (paged): back out of stage 2 first — clearing the first pick

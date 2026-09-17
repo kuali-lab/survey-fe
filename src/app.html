@@ -9,11 +9,11 @@
     <meta name="description" content="Isi survei dari Logika Statistik — platform riset dan analisis statistik." />
     <meta name="application-name" content="Logika Statistik Survey" />
 
-    <!-- Favicon chain: SVG (modern) → ICO (legacy) -->
-    <link rel="icon" type="image/svg+xml" href="%sveltekit.assets%/icons/favicon.svg" />
-    <link rel="icon" type="image/png" sizes="96x96" href="%sveltekit.assets%/icons/favicon-96x96.png" />
-    <link rel="icon" type="image/x-icon" href="%sveltekit.assets%/icons/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="180x180" href="%sveltekit.assets%/icons/apple-touch-icon.png" />
+    <!-- Favicon chain dideklarasikan di +layout.svelte, BUKAN di sini.
+         Alasannya: survei bisa punya favicon sendiri, dan SvelteKit cuma
+         menggabung isi <svelte:head> tanpa deduplikasi — ikon di sini akan
+         berdampingan dengan ikon survei, tanpa jaminan mana yang dipakai
+         peramban. Satu tempat deklarasi = nol ambiguitas. -->
 
     <!-- PWA manifest -->
     <link rel="manifest" href="%sveltekit.assets%/icons/site.webmanifest" />
@@ -21,13 +21,14 @@
     <!-- Browser chrome color -->
     <meta name="theme-color" content="#f7bb00" />
 
-    <!-- Default Open Graph (og:image + twitter:image injected in +layout.svelte from PUBLIC_SITE_URL) -->
+    <!-- Default Open Graph. og:image, twitter:image, DAN twitter:card
+         dipancarkan +layout.svelte (rute non-survei) atau halaman survei —
+         tepat satu sumber untuk masing-masing. twitter:card dulu ditetapkan
+         di sini tanpa syarat dan beradu dengan tag bersyarat milik halaman
+         survei; yang menang tidak pasti. -->
     <meta property="og:site_name" content="Logika Statistik" />
     <meta property="og:locale" content="id_ID" />
     <meta property="og:type" content="website" />
-
-    <!-- Default Twitter Card (overridden per-page) -->
-    <meta name="twitter:card" content="summary" />
 
     <!-- Fonts — body=Source Sans 3, display=Nunito Sans (matches dashboard-fe) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

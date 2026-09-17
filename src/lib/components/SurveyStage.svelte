@@ -125,6 +125,19 @@
     {/if}
 
     <div class="nav">
+      <!--
+        `runner.canGoBack` di sini KOSMETIK, bukan penegakan: tombol mati yang
+        terlihat adalah UX buruk. Penegakan No-Back hidup di `handleBack` dalam
+        runner, yang juga menutup roda tetikus, gestur sentuh, dan papan ketik —
+        jangan pernah membalik peran keduanya. `showNavArrows` tetap sakelar
+        terpisah dan tidak digabung ke sini.
+
+        🔴 `currentIndex > 0` sengaja TIDAK lagi diuji di sini. Sejak Top of Mind,
+        `canGoBack` sudah memuat pertanyaan "ada tempat untuk mundur?" — dan
+        jawabannya bisa YA di indeks 0, yaitu saat soal Top of Mind berada di
+        halaman pertama dan respondennya ada di tahap 2. Menambahkan kembali
+        penjaga indeks di sini akan menghilangkan tombol mundur tahap-2 itu.
+      -->
       {#if runner.canGoBack && settings.showNavArrows}
         <NavButton
           label="Sebelumnya"
