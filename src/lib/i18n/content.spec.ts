@@ -13,9 +13,9 @@ const q = (over: Partial<Question>): Question => ({
   sortOrder: 0, groupId: null, imageUrl: null, imageLayout: null, ...over,
 } as Question)
 
-// 🔴 Langkah "pilih bahasa" HANYA untuk survei yang benar-benar multibahasa.
-// Setiap kasus di bawah adalah satu cara sebuah survei bisa "tampak" punya bahasa
-// kedua padahal tidak — dan tidak satu pun boleh memunculkan langkah itu.
+// 🔴 The "choose language" step is ONLY for a genuinely multilingual survey. Each
+// case below is one way a survey can "look" like it has a second language when it
+// does not — and not one of them may bring that step up.
 describe('needsLanguageStep — only for a survey that really has two languages', () => {
   const translated = [q({ translations: { en: { title: 'Title' } } })]
   const untranslated = [q({})]
@@ -141,8 +141,8 @@ describe('t', () => {
   })
 })
 
-// 🔴 Penjaga aturan inti: bahasa hanya mengubah teks yang DITAMPILKAN. Jawaban,
-// skip logic, dan validasi tetap bekerja pada label bahasa utama.
+// 🔴 Guard for the core rule: language only changes the text that is DISPLAYED.
+// Answers, skip logic and validation keep working on primary-language labels.
 describe('language never touches data', () => {
   const makeRunner = (locale: string) => {
     const survey = buildBilingualMockSurvey()

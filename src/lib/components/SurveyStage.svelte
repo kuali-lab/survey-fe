@@ -54,9 +54,9 @@
 
   const i18n = useI18n()
 
-  // Judul bagian berasal dari pertanyaan `question_group`; halaman hanya membawa
-  // salinan teks bahasa utamanya. Untuk bahasa lain, teksnya dibaca ulang dari
-  // grup asalnya supaya ikut terjemahannya.
+  // A section title comes from a `question_group` question; the page only carries a
+  // copy of its primary-language text. For any other language the text is re-read
+  // from the group it came from, so it picks up the translation.
   function sectionText(section: SurveyPage, field: 'title' | 'description'): string | null {
     const group = section.groupId ? runner.questions.find((q) => q.id === section.groupId) : undefined
     if (group) return i18n.text(group, field) || null

@@ -1,10 +1,10 @@
 /**
- * Demo survei dua bahasa (Indonesia utama + English), dilayani di
- * `/s/mock-bilingual` saat PUBLIC_USE_MOCK=1. Isinya sama dengan survei demo
- * `s10` di builder (dashboard-fe), jadi alurnya bersambung: terjemahkan di
- * builder → isi di sini.
+ * A two-language demo survey (Indonesian primary + English), served at
+ * `/s/mock-bilingual` when PUBLIC_USE_MOCK=1. Its content matches the demo survey
+ * `s10` in the builder (dashboard-fe), so the two join up: translate in the
+ * builder → fill it in here.
  *
- * Data polos tanpa efek samping, sama seperti `mockSurvey.ts`.
+ * Plain data with no side effects, exactly like `mockSurvey.ts`.
  */
 import type { MatrixCol, MatrixRow, Question, QuestionOption, Survey } from './types.js'
 
@@ -12,7 +12,8 @@ type Pair = [id: string, en: string]
 
 const options = (pairs: Pair[], withOther = false): QuestionOption[] => [
   ...pairs.map(([label, en], i) => ({ id: `bo-${i}-${label}`, label, sortOrder: i, translations: { en } })),
-  // "Lainnya" sengaja TANPA terjemahan: teksnya milik platform, bukan pembuat survei.
+  // "Lainnya" deliberately has NO translation: that text belongs to the platform,
+  // not to the survey author.
   ...(withOther ? [{ id: 'bo-other', label: 'Lainnya', sortOrder: pairs.length, isOther: true }] : []),
 ]
 const rows = (pairs: Pair[]): MatrixRow[] =>
@@ -48,9 +49,9 @@ export function buildBilingualMockSurvey(): Survey {
     },
     closeMessage: null,
     closeImageUrl: null,
-    // Ditulis terhadap label BAHASA UTAMA ("Jarang"). Responden yang mengetuk
-    // "Rarely" tetap harus terkena aturan ini — itulah bukti bahwa terjemahan
-    // hanya proyeksi tampilan dan tidak menyentuh data.
+    // Written against the PRIMARY-language label ("Jarang"). A respondent who taps
+    // "Rarely" must still hit this rule — that is the proof that a translation is
+    // only a display projection and never touches the data.
     skipRules: [
       {
         id: 'bsr-1', questionId: 'bq2', sourceQuestionId: 'bq2', operator: 'equals', value: 'Jarang',

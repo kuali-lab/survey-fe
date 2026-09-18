@@ -1,13 +1,13 @@
 <!--
-  Pil `ID | EN` di pojok, tampil SESUDAH responden memilih bahasa di langkah
-  pertama (`LanguageSelectPage`): di halaman pembuka dan selama mengisi.
+  The `ID | EN` corner pill, shown AFTER the respondent picks a language in the
+  first step (`LanguageSelectPage`): on the welcome page and while answering.
 
-  Ini jaring pengaman bagi yang salah pilih. Aman dipakai kapan pun karena
-  jawaban disimpan dalam label bahasa utama (lihat `$lib/i18n/content.ts`) —
-  berganti bahasa di tengah survei tidak menghilangkan apa pun.
+  It is a safety net for anyone who picked wrong. Safe to use at any point, because
+  answers are stored as primary-language labels (see `$lib/i18n/content.ts`) —
+  switching language mid-survey loses nothing.
 
-  Tiap tombol diberi `lang` dan nama bahasa dalam bahasanya sendiri sebagai
-  `aria-label`, supaya pembaca layar melafalkannya dengan benar.
+  Each button carries `lang` and the language's own name as its `aria-label`, so a
+  screen reader pronounces it correctly.
 -->
 <script lang="ts">
   import type { LanguageChoice } from '$lib/i18n/content.js'
@@ -49,8 +49,8 @@
 {/if}
 
 <style>
-  /* Duduk DI BAWAH bilah kemajuan (yang membentang penuh di y≈18px) supaya
-     tidak menutupi ujung kanannya. */
+  /* Sits BELOW the progress bar (which spans the full width at y≈18px) so it never
+     covers its right-hand end. */
   .picker {
     position: fixed;
     top: 32px;

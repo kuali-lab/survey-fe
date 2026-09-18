@@ -1,24 +1,28 @@
 /**
- * Survei dua bahasa, sisi responden — bagian KONTEN (teks yang ditulis pembuat
- * survei). Rune-free dan DOM-free supaya bisa diuji di Node.
+ * Two-language surveys, respondent side — the CONTENT half (text the survey author
+ * wrote). Rune-free and DOM-free so it can be tested in Node.
  *
- * 🔴 Satu aturan yang menopang semuanya: terjemahan HANYA proyeksi saat merender.
- * Label pilihan adalah identitas data di aplikasi ini — jawaban, skip logic,
- * Pilihan Bertingkat, draf, dan badan kiriman menyimpan/membandingkan label
- * bahasa utama. Jadi tidak ada fungsi di sini yang mengubah survei atau jawaban;
- * semuanya hanya menjawab "teks apa yang DITAMPILKAN". Akibatnya responden boleh
- * berganti bahasa di tengah survei tanpa kehilangan apa pun, dan dataset hasil
- * tetap satu bahasa apa pun pilihan respondennya.
+ * 🔴 The one rule everything rests on: a translation is only a projection at render
+ * time. In this app an option label is the data identity — answers, skip logic,
+ * Pilihan Bertingkat, drafts and the submit body all store and compare the
+ * primary-language label. So no function here mutates a survey or an answer; every
+ * one of them only answers "what text is DISPLAYED". The result is that a respondent
+ * may switch language mid-survey without losing anything, and the resulting dataset
+ * stays in one language whatever they chose.
  */
 import type { Question, QuestionTextTranslation, Survey, SurveyLanguages, TranslatedText } from '$lib/types.js'
 import { LEGACY_LOCALE, t } from './messages.js'
 
 export interface LanguageChoice {
   code: string
-  /** Nama dalam bahasanya sendiri — responden harus bisa mengenalinya tanpa bisa membaca bahasa lain. */
+  /** The name in its own language — a respondent must recognise it without being able to read the others. */
   name: string
 }
 
+/**
+ * 🔴 This list is mirrored in two other repos — `SurveyLanguageCodes` (logika-be)
+ * and `SURVEY_LANGUAGES` (dashboard-fe). Adding a language means touching all three.
+ */
 const NATIVE_NAMES: Record<string, string> = {
   id: 'Bahasa Indonesia',
   en: 'English',
@@ -37,10 +41,10 @@ export function surveyLanguages(survey: Pick<Survey, 'languages'> | null | undef
 }
 
 /**
- * Apakah survei ini punya teks APA PUN dalam bahasa `lang`? Bahasa kedua yang
- * baru ditambahkan di builder tetapi belum diterjemahkan sama sekali akan tampil
- * persis sama dengan bahasa utama — menanyai responden untuk memilih di antara
- * dua survei yang identik hanya menambah satu langkah tanpa arti.
+ * Does this survey carry ANY text in `lang`? A second language that was just added
+ * in the builder but not yet translated at all renders exactly like the primary
+ * language — asking a respondent to choose between two identical surveys just adds
+ * a meaningless step.
  */
 export function hasAnyTranslation(survey: Pick<Survey, 'questions'> | null | undefined, lang: string): boolean {
   for (const q of survey?.questions ?? []) {
@@ -54,13 +58,13 @@ export function hasAnyTranslation(survey: Pick<Survey, 'questions'> | null | und
 }
 
 /**
- * Bahasa yang ditawarkan ke responden. SATU entri = survei satu bahasa.
+ * The languages offered to a respondent. ONE entry = a single-language survey.
  *
- * 🔴 Inilah satu-satunya tempat yang memutuskan "survei ini multibahasa atau
- * bukan". Langkah pilih bahasa, pil di pojok, dan pemulihan pilihan tersimpan
- * semuanya membaca dari sini, jadi ketiganya tidak bisa berselisih. Bahasa kedua
- * hanya dihitung bila: ada, tidak kosong, berbeda dari bahasa utama, DAN sudah
- * punya setidaknya satu terjemahan.
+ * 🔴 This is the only place that decides "is this survey multilingual or not". The
+ * language step, the corner pill and the restore of a saved choice all read from
+ * here, so the three cannot disagree. A second language only counts when it is
+ * present, non-blank, different from the primary one, AND already has at least one
+ * translation.
  */
 export function languageChoices(
   survey: (Pick<Survey, 'languages'> & Partial<Pick<Survey, 'questions'>>) | null | undefined,
@@ -72,15 +76,15 @@ export function languageChoices(
   return codes.map((code) => ({ code, name: languageName(code) }))
 }
 
-/** Langkah "pilih bahasa" hanya ada untuk survei yang benar-benar multibahasa. */
+/** The "choose language" step exists only for a genuinely multilingual survey. */
 export function needsLanguageStep(survey: Parameters<typeof languageChoices>[0]): boolean {
   return languageChoices(survey).length > 1
 }
 
 /**
- * Bahasa awal: pilihan tersimpan → bahasa peramban → bahasa utama.
- * `en-US` cocok dengan `en`; urutan `navigator.languages` dihormati, jadi
- * peramban `['id', 'en']` tetap mendapat Indonesia.
+ * The starting language: saved choice → browser language → primary.
+ * `en-US` matches `en`; the order of `navigator.languages` is respected, so a
+ * browser set to `['id', 'en']` still gets Indonesian.
  */
 export function pickInitialLocale(
   languages: SurveyLanguages,
@@ -101,9 +105,8 @@ function isBlank(text: string | null | undefined): boolean {
 }
 
 /**
- * Teks TAMPILAN sebuah pilihan / baris / kolom. Terjemahan yang kosong jatuh ke
- * bahasa utama — lebih baik satu pilihan berbahasa Indonesia daripada pilihan
- * kosong yang tidak bisa dipilih.
+ * The DISPLAY text of an option / row / column. An empty translation falls back to
+ * the primary language — one Indonesian option beats an empty one nobody can pick.
  */
 export function displayLabel(
   item: { label: string; isOther?: boolean; translations?: TranslatedText },
@@ -113,12 +116,12 @@ export function displayLabel(
   if (locale === primary) return item.label
   const translated = item.translations?.[locale]
   if (!isBlank(translated)) return translated as string
-  // "Lainnya" tidak diterjemahkan di builder: teksnya milik platform.
+  // "Lainnya" is not translated in the builder: that text belongs to the platform.
   if (item.isOther) return t(locale, 'other')
   return item.label
 }
 
-/** Teks TAMPILAN field skalar sebuah pertanyaan (judul, deskripsi, label skala, …). */
+/** The DISPLAY text of a question's scalar field (title, description, scale labels, …). */
 export function questionText(
   question: Question,
   field: keyof QuestionTextTranslation,
@@ -132,9 +135,9 @@ export function questionText(
 }
 
 /**
- * Varian polos (tanpa HTML) dari judul/deskripsi, untuk `alt` dan pesan
- * petunjuk. Backend hanya mengirim `titlePlain` untuk bahasa utama, jadi versi
- * terjemahannya dibuat di sini.
+ * The plain (HTML-free) variant of a title/description, for `alt` text and hints.
+ * The backend only sends `titlePlain` for the primary language, so the translated
+ * version is derived here.
  */
 export function questionPlainText(
   question: Question,

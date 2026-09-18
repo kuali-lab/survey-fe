@@ -39,9 +39,9 @@
     // and resolves to the real survey or a real error — no 500 flash.
     if (data.deferred) return 'loading'
     if (!survey || data.error) return 'error'
-    // Survei dua bahasa: responden memilih bahasanya DULU. Diputuskan di sini —
-    // bukan di onMount — supaya server sudah merender layar pilih bahasa dan
-    // halaman pembuka berbahasa utama tidak sempat berkedip.
+    // Two-language surveys: the respondent picks a language FIRST. Decided here
+    // rather than in onMount so the server already renders the language screen and
+    // the primary-language welcome page never flashes.
     if (needsLanguageStep(survey)) return 'language'
     return 'welcome'
   }
@@ -65,14 +65,14 @@
   // submitting straight away, so the respondent can review before committing.
   let showSubmitConfirm = $state(false)
 
-  // ── Survei dua bahasa ───────────────────────────────────────────────────────
-  // Bahasa aktif responden. HANYA memengaruhi teks yang ditampilkan: jawaban
-  // tetap disimpan dalam label bahasa utama (lihat `$lib/i18n/content.ts`), jadi
-  // berganti bahasa kapan pun aman dan dataset hasil tetap satu bahasa.
+  // ── Two-language surveys ──────────────────────────────────────────────────────
+  // The respondent's active language. It affects ONLY displayed text: answers are
+  // still stored as primary-language labels (see `$lib/i18n/content.ts`), so
+  // switching at any point is safe and the resulting dataset stays single-language.
   //
-  // Mulai dari bahasa utama — itulah yang dirender server (SEO/OG juga tetap
-  // bahasa utama). Pilihan tersimpan / bahasa peramban baru diterapkan di
-  // onMount, karena keduanya hanya ada di peramban.
+  // Start from the primary language — that is what the server renders (SEO/OG stay
+  // primary too). A saved choice or the browser language is applied in onMount,
+  // because both exist only in the browser.
   const surveyLangs = $derived(surveyLanguages(survey))
   const languages = $derived(languageChoices(survey))
   function initialLocale(): string {

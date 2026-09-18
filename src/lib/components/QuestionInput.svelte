@@ -56,11 +56,11 @@
     paged?: boolean
   } = $props()
 
-  // ── Survei dua bahasa ───────────────────────────────────────────────────────
-  // 🔴 `i18n.label(...)` / `i18n.text(...)` HANYA untuk teks yang ditampilkan.
-  // Setiap `onChange(...)`, `includes(...)`, dan perbandingan di berkas ini tetap
-  // memakai `opt.label` (bahasa utama): itulah nilai jawaban yang disimpan,
-  // dibandingkan skip logic / Pilihan Bertingkat, dan dikirim ke backend.
+  // ── Two-language surveys ──────────────────────────────────────────────────────
+  // 🔴 `i18n.label(...)` / `i18n.text(...)` are ONLY for displayed text. Every
+  // `onChange(...)`, `includes(...)` and comparison in this file keeps using
+  // `opt.label` (the primary language): that is the answer value that gets stored,
+  // compared by skip logic / Pilihan Bertingkat, and sent to the backend.
   const i18n = useI18n()
   const placeholderText = $derived(i18n.text(question, 'placeholder'))
 
@@ -441,8 +441,8 @@
   let tomOtherText = $state(untrack(() => topOfMindOtherText(value, question.options ?? [])))
 
   const TOM_OTHER_KEY = '__other__'
-  // Pilihan pertama yang tersimpan (label bahasa utama, atau teks bebas "Lainnya")
-  // → teks tampilannya.
+  // The stored first pick (a primary-language label, or free "Lainnya" text)
+  // → its display text.
   const tomFirstText = $derived.by(() => {
     const match = allOptions.find((o) => !o.isOther && o.label === tomFirst)
     return match ? i18n.label(match) : tomFirst

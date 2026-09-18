@@ -41,7 +41,7 @@
   // itulah yang disimpan, divalidasi runner, dan dikirim. `i18n.label` hanya
   // dipakai di titik TAMPILAN.
   const i18n = useI18n()
-  /** Jawaban tersimpan (label kolom bahasa utama) → teks tampilannya. */
+  /** The stored answer (a primary-language column label) → its display text. */
   function answerText(colLabel: string): string {
     const col = cols.find((c) => c.label === colLabel)
     return col ? i18n.label(col) : colLabel

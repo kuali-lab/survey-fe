@@ -1,16 +1,16 @@
 <!--
-  Langkah PERTAMA survei dua bahasa: responden memilih bahasanya, baru sesudah
-  itu halaman pembuka tampil dalam bahasa tersebut. Survei satu bahasa tidak
-  pernah sampai ke sini.
+  The FIRST step of a two-language survey: the respondent picks their language, and
+  only then does the welcome page appear in it. A single-language survey never
+  reaches this screen.
 
-  Satu ketukan = pilih + lanjut; tidak ada tombol "Lanjutkan" terpisah. Pilihan
-  ini tidak mengikat: pil `ID | EN` di pojok tetap ada sesudahnya, dan jawaban
-  disimpan dalam label bahasa utama (lihat `$lib/i18n/content.ts`), jadi
-  berganti bahasa belakangan tidak menghilangkan apa pun.
+  One tap = choose and continue; there is no separate "Continue" button. The choice
+  is not binding: the `ID | EN` corner pill stays available afterwards, and answers
+  are stored as primary-language labels (see `$lib/i18n/content.ts`), so switching
+  later loses nothing.
 
-  Layar ini sendiri ditulis dalam SEMUA bahasa yang ditawarkan sekaligus, dan
-  setiap tombol memuat judul survei dalam bahasanya — responden memastikan
-  "ini bahasa saya" dan "ini survei yang benar" dalam satu pandangan.
+  The screen itself is written in EVERY offered language at once, and each button
+  carries the survey title in its own language — so the respondent confirms both
+  "this is my language" and "this is the right survey" at a glance.
 -->
 <script lang="ts">
   import { isCustomLogo, resolveLogoUrl } from '$lib/branding.js'
@@ -26,9 +26,9 @@
     logoUrl = null,
   }: {
     choices: LanguageChoice[]
-    /** Judul survei (teks polos) per kode bahasa. */
+    /** The survey title (plain text) per language code. */
     titles?: Record<string, string>
-    /** Bahasa yang cocok dengan peramban — hanya ditonjolkan, TIDAK dipilihkan. */
+    /** The language matching the browser — highlighted only, NEVER pre-selected. */
     suggested?: string | null
     onSelect: (code: string) => void
     logoUrl?: string | null
@@ -92,7 +92,7 @@
     gap: 20px;
   }
 
-  /* Sama dengan WelcomePage, supaya logo tidak melompat saat berpindah layar. */
+  /* Matches WelcomePage, so the logo does not jump when moving between screens. */
   .logo-bar {
     position: fixed;
     top: 24px;
