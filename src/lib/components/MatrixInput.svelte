@@ -22,6 +22,7 @@
     type MatrixAnswer,
     answeredRowCount, nextUnansweredRow, isChipScale, chipColumns as chipColumnsOf,
   } from '$lib/matrixCompact.js'
+  import { useI18n } from '$lib/i18n/context.js'
 
   let {
     rows,
@@ -35,6 +36,16 @@
     value: MatrixAnswer
     onSelect: (rowLabel: string, colLabel: string) => void
   } = $props()
+
+  // 🔴 `value` dan `onSelect` tetap berbahasa UTAMA (Record<rowLabel, colLabel>):
+  // itulah yang disimpan, divalidasi runner, dan dikirim. `i18n.label` hanya
+  // dipakai di titik TAMPILAN.
+  const i18n = useI18n()
+  /** Jawaban tersimpan (label kolom bahasa utama) → teks tampilannya. */
+  function answerText(colLabel: string): string {
+    const col = cols.find((c) => c.label === colLabel)
+    return col ? i18n.label(col) : colLabel
+  }
 
   // ── Layout: grid when it fits, compact otherwise ───────────────────────────
   let wrapWidth = $state(0)
@@ -124,14 +135,14 @@
         <tr>
           <th class="corner"></th>
           {#each cols as col (col.id)}
-            <th class="col-head" scope="col" style="width: {66 / cols.length}%">{col.label}</th>
+            <th class="col-head" scope="col" style="width: {66 / cols.length}%">{i18n.label(col)}</th>
           {/each}
         </tr>
       </thead>
       <tbody>
         {#each rows as row, i (row.id)}
           <tr class="grid-row">
-            <th class="row-head" scope="row">{row.label}</th>
+            <th class="row-head" scope="row">{i18n.label(row)}</th>
             {#each cols as col (col.id)}
               {@const selected = value[row.label] === col.label}
               <td class="cell">
@@ -139,7 +150,7 @@
                   class="cell-btn"
                   class:selected
                   type="button"
-                  aria-label="{row.label}: {col.label}"
+                  aria-label="{i18n.label(row)}: {i18n.label(col)}"
                   aria-pressed={selected}
                   onclick={() => pick(row, i, col)}
                 >
@@ -153,7 +164,7 @@
     </table>
   {:else}
     <div class="progress" aria-live="polite">
-      <span class="progress-text">{answeredCount} dari {rows.length} terjawab</span>
+      <span class="progress-text">{i18n.t('matrixProgress', { n: answeredCount, total: rows.length })}</span>
       <span class="progress-track" aria-hidden="true">
         <span class="progress-fill" style="width: {rows.length ? (answeredCount / rows.length) * 100 : 0}%"></span>
       </span>
@@ -174,9 +185,9 @@
               {#if answer}<Check size={14} strokeWidth={3} />{:else}{i + 1}{/if}
             </span>
             <span class="item-text">
-              <span class="item-label">{row.label}</span>
+              <span class="item-label">{i18n.label(row)}</span>
               {#if answer && !open}
-                <span class="item-answer">{answer}</span>
+                <span class="item-answer">{answerText(answer)}</span>
               {/if}
             </span>
             <span class="chevron" aria-hidden="true"><ChevronDown size={18} /></span>
@@ -188,7 +199,7 @@
               class:chips={chipScale}
               style={chipScale ? `--chip-cols: ${chipColumns}` : undefined}
               role="group"
-              aria-label={row.label}
+              aria-label={i18n.label(row)}
               transition:slide={{ duration: 180 }}
             >
               {#each cols as col (col.id)}
@@ -201,7 +212,7 @@
                   onclick={() => pick(row, i, col)}
                 >
                   {#if !chipScale}<span class="radio"></span>{/if}
-                  <span class="option-text">{col.label}</span>
+                  <span class="option-text">{i18n.label(col)}</span>
                 </button>
               {/each}
             </div>

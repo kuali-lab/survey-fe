@@ -16,9 +16,10 @@ import { evaluateNext } from '$lib/skipLogic.js'
 import { isValidPhoneFormat } from '$lib/phone.js'
 import { collectDependents, pruneDependentAnswers, visibleOptions } from '$lib/optionDependency.js'
 import {
-  TOM_REQUIRED_ERROR, isTopOfMindAnswer, isTopOfMindEmpty, isTopOfMindQuestion,
+  isTopOfMindAnswer, isTopOfMindEmpty, isTopOfMindQuestion,
   remainingOptions, setTopOfMindFirst, toggleTopOfMindRest, topOfMindFirst,
 } from '$lib/topOfMind.js'
+import { LEGACY_LOCALE, t, type MessageKey } from '$lib/i18n/messages.js'
 import { buildSurveySections, type SurveyPage } from './sections.js'
 
 export type { SurveyPage }
@@ -113,6 +114,13 @@ export type RunnerOptions = {
    * Alasan lengkapnya ada satu tempat saja: lihat komentar `canGoBack`.
    */
   enforceAllowBack?: boolean
+  /**
+   * Bahasa aktif responden, untuk label tombol dan pesan validasi. Absen =
+   * bahasa Indonesia (perilaku lama; alur surveyor dan pratinjau tidak
+   * mengirimnya). HANYA memengaruhi teks yang ditampilkan — jawaban tetap
+   * disimpan dalam label bahasa utama, lihat `$lib/i18n/content.ts`.
+   */
+  getLocale?: () => string
 }
 
 export class SurveyRunner {
@@ -136,6 +144,7 @@ export class SurveyRunner {
   private _getSurvey!: () => Survey | null
   private _onFinish!: () => void | Promise<void>
   private _lastButtonLabel!: string | undefined
+  private _getLocale!: () => string
   private _autoSubmit = true
   private _enforceAllowBack = true
   private _onDependentsCleared: ((clearedIds: string[]) => void) | undefined
@@ -147,6 +156,11 @@ export class SurveyRunner {
     this._lastButtonLabel = opts.lastButtonLabel
     this._onDependentsCleared = opts.onDependentsCleared
     this._enforceAllowBack = opts.enforceAllowBack ?? true
+    this._getLocale = opts.getLocale ?? (() => LEGACY_LOCALE)
+  }
+
+  private msg(key: MessageKey, params?: Record<string, string | number>): string {
+    return t(this._getLocale(), key, params)
   }
 
   /** Update the onFinish callback. Used by the surveyor flow where each
@@ -266,7 +280,7 @@ export class SurveyRunner {
   isLastQuestion = $derived(this.currentIndex === this.surveyPages.length - 1)
 
   nextButtonLabel = $derived(
-    this.isLastQuestion ? (this._lastButtonLabel ?? 'Kirim Jawaban') : 'Selanjutnya',
+    this.isLastQuestion ? (this._lastButtonLabel ?? this.msg('submit')) : this.msg('next'),
   )
 
   // ---- Validation ----
@@ -283,14 +297,14 @@ export class SurveyRunner {
       // Top of Mind: stage 1 (the first pick) is what "required" means; stage 2
       // is always optional. A plain array here (draft saved before the toggle)
       // has no first pick, so it is asked again.
-      if (isTopOfMindQuestion(q) && (answer == null || isTopOfMindEmpty(answer))) return TOM_REQUIRED_ERROR
-      if (answer === null || answer === undefined) return 'Pertanyaan ini wajib diisi.'
-      if (typeof answer === 'string' && answer.trim() === '') return 'Pertanyaan ini wajib diisi.'
-      if (Array.isArray(answer) && answer.length === 0) return 'Pilih minimal satu jawaban.'
+      if (isTopOfMindQuestion(q) && (answer == null || isTopOfMindEmpty(answer))) return this.msg('errPickOne')
+      if (answer === null || answer === undefined) return this.msg('errRequired')
+      if (typeof answer === 'string' && answer.trim() === '') return this.msg('errRequired')
+      if (Array.isArray(answer) && answer.length === 0) return this.msg('errPickOne')
       if (q.type === 'contact_info') {
         const c = answer as { firstName?: string; lastName?: string; phone?: string; email?: string }
         const filled = [c.firstName, c.lastName, c.phone, c.email].some((v) => v && v.trim() !== '')
-        if (!filled) return 'Isi minimal satu data kontak.'
+        if (!filled) return this.msg('errContact')
       }
     }
 
@@ -310,7 +324,7 @@ export class SurveyRunner {
           const cell = val[r.label]
           return typeof cell === 'string' && cell.trim() !== ''
         })
-      if (!allAnswered) return 'Mohon lengkapi semua baris.'
+      if (!allAnswered) return this.msg('errMatrixRows')
     }
 
     const isEmpty = isEmptyAnswer(answer)
@@ -323,8 +337,8 @@ export class SurveyRunner {
       
       if (strVal !== '') {
         const len = strVal.length
-        if (q.minLength && len < q.minLength) return `Minimal ${q.minLength} karakter.`
-        if (q.maxLength && len > q.maxLength) return `Maksimal ${q.maxLength} karakter.`
+        if (q.minLength && len < q.minLength) return this.msg('errMinLength', { n: q.minLength })
+        if (q.maxLength && len > q.maxLength) return this.msg('errMaxLength', { n: q.maxLength })
       }
     }
 
@@ -334,21 +348,21 @@ export class SurveyRunner {
       if (typeof answerNum === 'number' && !isNaN(answerNum)) {
         const minVal = q.minValue !== undefined && q.minValue !== null ? Number(q.minValue) : null
         const maxVal = q.maxValue !== undefined && q.maxValue !== null ? Number(q.maxValue) : null
-        if (minVal !== null && answerNum < minVal) return `Nilai minimal adalah ${minVal}.`
-        if (maxVal !== null && answerNum > maxVal) return `Nilai maksimal adalah ${maxVal}.`
+        if (minVal !== null && answerNum < minVal) return this.msg('errMinValue', { n: minVal })
+        if (maxVal !== null && answerNum > maxVal) return this.msg('errMaxValue', { n: maxVal })
       }
     }
 
     if (q.type === 'email' && typeof answer === 'string' && answer.trim() !== '') {
-      if (!EMAIL_RE.test(answer.trim())) return 'Format email belum sesuai.'
+      if (!EMAIL_RE.test(answer.trim())) return this.msg('errEmail')
     }
 
     if (q.type === 'phone' && typeof answer === 'string' && answer.trim() !== '') {
-      if (!isValidPhoneFormat(answer)) return 'Format nomor telepon belum sesuai.'
+      if (!isValidPhoneFormat(answer)) return this.msg('errPhone')
     }
 
     if (q.type === 'file_upload' && typeof answer === 'string' && answer === '__uploading__') {
-      return 'Tunggu hingga berkas selesai diunggah.'
+      return this.msg('errUploading')
     }
 
     return null

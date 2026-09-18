@@ -22,6 +22,8 @@
   import SectionHeader from './SectionHeader.svelte'
   import QuestionCard from './QuestionCard.svelte'
   import NavButton from './NavButton.svelte'
+  import { useI18n } from '$lib/i18n/context.js'
+  import type { SurveyPage } from '$lib/runner/sections.js'
 
   let {
     runner,
@@ -49,6 +51,17 @@
     prefersReducedMotion?: boolean
     pratinjau?: boolean
   } = $props()
+
+  const i18n = useI18n()
+
+  // Judul bagian berasal dari pertanyaan `question_group`; halaman hanya membawa
+  // salinan teks bahasa utamanya. Untuk bahasa lain, teksnya dibaca ulang dari
+  // grup asalnya supaya ikut terjemahannya.
+  function sectionText(section: SurveyPage, field: 'title' | 'description'): string | null {
+    const group = section.groupId ? runner.questions.find((q) => q.id === section.groupId) : undefined
+    if (group) return i18n.text(group, field) || null
+    return section[field] ?? null
+  }
 </script>
 
 <div class="survey-wrap">
@@ -67,7 +80,7 @@
         {#each runner.scrollSections as section (section.id)}
           <div class="stage-slide">
             {#if section.title}
-              <SectionHeader title={section.title} description={section.description ?? null} />
+              <SectionHeader title={sectionText(section, 'title') ?? section.title} description={sectionText(section, 'description')} />
             {/if}
             {#each section.questions as q (q.id)}
               <QuestionCard
@@ -93,8 +106,8 @@
           >
             {#if runner.currentPage.title}
               <SectionHeader
-                title={runner.currentPage.title}
-                description={runner.currentPage.description ?? null}
+                title={sectionText(runner.currentPage, 'title') ?? runner.currentPage.title}
+                description={sectionText(runner.currentPage, 'description')}
               />
             {/if}
             {#each runner.currentPage.questions as q (q.id)}
@@ -124,7 +137,7 @@
     {#if runner.autoAdvancing}
       <div class="auto-advance-hint" aria-live="polite">
         <span class="auto-advance-spinner" aria-hidden="true"></span>
-        Lanjut otomatis…
+        {i18n.t('autoAdvance')}
       </div>
     {/if}
 
@@ -152,7 +165,7 @@
       -->
       {#if runner.canGoBack}
         <NavButton
-          label="Sebelumnya"
+          label={i18n.t('back')}
           onClick={runner.handleBack}
           variant="secondary"
           disabled={submitting}

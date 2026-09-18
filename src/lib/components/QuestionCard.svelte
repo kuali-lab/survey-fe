@@ -4,6 +4,7 @@
   // ini dirender sekali atau satu kali per pengulangan (Ihatec M5). Untuk
   // pertanyaan yang tidak berulang ia meneruskan apa adanya.
   import QuestionField from './QuestionField.svelte'
+  import { useI18n } from '$lib/i18n/context.js'
 
   let {
     question,
@@ -33,6 +34,13 @@
     pratinjau?: boolean
     paged?: boolean
   } = $props()
+
+  // Teks TAMPILAN saja. `question` diteruskan apa adanya ke QuestionField —
+  // label pilihannya adalah identitas data dan tidak boleh ikut diterjemahkan.
+  const i18n = useI18n()
+  const title = $derived(i18n.text(question, 'title'))
+  const description = $derived(i18n.text(question, 'description'))
+  const titlePlain = $derived(i18n.plain(question, 'title'))
 </script>
 
 <div class="card">
@@ -46,21 +54,21 @@
   {/if}
 
   <h2 class="question-title" data-question-heading tabindex="-1">
-    <div class="title-text">{@html question.title}</div>
+    <div class="title-text">{@html title}</div>
     {#if question.required}
-      <span class="required" aria-label="wajib diisi">*</span>
+      <span class="required" aria-label={i18n.t('requiredMark')}>*</span>
     {/if}
   </h2>
 
-  {#if question.description && question.type !== 'statement'}
-    <div class="description">{@html question.description}</div>
+  {#if description && question.type !== 'statement'}
+    <div class="description">{@html description}</div>
   {/if}
 
   {#if question.imageUrl}
     {#if question.imageLayout === 'left' || question.imageLayout === 'right'}
       <div class="card-inline-wrap card-inline-{question.imageLayout}">
         <div class="inline-img-wrap">
-          <img src={question.imageUrl} alt={question.titlePlain ?? ''} class="inline-img" />
+          <img src={question.imageUrl} alt={titlePlain} class="inline-img" />
         </div>
         <div class="inline-input-wrap">
           <QuestionField
@@ -78,7 +86,7 @@
       </div>
     {:else}
       <div class="image-wrap">
-        <img src={question.imageUrl} alt={question.titlePlain ?? ''} />
+        <img src={question.imageUrl} alt={titlePlain} />
       </div>
       <div class="input-wrap">
         <QuestionField
