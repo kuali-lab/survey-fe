@@ -5,6 +5,10 @@ export type QuestionType =
   | 'single_choice' | 'checkbox' | 'dropdown' | 'yes_no' | 'image_choice'
   | 'nps' | 'opinion_scale' | 'rating' | 'matrix'
   | 'contact_info' | 'file_upload' | 'region'
+  // Repeat group (Ihatec M5): pertanyaan yang memuat beberapa field, dan yang
+  // berulang adalah KARTU-nya. Induk tidak menyimpan jawaban sendiri — field-nya
+  // yang menyimpan, masing-masing dengan `repeat_index` = nomor kartu.
+  | 'repeat_group'
 
 // ── Survei dua bahasa ────────────────────────────────────────────────────────
 // Bentuknya sama dengan yang ditulis builder (dashboard-fe). SEMUA opsional:
@@ -130,6 +134,18 @@ export interface Question {
   // FITURNYA MATI. Pengulangan tanpa batas tidak boleh ada sama sekali — satu
   // kiriman akan menulis baris sebanyak yang ditentukan pengirim.
   maxRepeat?: number
+  // Grup Jawaban: jumlah kolom isian di dalam satu kartu (1 atau 2; tak terisi = 1).
+  fieldsPerRow?: number
+
+  // Field di dalam satu KARTU repeat group (Ihatec M5). Kosong/absen untuk
+  // setiap pertanyaan biasa.
+  //
+  // 🔴 Bersarang, dan itu yang menjaga sisa runner tidak perlu tahu apa-apa soal
+  // repeat group: `answerableQuestions` diturunkan dari daftar `questions`
+  // tingkat atas, jadi field TIDAK pernah ikut dihitung paginasi, progress bar,
+  // auto-advance, maupun skip-logic. Meratakan field jadi pertanyaan tingkat atas
+  // akan membuat kelimanya salah sekaligus — dan salahnya senyap.
+  fields?: Question[]
 
   // Relational config
   hasAsyncOptions?: boolean
@@ -227,7 +243,25 @@ export interface TopOfMindAnswer {
   selected: string[]
 }
 
-export type AnswerValue = string | number | string[] | Record<string, string> | ContactInfo | TopOfMindAnswer | null
+/**
+ * Jawaban sebuah repeat group (Ihatec M5): SATU objek per kartu, berkunci id
+ * field.
+ *
+ * 🔴 Bentuk ini dipilih di atas alternatif "satu array per field"
+ * (`answers[fieldId] = [n1, n2, n3]`), dan alasannya soal kebenaran, bukan
+ * selera. Backend merapatkan array pengulangan — nilai kosong DIBUANG. Kalau
+ * responden mengosongkan satu field di kartu ke-2, array field itu menyusut
+ * sementara array field lain tidak, dan seluruh record sesudahnya bergeser satu
+ * posisi: warna kartu 3 menempel pada merek kartu 2. Tidak ada galat yang
+ * muncul; datanya hanya diam-diam salah.
+ *
+ * Dengan kartu sebagai objek, keselarasan antar-field dijamin BENTUKNYA, bukan
+ * oleh kebetulan urutan. Field yang dikosongkan tetap hadir sebagai nilai kosong
+ * di kartunya sendiri.
+ */
+export type RepeatGroupAnswer = Record<string, string>[]
+
+export type AnswerValue = string | number | string[] | Record<string, string> | RepeatGroupAnswer | ContactInfo | TopOfMindAnswer | null
 
 export type Answers = Record<string, AnswerValue>
 

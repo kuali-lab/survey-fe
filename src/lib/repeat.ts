@@ -49,6 +49,47 @@ export function questionRepeats(q: Question): boolean {
   return q.maxRepeat != null && isRepeatableType(q.type)
 }
 
+/** Tipe induk repeat group — cerminan `repeatGroupType` di `logika-be`. */
+export const REPEAT_GROUP_TYPE = 'repeat_group'
+
+/** Apakah pertanyaan ini sebuah repeat group (kartu berisi field). */
+export function isRepeatGroup(q: Question): boolean {
+  return q.type === REPEAT_GROUP_TYPE
+}
+
+/**
+ * Batas KARTU sebuah repeat group.
+ *
+ * 🔴 Fungsi tersendiri, bukan memakai `effectiveMaxRepeat` di bawah: fungsi itu
+ * memeriksa `isRepeatableType`, dan `repeat_group` sengaja TIDAK ada di daftar
+ * tipe skalar berulang (persis seperti di backend). Memakainya akan selalu
+ * memulangkan 0, dan tombol "Tambah" tidak akan pernah menyala.
+ */
+export function effectiveMaxCards(q: Question): number {
+  const n = q.maxRepeat ?? MAX_REPEAT_CEILING
+  return n < MAX_REPEAT_CEILING ? n : MAX_REPEAT_CEILING
+}
+
+/**
+ * Memecah nilai jawaban repeat group menjadi daftar KARTU.
+ *
+ * Selalu menyisakan satu kartu: nol kartu berarti tidak ada tempat mengisi, dan
+ * responden akan mengira pertanyaannya rusak — aturan yang sama dengan baris
+ * pada pengulangan skalar.
+ */
+export function toCards(value: AnswerValue | undefined): Record<string, string>[] {
+  if (!Array.isArray(value)) return [{}]
+  const cards = value.filter(
+    (v): v is Record<string, string> => typeof v === 'object' && v !== null && !Array.isArray(v),
+  )
+  return cards.length > 0 ? cards : [{}]
+}
+
+/** Apakah kartu baru masih boleh ditambah. */
+export function canAddCard(q: Question, cards: readonly Record<string, string>[]): boolean {
+  return cards.length < effectiveMaxCards(q)
+}
+
 /** Batas yang benar-benar ditegakkan: nilai tersimpan, dipotong plafon. Nol = tidak berulang. */
 export function effectiveMaxRepeat(q: Question): number {
   if (!questionRepeats(q)) return 0
