@@ -6,19 +6,46 @@ export type QuestionType =
   | 'nps' | 'opinion_scale' | 'rating' | 'matrix'
   | 'contact_info' | 'file_upload' | 'region'
 
+// ── Survei dua bahasa ────────────────────────────────────────────────────────
+// Bentuknya sama dengan yang ditulis builder (dashboard-fe). SEMUA opsional:
+// survei lama, salinan di `survey-fe:surveyCache:*`, dan draf tersimpan tidak
+// punya field ini dan harus tetap berjalan persis seperti sebelumnya.
+export interface SurveyLanguages {
+  primary: string
+  /** Absen = survei satu bahasa. */
+  secondary?: string
+}
+
+/** Teks terjemahan per kode bahasa, mis. `{ en: 'Yes' }`. */
+export type TranslatedText = Record<string, string>
+
+export interface QuestionTextTranslation {
+  title?: string
+  description?: string
+  placeholder?: string
+  minLabel?: string
+  midLabel?: string
+  maxLabel?: string
+}
+
 export interface QuestionOption {
   id: string
+  // 🔴 `label` adalah IDENTITAS DATA, bukan sekadar tampilan: jawaban, skip logic,
+  // Pilihan Bertingkat, draf, dan badan kiriman semuanya menyimpan/membandingkan
+  // string ini. Terjemahan hanya boleh dipakai saat MERENDER (`/i18n`).
   label: string
   value?: string
   imageUrl?: string
   sortOrder: number
   isOther?: boolean
+  translations?: TranslatedText
 }
 
 export interface MatrixRow {
   id: string
   label: string
   sortOrder: number
+  translations?: TranslatedText
 }
 
 export interface MatrixCol {
@@ -26,6 +53,7 @@ export interface MatrixCol {
   label: string
   value?: string
   sortOrder: number
+  translations?: TranslatedText
 }
 
 /**
@@ -120,6 +148,8 @@ export interface Question {
   showLabel?: boolean | null
   matrixRows?: MatrixRow[]
   matrixCols?: MatrixCol[]
+  /** Terjemahan teks skalar per kode bahasa. Label pilihan/baris/kolom membawa miliknya sendiri. */
+  translations?: Record<string, QuestionTextTranslation>
 }
 
 export interface SkipRule {
@@ -171,6 +201,8 @@ export interface Survey {
   settings: SurveySettings
   questions: Question[]
   skipRules: SkipRule[]
+  /** Absen = survei satu bahasa (perilaku lama). */
+  languages?: SurveyLanguages
   closeMessage: string | null
   closeImageUrl: string | null
 }
@@ -199,4 +231,5 @@ export type AnswerValue = string | number | string[] | Record<string, string> | 
 
 export type Answers = Record<string, AnswerValue>
 
-export type ViewState = 'loading' | 'welcome' | 'selfie_capture' | 'selfie_denied' | 'location_prompt' | 'location_denied' | 'question' | 'submitting' | 'closing' | 'closed' | 'error'
+// 'language' = langkah pertama survei dua bahasa (pilih bahasa), sebelum 'welcome'.
+export type ViewState = 'loading' | 'language' | 'welcome' | 'selfie_capture' | 'selfie_denied' | 'location_prompt' | 'location_denied' | 'question' | 'submitting' | 'closing' | 'closed' | 'error'

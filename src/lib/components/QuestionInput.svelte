@@ -19,9 +19,9 @@
   import { applyNumberInput, numberInputText, numberInputCompare } from '$lib/numberInput.js'
   import { fade, fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
+  import { useI18n } from '$lib/i18n/context.js'
   import { cubicOut } from 'svelte/easing'
   import {
-    TOM_STAGE2_HINT,
     isTopOfMindQuestion, topOfMindFirst, topOfMindRest, remainingOptions, restLimit, restAtLimit,
     setTopOfMindFirst, toggleTopOfMindRest, clearTopOfMind, normalizeTopOfMind, topOfMindOtherText, firstIsOther,
   } from '$lib/topOfMind.js'
@@ -55,6 +55,14 @@
     pratinjau?: boolean
     paged?: boolean
   } = $props()
+
+  // ── Survei dua bahasa ───────────────────────────────────────────────────────
+  // 🔴 `i18n.label(...)` / `i18n.text(...)` HANYA untuk teks yang ditampilkan.
+  // Setiap `onChange(...)`, `includes(...)`, dan perbandingan di berkas ini tetap
+  // memakai `opt.label` (bahasa utama): itulah nilai jawaban yang disimpan,
+  // dibandingkan skip logic / Pilihan Bertingkat, dan dikirim ke backend.
+  const i18n = useI18n()
+  const placeholderText = $derived(i18n.text(question, 'placeholder'))
 
   // ── Filtered dropdown (contract §8) ─────────────────────────────────────────
   const filterActive = $derived(question.type === 'dropdown' && hasOptionFilter(question))
@@ -202,9 +210,9 @@
   const opMax = $derived(question.maxValue ?? 10)
   const opButtons = $derived(Array.from({ length: opMax - opMin + 1 }, (_, i) => opMin + i))
   const opValue = $derived(typeof value === 'number' ? value : null)
-  const opMinLabel = $derived(question.minLabel || 'Sangat Tidak Setuju')
-  const opMaxLabel = $derived(question.maxLabel || 'Sangat Setuju')
-  const opMidLabel = $derived(question.midLabel || '')
+  const opMinLabel = $derived(i18n.text(question, 'minLabel') || i18n.t('scaleDisagree'))
+  const opMaxLabel = $derived(i18n.text(question, 'maxLabel') || i18n.t('scaleAgree'))
+  const opMidLabel = $derived(i18n.text(question, 'midLabel') || '')
 
   // Matrix — value is Record<rowLabel, colLabel>
   const matrixRows = $derived(question.matrixRows ?? [])
@@ -433,25 +441,31 @@
   let tomOtherText = $state(untrack(() => topOfMindOtherText(value, question.options ?? [])))
 
   const TOM_OTHER_KEY = '__other__'
-  type TomRow = { key: string; label: string; isOther: boolean; isFirst: boolean; checked: boolean; disabled: boolean }
+  // Pilihan pertama yang tersimpan (label bahasa utama, atau teks bebas "Lainnya")
+  // → teks tampilannya.
+  const tomFirstText = $derived.by(() => {
+    const match = allOptions.find((o) => !o.isOther && o.label === tomFirst)
+    return match ? i18n.label(match) : tomFirst
+  })
+  type TomRow = { key: string; label: string; display: string; isOther: boolean; isFirst: boolean; checked: boolean; disabled: boolean }
   // Keyed rows: the first pick keeps the key of the option it came from, so
   // animate:flip slides it to the top instead of re-rendering it.
   const tomRows = $derived.by<TomRow[]>(() => {
     const ordered = [...options.filter(o => !o.isOther), ...options.filter(o => o.isOther)]
     if (tomStage === 1) {
       return ordered.map(o => ({
-        key: o.isOther ? TOM_OTHER_KEY : o.label, label: o.label, isOther: !!o.isOther,
+        key: o.isOther ? TOM_OTHER_KEY : o.label, label: o.label, display: i18n.label(o), isOther: !!o.isOther,
         isFirst: false, checked: !!o.isOther && tomOtherPending, disabled: false,
       }))
     }
     const first: TomRow = {
-      key: tomFirstIsOther ? TOM_OTHER_KEY : tomFirst, label: tomFirst, isOther: tomFirstIsOther,
+      key: tomFirstIsOther ? TOM_OTHER_KEY : tomFirst, label: tomFirst, display: tomFirstText, isOther: tomFirstIsOther,
       isFirst: true, checked: true, disabled: false,
     }
     const rest = [...tomRemaining.filter(o => !o.isOther), ...tomRemaining.filter(o => o.isOther)].map(o => {
       const checked = o.isOther ? tomOtherInRest : tomRest.includes(o.label)
       return {
-        key: o.isOther ? TOM_OTHER_KEY : o.label, label: o.label, isOther: !!o.isOther,
+        key: o.isOther ? TOM_OTHER_KEY : o.label, label: o.label, display: i18n.label(o), isOther: !!o.isOther,
         isFirst: false, checked, disabled: !checked && tomRestAtLimit,
       }
     })
@@ -462,10 +476,10 @@
   const tomShowOtherInput = $derived(tomStage === 1 ? tomOtherPending : tomOtherInRest)
   const tomHintText = $derived(
     tomRemaining.length === 0
-      ? 'Tidak ada pilihan lain.'
+      ? i18n.t('tomNoMore')
       : tomRestLimit > 0
-        ? `Bisa pilih hingga ${tomRestLimit} jawaban lagi (${tomRest.length}/${tomRestLimit}).`
-        : TOM_STAGE2_HINT,
+        ? i18n.t('tomRestLimit', { limit: tomRestLimit, n: tomRest.length })
+        : i18n.t('tomStage2Hint'),
   )
 
   const tomReduceMotion =
@@ -540,7 +554,7 @@
       >
         <div class="image-option-img-wrap">
           {#if question.optionImages && question.optionImages[idx]}
-            <img src={question.optionImages[idx]} alt={opt.label} class="image-option-img" />
+            <img src={question.optionImages[idx]} alt={i18n.label(opt)} class="image-option-img" />
           {:else}
             <div class="image-option-placeholder">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
@@ -554,7 +568,7 @@
         {#if question.showLabel !== false}
           <div class="image-option-footer">
             <span class="radio-indicator {strValue === opt.label ? 'selected' : ''}"></span>
-            <span class="image-option-label">{opt.label}</span>
+            <span class="image-option-label">{i18n.label(opt)}</span>
           </div>
         {/if}
       </button>
@@ -565,7 +579,7 @@
   <input
     class="text-input"
     type="text"
-    placeholder={question.placeholder ?? ''}
+    placeholder={placeholderText}
     value={strValue}
     maxlength={question.maxLength ?? undefined}
     minlength={question.minLength ?? undefined}
@@ -582,7 +596,7 @@
   <textarea
     class="textarea-input"
     rows="4"
-    placeholder={question.placeholder ?? ''}
+    placeholder={placeholderText}
     value={strValue}
     maxlength={question.maxLength ?? undefined}
     minlength={question.minLength ?? undefined}
@@ -623,7 +637,7 @@
     <input
       class="url-input"
       type="text"
-      placeholder={question.placeholder ?? 'contoh.com'}
+      placeholder={placeholderText || 'contoh.com'}
       value={websiteDisplay}
       oninput={(e) => onChange('https://' + (e.currentTarget as HTMLInputElement).value)}
       onblur={() => onBlur?.()}
@@ -676,11 +690,11 @@
   <div style="display: flex; justify-content: space-between; align-items: flex-start;">
     <div>
       {#if question.minValue !== undefined && question.minValue !== null && question.maxValue !== undefined && question.maxValue !== null}
-        <p class="number-hint" style="margin-top: 6px;">Antara {question.minValue} dan {question.maxValue}.</p>
+        <p class="number-hint" style="margin-top: 6px;">{i18n.t('numBetween', { min: question.minValue, max: question.maxValue })}</p>
       {:else if question.minValue !== undefined && question.minValue !== null}
-        <p class="number-hint" style="margin-top: 6px;">Minimal {question.minValue}.</p>
+        <p class="number-hint" style="margin-top: 6px;">{i18n.t('numMin', { min: question.minValue })}</p>
       {:else if question.maxValue !== undefined && question.maxValue !== null}
-        <p class="number-hint" style="margin-top: 6px;">Maksimal {question.maxValue}.</p>
+        <p class="number-hint" style="margin-top: 6px;">{i18n.t('numMax', { max: question.maxValue })}</p>
       {/if}
     </div>
     {#if question.maxLength || question.minLength}
@@ -731,7 +745,7 @@
         onclick={() => onChange(opt.label)}
       >
         <span class="radio-indicator {strValue === opt.label ? 'selected' : ''}"></span>
-        <span class="option-label">{opt.label}</span>
+        <span class="option-label">{i18n.label(opt)}</span>
       </button>
     {/each}
     {#if otherOption}
@@ -743,13 +757,13 @@
         onclick={selectOtherSingle}
       >
         <span class="radio-indicator {isOtherSelected ? 'selected' : ''}"></span>
-        <span class="option-label">{otherOption.label}</span>
+        <span class="option-label">{i18n.label(otherOption)}</span>
       </button>
       {#if isOtherSelected}
         <input
           class="text-input other-text-input"
           type="text"
-          placeholder="Tuliskan jawaban Anda..."
+          placeholder={i18n.t('otherPlaceholder')}
           value={otherText}
           oninput={(e) => updateOtherSingle((e.currentTarget as HTMLInputElement).value)}
         />
@@ -768,8 +782,8 @@
     <div class="tom-stage" in:fly={tomFly}>
     {#if paged && tomStage === 2}
       <p class="tom-intro" data-test="tom-intro">
-        Pilihan pertama Anda: <strong>{tomFirst}</strong>.
-        <span class="tom-intro-more">Ada lagi yang terlintas? {tomHintText}</span>
+        {i18n.t('tomFirst')} <strong>{tomFirstText}</strong>.
+        <span class="tom-intro-more">{i18n.t('tomMore')} {tomHintText}</span>
       </p>
     {/if}
     <div class="options-list" role="group">
@@ -791,7 +805,7 @@
                 </svg>
               {/if}
             </span>
-            <span class="option-label">{row.label}</span>
+            <span class="option-label">{row.display}</span>
           </button>
           {#if row.isOther && !row.isFirst && tomShowOtherInput}
             {#if tomStage === 1}
@@ -799,7 +813,7 @@
                 <input
                   class="text-input other-text-input tom-other-input"
                   type="text"
-                  placeholder="Tuliskan jawaban Anda..."
+                  placeholder={i18n.t('otherPlaceholder')}
                   value={tomOtherDraft}
                   use:tomFocus
                   oninput={(e) => { tomOtherDraft = (e.currentTarget as HTMLInputElement).value }}
@@ -810,13 +824,13 @@
                   type="button"
                   disabled={!tomOtherDraft.trim()}
                   onclick={tomConfirmOtherFirst}
-                >Lanjut</button>
+                >{i18n.t('tomContinue')}</button>
               </div>
             {:else}
               <input
                 class="text-input other-text-input"
                 type="text"
-                placeholder="Tuliskan jawaban Anda..."
+                placeholder={i18n.t('otherPlaceholder')}
                 value={tomOtherText}
                 oninput={(e) => tomUpdateOtherRest((e.currentTarget as HTMLInputElement).value)}
               />
@@ -850,7 +864,7 @@
             </svg>
           {/if}
         </span>
-        <span class="option-label">{opt.label}</span>
+        <span class="option-label">{i18n.label(opt)}</span>
       </button>
     {/each}
     {#if otherOption}
@@ -869,13 +883,13 @@
             </svg>
           {/if}
         </span>
-        <span class="option-label">{otherOption.label}</span>
+        <span class="option-label">{i18n.label(otherOption)}</span>
       </button>
       {#if isOtherSelected}
         <input
           class="text-input other-text-input"
           type="text"
-          placeholder="Tuliskan jawaban Anda..."
+          placeholder={i18n.t('otherPlaceholder')}
           value={otherText}
           oninput={(e) => updateOtherCheckbox((e.currentTarget as HTMLInputElement).value)}
         />
@@ -883,7 +897,7 @@
     {/if}
   </div>
   {#if selectLimit > 0}
-    <p style="margin-top:8px;font-size:0.85rem;color:var(--text-body);">Pilih maksimal {selectLimit} jawaban ({arrValue.length}/{selectLimit}).</p>
+    <p style="margin-top:8px;font-size:0.85rem;color:var(--text-body);">{i18n.t('selectLimit', { limit: selectLimit, n: arrValue.length })}</p>
   {/if}
 
 {:else if question.type === 'dropdown'}
@@ -914,7 +928,7 @@
       <input
         class="text-input other-text-input"
         type="text"
-        placeholder="Tuliskan jawaban Anda..."
+        placeholder={i18n.t('otherPlaceholder')}
         value={otherText}
         oninput={(e) => updateOtherSingle((e.currentTarget as HTMLInputElement).value)}
       />
@@ -932,7 +946,7 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path d="M5 12.5l5 5 9-10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        Ya
+        {i18n.t('yes')}
       </span>
     </button>
     <button
@@ -944,7 +958,7 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
         </svg>
-        Tidak
+        {i18n.t('no')}
       </span>
     </button>
   </div>
@@ -956,7 +970,7 @@
         <button
           class="star-btn"
           type="button"
-          aria-label="Beri nilai {star}"
+          aria-label={i18n.t('ratingStar', { n: star })}
           onmouseenter={() => hoverRating = star}
           onmouseleave={() => hoverRating = 0}
           onclick={() => { onChange(star); hoverRating = 0 }}
@@ -974,7 +988,7 @@
       {/each}
     </div>
     {#if ratingValue > 0}
-      <p class="rating-label" aria-live="polite">{ratingValue} dari {ratingScale}</p>
+      <p class="rating-label" aria-live="polite">{i18n.t('ratingOf', { n: ratingValue, max: ratingScale })}</p>
     {/if}
   </div>
 
@@ -990,8 +1004,8 @@
       {/each}
     </div>
     <div class="nps-labels">
-      <span>{question.minLabel || 'Sangat Tidak Mungkin'}</span>
-      <span>{question.maxLabel || 'Sangat Mungkin'}</span>
+      <span>{i18n.text(question, 'minLabel') || i18n.t('npsUnlikely')}</span>
+      <span>{i18n.text(question, 'maxLabel') || i18n.t('npsLikely')}</span>
     </div>
   </div>
 
@@ -1026,14 +1040,14 @@
     <input
       class="text-input"
       type="text"
-      placeholder="Nama Depan"
+      placeholder={i18n.t('firstName')}
       value={contactValue.firstName}
       oninput={(e) => updateContact('firstName', (e.currentTarget as HTMLInputElement).value)}
     />
     <input
       class="text-input"
       type="text"
-      placeholder="Nama Belakang"
+      placeholder={i18n.t('lastName')}
       value={contactValue.lastName}
       oninput={(e) => updateContact('lastName', (e.currentTarget as HTMLInputElement).value)}
     />
@@ -1041,14 +1055,14 @@
       class="text-input"
       type="tel"
       inputmode="numeric"
-      placeholder="Nomor Telepon"
+      placeholder={i18n.t('phone')}
       value={contactValue.phone}
       oninput={(e) => updateContact('phone', sanitizePhoneInput((e.currentTarget as HTMLInputElement).value))}
     />
     <input
       class="text-input"
       type="email"
-      placeholder="Email"
+      placeholder={i18n.t('email')}
       value={contactValue.email}
       oninput={(e) => updateContact('email', (e.currentTarget as HTMLInputElement).value)}
     />
@@ -1122,7 +1136,7 @@
 {:else if question.type === 'statement'}
   {#if question.description}
     <div class="statement-body">
-      <p>{@html question.description}</p>
+      <p>{@html i18n.text(question, 'description')}</p>
     </div>
   {/if}
 

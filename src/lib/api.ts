@@ -1,6 +1,6 @@
 import { PUBLIC_API_BASE_URL } from '$env/static/public'
 import { env as publicEnv } from '$env/dynamic/public'
-import type { Survey, Question } from './types.js'
+import type { Survey, Question, TranslatedText } from './types.js'
 import type { Answers } from './types.js'
 import type { OptionFilter } from './optionFilter.js'
 import { buildMockSurvey } from './mockSurvey.js'
@@ -46,6 +46,10 @@ function normalizeQuestion(q: Record<string, unknown>): Question {
       imageUrl: o.imageUrl as string | undefined,
       sortOrder: (o.sortOrder as number) ?? 0,
       isOther: Boolean(o.isOther),
+      // Peta ini memilih field satu per satu, jadi field baru HILANG kalau tidak
+      // didaftarkan. Baris/kolom matriks dan `question.translations` lolos lewat
+      // spread di atas; pilihan tidak.
+      translations: o.translations as TranslatedText | undefined,
     })),
     optionImages: hasOptionImages ? optionImages : undefined,
   } as Question
@@ -295,6 +299,12 @@ export async function submitSurveyAnswers(
   surveyorCode?: string,
   submissionId?: string,
   invitationToken?: string | null,
+  /**
+   * Bahasa yang DIPAKAI responden mengisi (survei dua bahasa). Catatan saja:
+   * jawabannya sendiri selalu label bahasa utama, apa pun isinya. Kode yang tidak
+   * ditawarkan survei disimpan NULL oleh backend, bukan ditolak.
+   */
+  language?: string,
 ): Promise<void> {
   // Dev mock: pretend the submission succeeded so the closing journey renders
   // without a backend. Mirrors the fetchSurvey() gate.
@@ -319,6 +329,7 @@ export async function submitSurveyAnswers(
       // invite state to 'completed' and bypass the require_login email-dedup
       // when the invite has been reopened for re-fill.
       invitationToken: invitationToken ?? undefined,
+      language: language || undefined,
     })
   })
   // Status mapping lives in submitError.ts so the outbox drain and the

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { isCustomLogo, resolveLogoUrl } from '$lib/branding.js'
   import { resolveMediaUrl } from '$lib/mediaUrl.js'
+  import { useI18n } from '$lib/i18n/context.js'
 
   let {
     title,
@@ -18,6 +19,8 @@
     /** Logo per survei (M2). `null`/absen = logo platform, seperti sebelumnya. */
     logoUrl?: string | null
   } = $props()
+
+  const i18n = useI18n()
 
   // Sama seperti WelcomePage: jadikan absolut sekali, pakai untuk `src` dan `alt`.
   const logoMedia = $derived(resolveMediaUrl(logoUrl))
@@ -60,7 +63,7 @@
     {#if description}
       <p class="description">{@html description}</p>
     {:else}
-      <p class="description">Terima kasih telah mengisi survei ini. Jawaban Anda telah berhasil disimpan.</p>
+      <p class="description">{i18n.t('closingBody')}</p>
     {/if}
   </div>
 </div>

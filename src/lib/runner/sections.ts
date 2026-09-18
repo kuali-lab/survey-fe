@@ -10,6 +10,8 @@ export type SurveyPage = {
   id: string
   title?: string
   description?: string
+  /** Id `question_group` asal judul/deskripsi di atas — dipakai panggung untuk menampilkannya dalam bahasa aktif. */
+  groupId?: string
   questions: Question[]
 }
 
@@ -43,10 +45,10 @@ export function buildSurveySections(
       if (flattenGroups) {
         // One page per member, keeping the group header for context.
         for (const m of members) {
-          sections.push({ id: m.id, title: q.title, description: q.description ?? undefined, questions: [m] })
+          sections.push({ id: m.id, title: q.title, description: q.description ?? undefined, groupId: q.id, questions: [m] })
         }
       } else {
-        sections.push({ id: q.id, title: q.title, description: q.description ?? undefined, questions: members })
+        sections.push({ id: q.id, title: q.title, description: q.description ?? undefined, groupId: q.id, questions: members })
       }
     } else if (answerableIds.has(q.id) && !(q.groupId && groupById.has(q.groupId))) {
       sections.push({ id: q.id, questions: [q] })

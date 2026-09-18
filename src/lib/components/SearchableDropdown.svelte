@@ -4,13 +4,17 @@
 
   import { fetchAsyncOptions } from '$lib/api';
   import { optionFilterKey, type OptionFilter } from '$lib/optionFilter';
+  import { useI18n } from '$lib/i18n/context.js';
+  import type { TranslatedText } from '$lib/types.js';
 
   let {
-    options = [], value = '', onChange, placeholder = '-- Pilih salah satu --', hasAsyncOptions = false, questionId = '', slug = '',
+    options = [], value = '', onChange, placeholder = '', hasAsyncOptions = false, questionId = '', slug = '',
     filterActive = false, filter = null, filterHint = '', filterEmptyMessage = '',
     disabled = false, notice = '',
   } = $props<{
-    options?: { label: string, isOther?: boolean }[];
+    // `label` = NILAI yang dipancarkan lewat onChange (bahasa utama). `translations`
+    // hanya memengaruhi teks yang ditampilkan dan dicari.
+    options?: { label: string, isOther?: boolean, translations?: TranslatedText }[];
     value: string;
     onChange: (val: string) => void;
     placeholder?: string;
@@ -39,6 +43,15 @@
   let filterBlocked = $derived(disabled || (filterActive && hasAsyncOptions && !filter));
   // Stable identity so the fetch effect re-runs only when the params change.
   let filterKey = $derived(optionFilterKey(filter));
+
+  const i18n = useI18n();
+  type Opt = { label: string, isOther?: boolean, translations?: TranslatedText };
+  /** Nilai tersimpan (label bahasa utama) → teks tampilannya. Teks bebas "Lainnya" tampil apa adanya. */
+  let selectedText = $derived.by(() => {
+    if (!value) return '';
+    const match = ((options || []) as Opt[]).find((o) => o.label === value);
+    return match ? i18n.label(match) : value;
+  });
 
   let isOpen = $state(false);
   let searchQuery = $state('');
@@ -137,7 +150,7 @@
       ? asyncOptions
       : (debouncedSearch === '' 
         ? (options || [])
-        : (options || []).filter((o: { label: string, isOther?: boolean }) => o.label.toLowerCase().includes(debouncedSearch)))
+        : (options || []).filter((o: Opt) => o.label.toLowerCase().includes(debouncedSearch) || i18n.label(o).toLowerCase().includes(debouncedSearch)))
   );
 
   // Virtual scrolling
@@ -201,7 +214,7 @@
     aria-disabled={filterBlocked}
     onclick={toggleOpen}
   >
-    <span class="truncate">{value || placeholder}</span>
+    <span class="truncate">{selectedText || placeholder || i18n.t('ddPlaceholder')}</span>
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="6 9 12 15 18 9"></polyline>
     </svg>
@@ -215,18 +228,18 @@
           bind:this={searchInput}
           bind:value={searchQuery}
           type="text" 
-          placeholder="Cari pilihan..." 
+          placeholder={i18n.t('ddSearch')} 
         />
       </div>
 
       {#if searchTooShort}
-        <div class="empty-state">Ketik minimal {MIN_SEARCH_CHARS} huruf untuk mencari.</div>
+        <div class="empty-state">{i18n.t('ddMinChars', { n: MIN_SEARCH_CHARS })}</div>
       {:else if filteredOptions.length === 0 && isFetching}
-        <div class="empty-state">Memuat...</div>
+        <div class="empty-state">{i18n.t('ddLoading')}</div>
       {:else if filteredOptions.length === 0 && (filter || !hasAsyncOptions) && filterEmptyMessage && debouncedSearch === ''}
         <div class="empty-state filter-empty">{filterEmptyMessage}</div>
       {:else if filteredOptions.length === 0}
-        <div class="empty-state">Tidak ada pilihan yang cocok.</div>
+        <div class="empty-state">{i18n.t('ddEmpty')}</div>
       {:else}
         <div 
           class="options-container" 
@@ -242,7 +255,7 @@
                   class:selected={value === opt.label}
                   onclick={() => selectOption(opt.label)}
                 >
-                  <span class="truncate">{opt.label}</span>
+                  <span class="truncate">{i18n.label(opt)}</span>
                 </button>
               {/each}
             </div>
@@ -252,7 +265,7 @@
       <div class="footer">
         Menampilkan {filteredOptions.length}{hasAsyncOptions && asyncHasMore ? '+' : ''} hasil {hasAsyncOptions ? '' : ' dari ' + (options?.length || 0)}
         {#if isFetching}
-          <span class="ml-2 animate-pulse">Memuat...</span>
+          <span class="ml-2 animate-pulse">{i18n.t('ddLoading')}</span>
         {/if}
       </div>
     </div>
