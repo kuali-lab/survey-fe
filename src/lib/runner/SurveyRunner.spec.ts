@@ -486,19 +486,19 @@ describe('SurveyRunner — Top of Mind', () => {
     expect(r.answers.brand).toEqual({ first: 'Aqua', selected: ['Aqua'] }) // intact: lands on stage 2
   })
 
-  it('scroll mode: back never touches the answer', () => {
+  it('forces one-per-page even when the survey is stored as scroll', () => {
+    // Stage 2 is an extended question on its own screen, so a survey with a Top
+    // of Mind question can never run as one long scroll — same rule as skip logic.
     const r = makeTomRunner({ displayMode: 'scroll' })
+    expect(r.effectiveDisplayMode).toBe('one_per_page')
+    expect(r.isScrollMode).toBe(false)
+    expect(r.surveyPages.length).toBe(2)
     r.handleAnswer('brand', { first: 'Aqua', selected: ['Aqua'] })
-    expect(r.tomStage2QuestionId).toBeNull()
-    expect(r.canGoBack).toBe(false)
-    r.handleBack()
-    expect(r.answers.brand).toEqual({ first: 'Aqua', selected: ['Aqua'] })
+    expect(r.tomStage2QuestionId).toBe('brand')
   })
 
-  it('scroll-mode progress counts a first-pick-only answer as answered', () => {
-    const r = makeTomRunner({ displayMode: 'scroll' })
-    const before = r.progress
-    r.handleAnswer('brand', { first: 'Aqua', selected: ['Aqua'] })
-    expect(r.progress).toBeGreaterThan(before)
+  it('a single-pick checkbox with the flag does not force the mode', () => {
+    const r = makeTomRunner({ displayMode: 'scroll', maxSelections: 1 })
+    expect(r.effectiveDisplayMode).toBe('scroll')
   })
 })
