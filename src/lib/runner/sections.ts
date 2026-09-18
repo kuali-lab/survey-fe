@@ -10,7 +10,7 @@ export type SurveyPage = {
   id: string
   title?: string
   description?: string
-  /** Id `question_group` asal judul/deskripsi di atas — dipakai panggung untuk menampilkannya dalam bahasa aktif. */
+  /** The `question_group` id the title/description above came from — the stage uses it to show them in the active language. */
   groupId?: string
   questions: Question[]
 }

@@ -35,8 +35,8 @@
     paged?: boolean
   } = $props()
 
-  // Teks TAMPILAN saja. `question` diteruskan apa adanya ke QuestionField —
-  // label pilihannya adalah identitas data dan tidak boleh ikut diterjemahkan.
+  // DISPLAY text only. `question` is passed through to QuestionField untouched —
+  // its option labels are the data identity and must not be translated with it.
   const i18n = useI18n()
   const title = $derived(i18n.text(question, 'title'))
   const description = $derived(i18n.text(question, 'description'))

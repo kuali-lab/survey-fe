@@ -12,8 +12,8 @@
     filterActive = false, filter = null, filterHint = '', filterEmptyMessage = '',
     disabled = false, notice = '',
   } = $props<{
-    // `label` = NILAI yang dipancarkan lewat onChange (bahasa utama). `translations`
-    // hanya memengaruhi teks yang ditampilkan dan dicari.
+    // `label` = the VALUE emitted through onChange (primary language). `translations`
+    // only affects the text that is displayed and searched.
     options?: { label: string, isOther?: boolean, translations?: TranslatedText }[];
     value: string;
     onChange: (val: string) => void;
@@ -46,7 +46,7 @@
 
   const i18n = useI18n();
   type Opt = { label: string, isOther?: boolean, translations?: TranslatedText };
-  /** Nilai tersimpan (label bahasa utama) → teks tampilannya. Teks bebas "Lainnya" tampil apa adanya. */
+  /** The stored value (a primary-language label) → its display text. Free "Lainnya" text shows as-is. */
   let selectedText = $derived.by(() => {
     if (!value) return '';
     const match = ((options || []) as Opt[]).find((o) => o.label === value);

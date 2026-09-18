@@ -10,17 +10,17 @@ export type QuestionType =
   // yang menyimpan, masing-masing dengan `repeat_index` = nomor kartu.
   | 'repeat_group'
 
-// ── Survei dua bahasa ────────────────────────────────────────────────────────
-// Bentuknya sama dengan yang ditulis builder (dashboard-fe). SEMUA opsional:
-// survei lama, salinan di `survey-fe:surveyCache:*`, dan draf tersimpan tidak
-// punya field ini dan harus tetap berjalan persis seperti sebelumnya.
+// ── Two-language surveys ─────────────────────────────────────────────────────
+// The same shape the builder writes (dashboard-fe). ALL optional: older surveys,
+// copies in `survey-fe:surveyCache:*` and saved drafts do not carry these fields
+// and must keep working exactly as before.
 export interface SurveyLanguages {
   primary: string
-  /** Absen = survei satu bahasa. */
+  /** Absent = a single-language survey. */
   secondary?: string
 }
 
-/** Teks terjemahan per kode bahasa, mis. `{ en: 'Yes' }`. */
+/** Translated text per language code, e.g. `{ en: 'Yes' }`. */
 export type TranslatedText = Record<string, string>
 
 export interface QuestionTextTranslation {
@@ -34,9 +34,9 @@ export interface QuestionTextTranslation {
 
 export interface QuestionOption {
   id: string
-  // 🔴 `label` adalah IDENTITAS DATA, bukan sekadar tampilan: jawaban, skip logic,
-  // Pilihan Bertingkat, draf, dan badan kiriman semuanya menyimpan/membandingkan
-  // string ini. Terjemahan hanya boleh dipakai saat MERENDER (`/i18n`).
+  // 🔴 `label` is the DATA IDENTITY, not just display text: answers, skip logic,
+  // Pilihan Bertingkat, drafts and the submit body all store and compare this
+  // string. A translation may only be used when RENDERING (`/i18n`).
   label: string
   value?: string
   imageUrl?: string
@@ -164,7 +164,7 @@ export interface Question {
   showLabel?: boolean | null
   matrixRows?: MatrixRow[]
   matrixCols?: MatrixCol[]
-  /** Terjemahan teks skalar per kode bahasa. Label pilihan/baris/kolom membawa miliknya sendiri. */
+  /** Scalar text translations per language code. Option/row/column labels carry their own. */
   translations?: Record<string, QuestionTextTranslation>
 }
 
@@ -265,5 +265,5 @@ export type AnswerValue = string | number | string[] | Record<string, string> | 
 
 export type Answers = Record<string, AnswerValue>
 
-// 'language' = langkah pertama survei dua bahasa (pilih bahasa), sebelum 'welcome'.
+// 'language' = the first step of a two-language survey (choose language), before 'welcome'.
 export type ViewState = 'loading' | 'language' | 'welcome' | 'selfie_capture' | 'selfie_denied' | 'location_prompt' | 'location_denied' | 'question' | 'submitting' | 'closing' | 'closed' | 'error'

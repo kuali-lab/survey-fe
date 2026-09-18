@@ -1,13 +1,14 @@
 /**
- * Teks antarmuka bawaan platform (tombol, petunjuk, pesan validasi) per bahasa.
+ * The platform's own interface text (buttons, hints, validation messages) per
+ * language.
  *
- * Pembuat survei TIDAK menerjemahkan ini — mereka hanya menerjemahkan teks yang
- * mereka tulis sendiri (judul, pilihan, …). Rune-free dan DOM-free supaya bisa
- * diuji di Node, mengikuti `topOfMind.ts` / `optionDependency.ts`.
+ * Survey authors do NOT translate any of this — they only translate the text they
+ * wrote themselves (titles, options, …). Rune-free and DOM-free so it can be tested
+ * in Node, following `topOfMind.ts` / `optionDependency.ts`.
  *
- * 🔴 Paket `id` adalah SUMBER KEBENARAN dan nilainya harus sama persis dengan
- * string yang dulu tertanam di komponen: survei satu bahasa (dan spec yang sudah
- * ada) tidak boleh berubah satu karakter pun.
+ * 🔴 The `id` pack is the SOURCE OF TRUTH and its values must match the strings
+ * that used to be embedded in the components character for character: a
+ * single-language survey (and the specs that already exist) must not change at all.
  */
 const id = {
   start: 'Mulai Survei',
@@ -161,12 +162,12 @@ const en: Record<MessageKey, string> = {
 
 const PACKS: Record<string, Record<MessageKey, string>> = { id, en }
 
-/** Bahasa utama lama: semua survei sebelum fitur dua bahasa berbahasa Indonesia. */
+/** The legacy primary language: every survey before this feature was in Indonesian. */
 export const LEGACY_LOCALE = 'id'
 
 /**
- * Bahasa yang belum punya paket jatuh ke Inggris, bukan ke Indonesia: responden
- * yang memilih 日本語 jauh lebih mungkin terbantu tombol "Next" daripada
+ * A language with no pack falls back to English, not Indonesian: a respondent who
+ * picked 日本語 is far more likely to be helped by a "Next" button than by
  * "Selanjutnya".
  */
 export function t(locale: string, key: MessageKey, params?: Record<string, string | number>): string {

@@ -300,9 +300,10 @@ export async function submitSurveyAnswers(
   submissionId?: string,
   invitationToken?: string | null,
   /**
-   * Bahasa yang DIPAKAI responden mengisi (survei dua bahasa). Catatan saja:
-   * jawabannya sendiri selalu label bahasa utama, apa pun isinya. Kode yang tidak
-   * ditawarkan survei disimpan NULL oleh backend, bukan ditolak.
+   * The language the respondent actually FILLED the survey in (two-language
+   * surveys). A record only: the answers themselves are always primary-language
+   * labels whatever this says. A code the survey does not offer is stored as NULL
+   * by the backend rather than rejected.
    */
   language?: string,
 ): Promise<void> {

@@ -115,10 +115,10 @@ export type RunnerOptions = {
    */
   enforceAllowBack?: boolean
   /**
-   * Bahasa aktif responden, untuk label tombol dan pesan validasi. Absen =
-   * bahasa Indonesia (perilaku lama; alur surveyor dan pratinjau tidak
-   * mengirimnya). HANYA memengaruhi teks yang ditampilkan — jawaban tetap
-   * disimpan dalam label bahasa utama, lihat `$lib/i18n/content.ts`.
+   * The respondent's active language, for button labels and validation messages.
+   * Absent = Indonesian (the old behaviour; the surveyor and preview flows do not
+   * pass it). It affects ONLY displayed text — answers are still stored as
+   * primary-language labels, see `$lib/i18n/content.ts`.
    */
   getLocale?: () => string
 }

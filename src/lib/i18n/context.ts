@@ -1,12 +1,12 @@
 /**
- * Bahasa aktif untuk pohon komponen responden, lewat Svelte context.
+ * The active language for the respondent component tree, via Svelte context.
  *
- * Kenapa context, bukan prop: komponen yang sama (QuestionCard, QuestionInput,
- * MatrixInput, …) dipakai tiga rute — responden, `/pratinjau`, dan surveyor —
- * lewat jalur yang berbeda-beda. Prop `locale` harus dirangkai di SEMUA jalur
- * itu, dan jalur yang terlewat akan diam-diam merender bahasa utama. Dengan
- * context, rute yang tidak menyediakannya otomatis mendapat bawaan di bawah:
- * bahasa Indonesia, teks apa adanya — persis perilaku sebelum fitur ini ada.
+ * Why context rather than a prop: the same components (QuestionCard, QuestionInput,
+ * MatrixInput, …) are used by three routes — respondent, `/pratinjau` and surveyor —
+ * reached by different paths. A `locale` prop would have to be threaded through ALL
+ * of them, and any path that was missed would silently render the primary language.
+ * With context, a route that provides none automatically gets the default below:
+ * Indonesian, text as written — exactly the behaviour before this feature existed.
  */
 import { getContext, setContext } from 'svelte'
 import type { Question, QuestionTextTranslation, TranslatedText } from '$lib/types.js'
@@ -18,9 +18,9 @@ const KEY = Symbol('survey-i18n')
 export interface I18n {
   readonly locale: string
   readonly primary: string
-  /** Teks antarmuka platform. */
+  /** The platform's interface text. */
   t: (key: MessageKey, params?: Record<string, string | number>) => string
-  /** Teks TAMPILAN pilihan/baris/kolom. Jangan pernah dipakai sebagai nilai jawaban. */
+  /** The DISPLAY text of an option/row/column. Never use it as an answer value. */
   label: (item: { label: string; isOther?: boolean; translations?: TranslatedText }) => string
   text: (question: Question, field: keyof QuestionTextTranslation) => string
   plain: (question: Question, field: 'title' | 'description') => string
@@ -28,8 +28,8 @@ export interface I18n {
 
 function build(getLocale: () => string, getPrimary: () => string): I18n {
   return {
-    // Getter, bukan nilai: dibaca ulang di setiap render sehingga pergantian
-    // bahasa (sebuah `$state` di halaman) langsung merambat ke semua komponen.
+    // A getter, not a value: re-read on every render, so switching language (a
+    // `$state` on the page) propagates to every component immediately.
     get locale() { return getLocale() },
     get primary() { return getPrimary() },
     t: (key, params) => t(getLocale(), key, params),

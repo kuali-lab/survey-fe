@@ -130,10 +130,10 @@
         <div class="kartu-grid" style="--kolom-kartu: {kolomKartu}">
           {#each question.fields ?? [] as f (f.id)}
             <div class="kartu-field">
-              <!-- Label isian kartu ikut bahasa aktif. `QuestionInput` di bawah
-                   sudah menerjemahkan isinya sendiri lewat context yang sama;
-                   tanpa baris ini hanya label-labelnya yang tertinggal di
-                   bahasa utama. -->
+              <!-- Card field labels follow the active language. The `QuestionInput`
+                   below already translates its own contents through the same
+                   context; without this line only the labels would be left behind
+                   in the primary language. -->
               <span class="kartu-label">{i18n.plain(f, 'title')}</span>
               <QuestionInput
                 question={f}
