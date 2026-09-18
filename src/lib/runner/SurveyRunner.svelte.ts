@@ -182,8 +182,13 @@ export class SurveyRunner {
   // page's scroll-vs-paged render branch, nav handlers, progress, and auto-
   // advance — reads this single derived so they can never diverge. Scroll
   // layout is therefore used only when the survey has no skip rules.
+  // Top of Mind forces it too: its second stage is an extended question on its
+  // own screen, which only exists one per page (the backend forces the same in
+  // the public payload; this covers cached survey copies and preview drafts).
   effectiveDisplayMode = $derived<'scroll' | 'one_per_page'>(
-    this.skipRules.length > 0 ? 'one_per_page' : (this.settings.displayMode || 'one_per_page'),
+    this.skipRules.length > 0 || this.questions.some((q) => isTopOfMindQuestion(q))
+      ? 'one_per_page'
+      : (this.settings.displayMode || 'one_per_page'),
   )
   isScrollMode = $derived(this.effectiveDisplayMode === 'scroll')
 
