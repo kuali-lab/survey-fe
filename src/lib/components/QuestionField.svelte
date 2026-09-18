@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Question, AnswerValue, Answers } from '$lib/types.js'
   import QuestionInput from './QuestionInput.svelte'
+  import { useI18n } from '$lib/i18n/context.js'
   import {
     canAddCard,
     canAddRow,
@@ -50,6 +51,8 @@
     pratinjau?: boolean
     paged?: boolean
   } = $props()
+
+  const i18n = useI18n()
 
   const berulang = $derived(questionRepeats(question))
   const rows = $derived(toRows(value))
@@ -127,7 +130,11 @@
         <div class="kartu-grid" style="--kolom-kartu: {kolomKartu}">
           {#each question.fields ?? [] as f (f.id)}
             <div class="kartu-field">
-              <span class="kartu-label">{f.titlePlain || f.title}</span>
+              <!-- Label isian kartu ikut bahasa aktif. `QuestionInput` di bawah
+                   sudah menerjemahkan isinya sendiri lewat context yang sama;
+                   tanpa baris ini hanya label-labelnya yang tertinggal di
+                   bahasa utama. -->
+              <span class="kartu-label">{i18n.plain(f, 'title')}</span>
               <QuestionInput
                 question={f}
                 value={kartu[f.id] ?? ''}
