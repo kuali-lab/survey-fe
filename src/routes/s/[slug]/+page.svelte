@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { PageData } from './$types.js'
   import type { ViewState, Answers } from '$lib/types.js'
+  import { parseSavedState, serializeSavedState, type SavedState } from '$lib/savedState.js'
   import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress, getInvitationStatus, getDeviceStatus, OptionOutOfFilterError } from '$lib/api.js'
   import { computeFingerprint } from '$lib/fingerprint.js'
   import { serverMessageOf } from '$lib/submitError.js'
@@ -76,15 +77,11 @@
     },
   })
 
-  // Persisted respondent state, keyed per survey slug. Selfie/location are
+  // Persisted respondent state, keyed per survey slug. Bentuk + parsing/serialisasi
+  // ada di $lib/savedState.ts (modul murni yang teruji). Selfie/location are
   // intentionally NOT persisted (privacy + size).
-  type SavedState = {
-    answers: Answers
-    currentIndex: number
-    accumulatedTimeMs: number
-    savedAt: number
-  }
-  const STORAGE_TTL_MS = 30 * 24 * 3600 * 1000
+  // Kode cabang tautan (?c=) — diisi B2; ikut tersimpan di draf lokal (K60).
+  let linkCode = $state<string | null>(null)
   // Draft state is scoped per invitation token (not just per survey slug). This is
   // the fix for the reopen bug: a respondent who completed the survey and is then
   // re-invited arrives with a NEW token, so there is no saved state under the new
@@ -101,20 +98,13 @@
     try {
       const raw = localStorage.getItem(storageKey(s))
       if (!raw) return null
-      const parsed = JSON.parse(raw) as Partial<SavedState>
-      if (typeof parsed?.currentIndex !== 'number') return null
-      if (!parsed.answers || typeof parsed.answers !== 'object') return null
-      if (parsed.savedAt && Date.now() - parsed.savedAt > STORAGE_TTL_MS) {
+      const r = parseSavedState(raw, Date.now())
+      if (!r) return null
+      if (r.expired) {
         localStorage.removeItem(storageKey(s))
         return null
       }
-      
-      // Fallback for old localStorage format that used startTime
-      if (typeof parsed.accumulatedTimeMs !== 'number') {
-        const anyParsed = parsed as any
-        parsed.accumulatedTimeMs = anyParsed.startTime || 0
-      }
-      return parsed as SavedState
+      return r.state
     } catch {
       return null
     }
@@ -130,8 +120,9 @@
         currentIndex: runner.currentIndex,
         accumulatedTimeMs: runner.accumulatedTimeMs + (runner.lastActiveTime > 0 ? Date.now() - runner.lastActiveTime : 0),
         savedAt: Date.now(),
+        linkCode: linkCode ?? undefined,
       }
-      localStorage.setItem(storageKey(data.slug), JSON.stringify(state))
+      localStorage.setItem(storageKey(data.slug), serializeSavedState(state))
     } catch {
       // localStorage may be disabled (private mode) or full — fail silently.
     }
