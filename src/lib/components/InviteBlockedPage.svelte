@@ -6,7 +6,7 @@
     title = '',
     logoUrl = null,
   }: {
-    state: 'done' | 'expired' | 'device'
+    state: 'done' | 'expired' | 'device' | 'link'
     title?: string
     /** Logo per survei (M2/K29). `null`/absen = logo platform, seperti sebelumnya. */
     logoUrl?: string | null
@@ -31,7 +31,18 @@
             message:
               'Setiap perangkat hanya dapat mengisi survei ini satu kali. Gunakan perangkat lain bila Anda ingin mengisi sebagai responden berbeda.',
           }
-        : {
+        : state === 'link'
+          ? {
+              // Kode cabang tautan (M6a) tidak aktif/tak dikenal — jawaban tidak
+              // hilang; responden cukup minta tautan/QR terbaru ke petugas.
+              tone: 'warning' as const,
+              icon: 'clock' as const,
+              eyebrow: 'Tautan tidak berlaku',
+              heading: 'Tautan ini tidak berlaku',
+              message:
+                'Tautan atau QR yang Anda pakai sudah tidak aktif. Minta tautan terbaru ke petugas yang membagikannya.',
+            }
+          : {
             tone: 'warning' as const,
             icon: 'clock' as const,
             eyebrow: 'Tautan tidak berlaku',

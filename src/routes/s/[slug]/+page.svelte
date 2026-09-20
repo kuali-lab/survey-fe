@@ -2,7 +2,8 @@
   import type { PageData } from './$types.js'
   import type { ViewState, Answers } from '$lib/types.js'
   import { parseSavedState, serializeSavedState, type SavedState } from '$lib/savedState.js'
-  import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress, getInvitationStatus, getDeviceStatus, OptionOutOfFilterError } from '$lib/api.js'
+  import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress, getInvitationStatus, getDeviceStatus, getLinkStatus, OptionOutOfFilterError } from '$lib/api.js'
+  import { readLinkCodeFromUrl, stripLinkCodeFromUrl, resolveResumeLinkCode } from '$lib/linkCode.js'
   import { computeFingerprint } from '$lib/fingerprint.js'
   import { serverMessageOf } from '$lib/submitError.js'
   import { page } from '$app/stores'
@@ -48,12 +49,13 @@
   let selfie = $state<{ imageBase64: string } | null>(null)
   let fingerprintHash = $state<string | null>(null)
   let prefersReducedMotion = $state(false)
-  let resumePrompt = $state<{ answers: Answers; currentIndex: number; accumulatedTimeMs?: number } | null>(null)
+  let resumePrompt = $state<{ answers: Answers; currentIndex: number; accumulatedTimeMs?: number; linkCode?: string } | null>(null)
   // Invitation token captured from ?t= on first mount; null for anonymous fill.
   let invitationToken = $state<string | null>(null)
   let invitationStartedFired = false
   // Item 4 — one-time link gate: 'done' (already completed) | 'expired' | null.
-  let inviteBlocked = $state<'done' | 'expired' | 'device' | null>(null)
+  // 'link' = kode cabang tautan (?c=, M6a) tidak aktif.
+  let inviteBlocked = $state<'done' | 'expired' | 'device' | 'link' | null>(null)
   // Final-step confirm modal: pressing "Kirim Jawaban" opens it instead of
   // submitting straight away, so the respondent can review before committing.
   let showSubmitConfirm = $state(false)
@@ -72,7 +74,7 @@
     // draft follows runner.answers reactively (see saveCurrentState effect).
     onDependentsCleared: () => {
       if (fingerprintHash && slug && viewState === 'question') {
-        saveDraft(slug, draftSessionKey(fingerprintHash), runner.answers, runner.currentIndex).catch(() => {})
+        saveDraft(slug, draftSessionKey(fingerprintHash), runner.answers, runner.currentIndex, linkCode).catch(() => {})
       }
     },
   })
@@ -80,7 +82,7 @@
   // Persisted respondent state, keyed per survey slug. Bentuk + parsing/serialisasi
   // ada di $lib/savedState.ts (modul murni yang teruji). Selfie/location are
   // intentionally NOT persisted (privacy + size).
-  // Kode cabang tautan (?c=) — diisi B2; ikut tersimpan di draf lokal (K60).
+  // Kode cabang tautan (?c=, M6a); ikut tersimpan di draf lokal + server (K60).
   let linkCode = $state<string | null>(null)
   // Draft state is scoped per invitation token (not just per survey slug). This is
   // the fix for the reopen bug: a respondent who completed the survey and is then
@@ -143,6 +145,8 @@
     // pushes the trimmed map to the server draft while on the question stage.
     viewState = 'question'
     runner.loadFrom(saved)
+    // URL menang atas draf; kalau URL kosong, kode yang ikut draf yang pulih.
+    linkCode = resolveResumeLinkCode(linkCode, saved.linkCode)
   }
 
   function discardSavedState() {
@@ -183,6 +187,19 @@
           }
         })
       }
+
+      // Kode tautan cabang (M6a). URL menang atas draf: QR yang baru dipindai adalah
+      // kebenaran terbaru. Persistensinya menumpang draf lokal + server (K60), bukan
+      // kunci sendiri — supaya membuka tautan utama kelak tidak membawa cabang hantu.
+      const codeFromUrl = readLinkCodeFromUrl($page.url)
+      if (codeFromUrl) {
+        linkCode = codeFromUrl
+        try { history.replaceState({}, '', stripLinkCodeFromUrl(new URL(window.location.href))) } catch {}
+        // Gerbang dini, fail-open; gerbang undangan/perangkat yang sudah terpasang menang.
+        getLinkStatus(data.slug, codeFromUrl).then((st) => {
+          if (st === 'invalid' && !inviteBlocked) inviteBlocked = 'link'
+        })
+      }
     }
 
     computeFingerprint().then(async (fp) => {
@@ -201,7 +218,7 @@
         try {
           const serverDraft = await getDraft(data.slug, draftSessionKey(fp))
           if (serverDraft && serverDraft.currentPageIndex > 0 && Object.keys(serverDraft.answers).length > 0) {
-            resumePrompt = { answers: serverDraft.answers, currentIndex: serverDraft.currentPageIndex, accumulatedTimeMs: 0 }
+            resumePrompt = { answers: serverDraft.answers, currentIndex: serverDraft.currentPageIndex, accumulatedTimeMs: 0, linkCode: serverDraft.linkCode }
           }
         } catch { /* server unavailable — continue without draft */ }
       }
@@ -276,7 +293,8 @@
     const s   = untrack(() => slug)
     if (vs !== 'question') return
     if (_draftInitialSkip) { _draftInitialSkip = false; return }
-    if (fp && s) saveDraft(s, draftSessionKey(fp), ans, idx).catch(() => {})
+    const lc  = untrack(() => linkCode)
+    if (fp && s) saveDraft(s, draftSessionKey(fp), ans, idx, lc).catch(() => {})
   })
 
   let questionErrors = $derived(runner.questionErrors)
@@ -428,7 +446,7 @@
       const respondentEmail = emailQuestion ? (runner.answers[emailQuestion.id] as string | undefined) : undefined
       const durationSeconds = runner.getDurationSeconds()
 
-      await submitSurveyAnswers(slug, runner.answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie, undefined, undefined, invitationToken)
+      await submitSurveyAnswers(slug, runner.answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie, undefined, undefined, invitationToken, linkCode)
 
       clearSavedState()
       if (fingerprintHash && slug) deleteDraft(slug, draftSessionKey(fingerprintHash)).catch(() => {})
@@ -457,6 +475,10 @@
         submitError = 'Survei ini sudah pernah Anda isi sebelumnya.'
         viewState = 'question'
         clearSavedState()
+      } else if (msg === 'link_invalid') {
+        // Gerbang, bukan toast — dan draf TIDAK dihapus: kalau petugas memberi
+        // tautan baru, jawabannya masih ada.
+        inviteBlocked = 'link'
       } else if (msg === 'survey_closed') {
         viewState = 'closed'
         clearSavedState()

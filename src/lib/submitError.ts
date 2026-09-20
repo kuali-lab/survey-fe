@@ -22,6 +22,8 @@
 
 export const ANSWER_VALIDATION_ERROR = 'answer_validation_error'
 export const BAD_REQUEST_ERROR = 'bad_request_error'
+/** 410 dengan `code: LINK_INVALID` — kode cabang tautan (M6a) tidak aktif/tak dikenal. */
+export const LINK_INVALID_ERROR = 'link_invalid'
 export const OPTION_OUT_OF_FILTER = 'OPTION_OUT_OF_FILTER'
 
 /**
@@ -54,6 +56,8 @@ const MESSAGE_BEARING_CODES: Record<number, string> = {
 const PERMANENT_CODES = new Set([
   'unauthorized',
   'survey_closed',
+  // Kode cabang menempel di payload; mengirim ulang payload yang sama ditolak sama.
+  LINK_INVALID_ERROR,
   ANSWER_VALIDATION_ERROR,
   BAD_REQUEST_ERROR,
   // Re-sending the identical payload is rejected identically: the stale pick is
@@ -129,7 +133,12 @@ async function readErrorEnvelope(res: JsonResponse): Promise<ErrorEnvelope> {
 export async function submitErrorFromResponse(res: JsonResponse): Promise<Error | null> {
   if (res.status === 401) return new Error('unauthorized')
   if (res.status === 409) return new Error('already_submitted')
-  if (res.status === 410) return new Error('survey_closed')
+  if (res.status === 410) {
+    // 410 kini dua arti: survei ditutup (kontrak lama) atau tautan cabang tidak
+    // aktif (M6a). Dibedakan lewat `code`; badan yang tak terbaca jatuh ke arti lama.
+    const envelope = await readErrorEnvelope(res)
+    return new Error(envelope.code === 'LINK_INVALID' ? LINK_INVALID_ERROR : 'survey_closed')
+  }
 
   const code = MESSAGE_BEARING_CODES[res.status]
   if (code) {
