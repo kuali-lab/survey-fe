@@ -127,8 +127,9 @@ async function readErrorEnvelope(res: JsonResponse): Promise<ErrorEnvelope> {
 
 /**
  * Map a submit response onto the Error to throw, or null when it succeeded.
- * The 401 / 409 / 410 / fallback mappings are the long-standing contract and
- * must not shift; only 400 and 422 gained behaviour here.
+ * The 401 / 409 / fallback mappings are the long-standing contract and must
+ * not shift. 400 and 422 carry a server sentence; 410 branches on the envelope
+ * `code` (LINK_INVALID → link_invalid, otherwise the old survey_closed).
  */
 export async function submitErrorFromResponse(res: JsonResponse): Promise<Error | null> {
   if (res.status === 401) return new Error('unauthorized')

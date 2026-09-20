@@ -43,13 +43,13 @@
                 'Tautan atau QR yang Anda pakai sudah tidak aktif. Minta tautan terbaru ke petugas yang membagikannya.',
             }
           : {
-            tone: 'warning' as const,
-            icon: 'clock' as const,
-            eyebrow: 'Tautan tidak berlaku',
-            heading: 'Tautan undangan telah kedaluwarsa',
-            message:
-              'Tautan undangan ini sudah tidak dapat digunakan. Silakan minta undangan terbaru dari penyelenggara survei.',
-          },
+              tone: 'warning' as const,
+              icon: 'clock' as const,
+              eyebrow: 'Tautan tidak berlaku',
+              heading: 'Tautan undangan telah kedaluwarsa',
+              message:
+                'Tautan undangan ini sudah tidak dapat digunakan. Silakan minta undangan terbaru dari penyelenggara survei.',
+            },
   )
 </script>
 
