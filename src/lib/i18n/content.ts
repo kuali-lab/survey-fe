@@ -50,6 +50,12 @@ export function hasAnyTranslation(survey: Pick<Survey, 'questions'> | null | und
   for (const q of survey?.questions ?? []) {
     const scalar = q.translations?.[lang]
     if (scalar && Object.values(scalar).some((text) => !isBlank(text))) return true
+    // Isian di dalam Grup Jawaban membawa terjemahannya sendiri; survei yang HANYA
+    // menerjemahkan isian kartu tetap survei dua bahasa.
+    for (const f of q.fields ?? []) {
+      const own = f.translations?.[lang]
+      if (own && Object.values(own).some((text) => !isBlank(text))) return true
+    }
     for (const item of [...(q.options ?? []), ...(q.matrixRows ?? []), ...(q.matrixCols ?? [])]) {
       if (!isBlank(item.translations?.[lang])) return true
     }

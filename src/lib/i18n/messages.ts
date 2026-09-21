@@ -80,6 +80,9 @@ const id = {
   ddPlaceholder: '-- Pilih salah satu --',
   ddSearch: 'Cari pilihan...',
   ddMinChars: 'Ketik minimal {n} huruf untuk mencari.',
+  repeatAdd: '+ Tambah jawaban',
+  repeatLimit: 'Maksimal {n} jawaban.',
+  repeatRemove: 'Hapus jawaban ke-{n}',
   ddLoading: 'Memuat...',
   ddEmpty: 'Tidak ada pilihan yang cocok.',
 }
@@ -156,6 +159,9 @@ const en: Record<MessageKey, string> = {
   ddPlaceholder: '-- Choose one --',
   ddSearch: 'Search options...',
   ddMinChars: 'Type at least {n} characters to search.',
+  repeatAdd: '+ Add answer',
+  repeatLimit: 'Maximum {n} answers.',
+  repeatRemove: 'Remove answer {n}',
   ddLoading: 'Loading...',
   ddEmpty: 'No matching options.',
 }
