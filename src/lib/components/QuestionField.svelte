@@ -121,7 +121,7 @@
               type="button"
               class="repeat-remove"
               onclick={() => hapusKartu(ci)}
-              aria-label="Hapus jawaban ke-{ci + 1}"
+              aria-label={i18n.t('repeatRemove', { n: ci + 1 })}
             >
               &times;
             </button>
@@ -153,9 +153,9 @@
     {/each}
 
     {#if canAddCard(question, cards)}
-      <button type="button" class="repeat-add" onclick={tambahKartu}>+ Tambah jawaban</button>
+      <button type="button" class="repeat-add" onclick={tambahKartu}>{i18n.t('repeatAdd')}</button>
     {:else}
-      <p class="repeat-limit">Maksimal {batasKartu} jawaban.</p>
+      <p class="repeat-limit">{i18n.t('repeatLimit', { n: batasKartu })}</p>
     {/if}
   </div>
 {:else if berulang}
@@ -180,7 +180,7 @@
             type="button"
             class="repeat-remove"
             onclick={() => hapus(i)}
-            aria-label="Hapus jawaban ke-{i + 1}"
+            aria-label={i18n.t('repeatRemove', { n: i + 1 })}
           >
             &times;
           </button>
@@ -189,9 +189,9 @@
     {/each}
 
     {#if canAddRow(question, rows)}
-      <button type="button" class="repeat-add" onclick={tambah}>+ Tambah jawaban</button>
+      <button type="button" class="repeat-add" onclick={tambah}>{i18n.t('repeatAdd')}</button>
     {:else}
-      <p class="repeat-limit">Maksimal {batas} jawaban.</p>
+      <p class="repeat-limit">{i18n.t('repeatLimit', { n: batas })}</p>
     {/if}
   </div>
 {:else}
