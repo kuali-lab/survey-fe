@@ -42,6 +42,7 @@
     // Top of Mind: one-per-page mode renders stage 2 as an "extended question"
     // (first pick excluded, intro line) instead of pinning the first pick.
     paged = false,
+    grow = false,
   }: {
     question: Question
     value: AnswerValue
@@ -54,6 +55,8 @@
     questions?: Question[]
     pratinjau?: boolean
     paged?: boolean
+    /** Isian teks pendek yang tumbuh ke bawah mengikuti isinya (isian kartu Grup Jawaban). */
+    grow?: boolean
   } = $props()
 
   // ── Two-language surveys ──────────────────────────────────────────────────────
@@ -574,6 +577,27 @@
       </button>
     {/each}
   </div>
+
+{:else if question.type === 'short_text' && grow}
+  <!-- Satu baris saat pendek, membungkus dan tumbuh saat panjang. Enter tidak
+       menyisipkan baris baru: jawabannya tetap satu baris logis. -->
+  <textarea
+    class="text-input grow-input"
+    rows="1"
+    placeholder={placeholderText}
+    value={strValue}
+    maxlength={question.maxLength ?? undefined}
+    minlength={question.minLength ?? undefined}
+    oninput={(e) => onChange((e.currentTarget as HTMLTextAreaElement).value)}
+    onkeydown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
+    onblur={() => onBlur?.()}
+    use:autoExpand
+  ></textarea>
+  {#if question.maxLength || question.minLength}
+    <div class="char-count" style="text-align: right; margin-top: 6px; font-size: 0.85rem; color: var(--text-body);">
+      {strValue.length}{question.maxLength ? '/' + question.maxLength : ''}
+    </div>
+  {/if}
 
 {:else if question.type === 'short_text'}
   <input
@@ -1168,6 +1192,17 @@
   }
 
   .text-input::placeholder { color: var(--text-muted); }
+
+  /* Varian tumbuh: tinggi minimal sama dengan kotak biasa, sisanya mengikuti isi. */
+  .grow-input {
+    height: auto;
+    min-height: 52px;
+    padding: 14px 16px;
+    line-height: 1.4;
+    resize: none;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
 
   .text-input:focus {
     outline: none;

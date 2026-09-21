@@ -145,6 +145,7 @@
                 {questions}
                 {pratinjau}
                 {paged}
+                grow
               />
             </div>
           {/each}
@@ -173,6 +174,7 @@
             {questions}
             {pratinjau}
             {paged}
+            grow
           />
         </div>
         {#if rows.length > 1}
