@@ -906,13 +906,13 @@
          respondent why it isn't narrowed yet. -->
     <p class="checkbox-search-hint">{i18n.t('ddMinChars', { n: checkboxMinChars })}</p>
   {/if}
-  <div class="options-list">
+  <div class="options-list" class:dependency-waiting={dependencyWaiting} aria-disabled={dependencyWaiting}>
     {#each checkboxDisplayOptions.filter(o => !o.isOther) as opt, i}
       {@const checked = arrValue.includes(opt.label)}
       <button
         class="option-card {checked ? 'selected' : ''}"
         type="button"
-        disabled={!checked && atSelectLimit}
+        disabled={dependencyWaiting || (!checked && atSelectLimit)}
         style={!checked && atSelectLimit ? 'opacity:0.55;cursor:not-allowed;' : ''}
         onclick={() => toggleCheckbox(opt.label)}
       >
@@ -930,7 +930,7 @@
       <button
         class="option-card {isOtherSelected ? 'selected' : ''}"
         type="button"
-        disabled={!isOtherSelected && atSelectLimit}
+        disabled={dependencyWaiting || (!isOtherSelected && atSelectLimit)}
         style={!isOtherSelected && atSelectLimit ? 'opacity:0.55;cursor:not-allowed;' : ''}
         onclick={toggleOtherCheckbox}
       >
@@ -954,6 +954,11 @@
       {/if}
     {/if}
   </div>
+  {/if}
+  {#if dependencyHint}
+    <p class="dependency-note">{dependencyHint}</p>
+  {:else if dependencyEmptyText}
+    <p class="dependency-note dependency-empty">{dependencyEmptyText}</p>
   {/if}
   {#if selectLimit > 0}
     <p style="margin-top:8px;font-size:0.85rem;color:var(--text-body);">{i18n.t('selectLimit', { limit: selectLimit, n: arrValue.length })}</p>
