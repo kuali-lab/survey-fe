@@ -100,6 +100,42 @@ function findStandardOption(q: Pick<Question, 'options'> | undefined, label: str
 }
 
 /**
+ * `parent`'s true, full candidate catalog — what a stored answer of `parent`
+ * should be looked up against, REGARDLESS of whether `parent`'s own
+ * dependency currently happens to be satisfied.
+ *
+ * A plain or mapped-mode parent's `options` already IS that catalog — using
+ * it directly (not a live-filtered `visibleOptions()` subset) matters:
+ * resolving "which option did this stored label mean" must not depend on
+ * whether the parent's own upstream chain is currently answered. Only a
+ * carryOver parent's `options` are unused authoring leftovers — there, the
+ * real catalog is whatever `visibleOptions()` derives from further upstream.
+ */
+function parentCatalog(parent: Question, answers: Answers, questions: Question[]): QuestionOption[] {
+  if (parent.dependsOn?.mode === 'carryOver') return visibleOptions(parent, answers, questions).options
+  return parent.options ?? []
+}
+
+/**
+ * `q`'s full option catalog, ignoring live include/exclude/allowed narrowing —
+ * every label `q`'s answer could ever legitimately mean, not just what is
+ * currently offered. Mapped/plain mode already owns this list (`q.options`);
+ * carryOver mode recurses to the parent's own full catalog, since `q.options`
+ * there are unused authoring leftovers.
+ *
+ * Distinct from `parentCatalog` on purpose: that one tracks the LIVE, narrowed
+ * catalog (what's carried right now); this one is needed only to tell "a real
+ * option that simply isn't allowed right now" (stays pruned, never rescued by
+ * Lainnya) apart from genuinely unrecognized free text (Lainnya-protected) —
+ * see `isDependentAnswerVisible`.
+ */
+function fullCatalogOf(q: Question, questions: Question[]): QuestionOption[] {
+  if (q.dependsOn?.mode !== 'carryOver') return q.options ?? []
+  const parent = questions.find((x) => x.id === q.dependsOn?.sourceQuestionId)
+  return parent ? fullCatalogOf(parent, questions).filter((o) => !o.isOther) : []
+}
+
+/**
  * Key of the parent's chosen option. Answers are stored as LABELS, so the label
  * is mapped back to its option (same identity as `resolveAttrValue`). Returns
  * null when the parent is unanswered OR answered with a "Lainnya" free text —
@@ -109,22 +145,27 @@ export function parentKey(q: Question, answers: Answers, questions: Question[]):
   const sourceId = getDependencySourceId(q)
   if (!sourceId) return null
   const parent = questions.find((x) => x.id === sourceId)
-  const opt = findStandardOption(parent, answeredLabel(answers[sourceId]))
+  if (!parent) return null
+  const opt = findStandardOption({ options: parentCatalog(parent, answers, questions) }, answeredLabel(answers[sourceId]))
   return opt ? optionKey(opt) : null
 }
 
 /**
- * carryOver mode's one new primitive (§B): normalizes a SOURCE question's
- * current answer to the set of option keys it resolves to — one key for a
+ * carryOver mode's one new primitive (§B): normalizes a raw answer to the set
+ * of option keys it resolves to against `sourceOptions` — one key for a
  * single-value answer (plain dropdown), N keys for an array answer (checkbox /
  * multi-select dropdown, §A). A label that doesn't match a known option
  * (free "Lainnya" text) falls back to the label itself, same convention as
  * `resolveAttrValue` in optionFilter.ts — it then simply never coincides with
  * a real target option key instead of needing special-case handling.
+ *
+ * Takes the resolved options directly, not a `Question` — the caller decides
+ * WHICH options are the source's true candidate pool (its own, if plain; a
+ * further-upstream question's, if the source is itself a carryOver target).
  */
-export function sourceAnswerKeys(sourceQ: Pick<Question, 'options'> | undefined, answer: AnswerValue | undefined): string[] {
+export function sourceAnswerKeys(sourceOptions: readonly Pick<QuestionOption, 'label' | 'value' | 'isOther'>[], answer: AnswerValue | undefined): string[] {
   const keyForLabel = (label: string): string => {
-    const opt = findStandardOption(sourceQ, label)
+    const opt = sourceOptions.find((o) => !o.isOther && o.label.trim() === label)
     return opt ? optionKey(opt) : label
   }
   if (Array.isArray(answer)) {
@@ -168,17 +209,22 @@ export function visibleOptions(q: Question, answers: Answers, questions: Questio
 
   if (q.dependsOn?.mode === 'carryOver') {
     if (!isCarryOverSource(parent)) return { status: 'inactive', options: all }
-    const keys = sourceAnswerKeys(parent, answers[sourceId])
+    // The candidate pool is the SOURCE's own catalog (its answer becomes this
+    // question's choices, per contract §B). `q.options` (`all`) only still
+    // matters for this question's own "Lainnya".
+    const parentOptions = parentCatalog(parent!, answers, questions)
+    const keys = sourceAnswerKeys(parentOptions, answers[sourceId])
     if (keys.length === 0) return { status: 'waiting', options: [] }
     const keySet = new Set(keys)
     const exclude = q.dependsOn?.carryOverMode === 'exclude'
-    const options = all.filter((o) => {
-      if (o.isOther) return true
+    const carried = parentOptions.filter((o) => {
+      if (o.isOther) return false
       const picked = keySet.has(optionKey(o))
       return exclude ? !picked : picked
     })
-    const hasMapped = options.some((o) => !o.isOther)
-    return { status: hasMapped ? 'ready' : 'empty', options }
+    const ownOther = all.find((o) => o.isOther)
+    const options = ownOther ? [...carried, ownOther] : carried
+    return { status: carried.length > 0 ? 'ready' : 'empty', options }
   }
 
   if (!isPlainChoice(parent)) return { status: 'inactive', options: all }
@@ -186,7 +232,7 @@ export function visibleOptions(q: Question, answers: Answers, questions: Questio
   const label = answeredLabel(answers[sourceId])
   if (!label) return { status: 'waiting', options: [] }
 
-  const opt = findStandardOption(parent, label)
+  const opt = findStandardOption({ options: parentCatalog(parent!, answers, questions) }, label)
   const pKey = opt ? optionKey(opt) : null
   const allowed = q.dependsOn?.allowed ?? {}
   const options = all.filter((o) => {
@@ -211,8 +257,12 @@ export function isDependentAnswerVisible(q: Question, answers: Answers, question
   const vis = visibleOptions(q, answers, questions)
   if (vis.status === 'inactive') return true
   if (vis.status === 'waiting') return false
-  const std = findStandardOption(q, label)
-  if (std) return vis.options.includes(std)
+  // Two steps, deliberately not collapsed into one: a label that matches a
+  // REAL, known option (fullCatalogOf) but isn't in the CURRENT visible set
+  // (vis.options) is a stale pick — invisible, and must NOT fall through to
+  // the Lainnya rescue below (that's for genuinely unrecognized free text).
+  const known = fullCatalogOf(q, questions).some((o) => !o.isOther && o.label.trim() === label)
+  if (known) return vis.options.some((o) => !o.isOther && o.label.trim() === label)
   return vis.options.some((o) => o.isOther)
 }
 
