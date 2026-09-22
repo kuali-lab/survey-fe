@@ -302,6 +302,14 @@ describe('sourceAnswerKeys', () => {
   it('free text ("Lainnya") falls back to the typed text itself, matching optionFilter.ts\'s resolveAttrValue fallback', () => {
     expect(sourceAnswerKeys(alergi.options!, ['Udang'])).toEqual(['Udang'])
   })
+
+  it('Top of Mind answer ({first, selected}) resolves the same as a plain array — regression guard', () => {
+    // Live bug: a checkbox source with the Top of Mind toggle on answers as an
+    // OBJECT, not string[] — sourceAnswerKeys used to only check Array.isArray
+    // and silently return [] for it, so carryOver from a TOM source never left
+    // the "waiting" state no matter what the respondent picked.
+    expect(sourceAnswerKeys(alergi.options!, { first: 'Kacang', selected: ['Kacang', 'Telur'] })).toEqual(['Kacang', 'Telur'])
+  })
 })
 
 describe('visibleOptions — carryOver mode', () => {

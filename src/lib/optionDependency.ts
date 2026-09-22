@@ -16,6 +16,7 @@
 
 import type { Answers, AnswerValue, Question, QuestionOption } from './types.js'
 import { getFilterDependents } from './optionFilter.js'
+import { isTopOfMindAnswer, selectionsOf } from './topOfMind.js'
 
 const DEPENDENCY_TYPES = new Set<Question['type']>(['single_choice', 'dropdown'])
 
@@ -168,8 +169,11 @@ export function sourceAnswerKeys(sourceOptions: readonly Pick<QuestionOption, 'l
     const opt = sourceOptions.find((o) => !o.isOther && o.label.trim() === label)
     return opt ? optionKey(opt) : label
   }
-  if (Array.isArray(answer)) {
-    return (answer as string[])
+  // A Top of Mind checkbox source answers as `{first, selected}`, not a plain
+  // array — selectionsOf() is the one existing seam that already normalizes
+  // both shapes (topOfMind.ts), reused here instead of a second array check.
+  if (Array.isArray(answer) || isTopOfMindAnswer(answer)) {
+    return selectionsOf(answer)
       .map((v) => (typeof v === 'string' ? v.trim() : ''))
       .filter(Boolean)
       .map(keyForLabel)
