@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { MIN_SEARCH_CHARS, SEARCH_DEBOUNCE_MS, filterBySearch, debounce } from './optionSearch.js'
+import { MIN_SEARCH_CHARS, SEARCH_DEBOUNCE_MS, filterBySearch, debounce, effectiveMinChars } from './optionSearch.js'
 
 describe('filterBySearch', () => {
   const items = [
@@ -68,5 +68,38 @@ describe('debounce', () => {
 describe('MIN_SEARCH_CHARS', () => {
   it('matches the server-side guard (public_survey_options.go minSearchChars)', () => {
     expect(MIN_SEARCH_CHARS).toBe(3)
+  })
+})
+
+describe('effectiveMinChars', () => {
+  const getText = (i: { label: string; en?: string }) => [i.label, ...(i.en ? [i.en] : [])]
+
+  it('is MIN_SEARCH_CHARS when every option is long enough — the common case, no behavior change', () => {
+    const items = [{ label: 'Kacang' }, { label: 'Susu' }, { label: 'Telur' }]
+    expect(effectiveMinChars(items, getText)).toBe(MIN_SEARCH_CHARS)
+  })
+
+  it('lowers to the shortest searchable text so no option becomes permanently unreachable', () => {
+    const items = [{ label: 'Kacang' }, { label: 'Ya' }]
+    expect(effectiveMinChars(items, getText)).toBe(2)
+  })
+
+  it('never goes below 1', () => {
+    const items = [{ label: 'X' }]
+    expect(effectiveMinChars(items, getText)).toBe(1)
+  })
+
+  it('ignores blank/whitespace-only search text (e.g. an unset "Lainnya" label)', () => {
+    const items = [{ label: 'Kacang' }, { label: '  ' }]
+    expect(effectiveMinChars(items, getText)).toBe(MIN_SEARCH_CHARS)
+  })
+
+  it('checks every searchable variant, not just the first — a short i18n label counts too', () => {
+    const items = [{ label: 'Kacang', en: 'Nut' }]
+    expect(effectiveMinChars(items, getText)).toBe(3)
+  })
+
+  it('falls back to MIN_SEARCH_CHARS for an empty option list', () => {
+    expect(effectiveMinChars([], getText)).toBe(MIN_SEARCH_CHARS)
   })
 })

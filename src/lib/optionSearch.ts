@@ -34,6 +34,26 @@ export function filterBySearch<T>(items: T[], query: string, getSearchText: (ite
 }
 
 /**
+ * A question's search minimum — `MIN_SEARCH_CHARS` (3), lowered only far
+ * enough to keep its shortest option label (or translation) reachable. A flat
+ * 3-char floor would make "Ya" or "RT" unsearchable forever once "Sembunyikan
+ * Opsi" hides the list until something is typed.
+ *
+ * Local lists only — the async/catalog path keeps the flat `MIN_SEARCH_CHARS`,
+ * a server-side guard this must never loosen.
+ */
+export function effectiveMinChars<T>(items: T[], getSearchText: (item: T) => string[]): number {
+  let shortest = MIN_SEARCH_CHARS
+  for (const item of items) {
+    for (const text of getSearchText(item)) {
+      const len = text.trim().length
+      if (len > 0 && len < shortest) shortest = len
+    }
+  }
+  return Math.max(1, shortest)
+}
+
+/**
  * A debounced wrapper around `fn` — the SAME timer is reused across calls
  * (unlike calling `debounce()` fresh inside a reactive block, which would
  * create a new, never-cancelled timer every time). Create it once per

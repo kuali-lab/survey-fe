@@ -16,7 +16,7 @@
     visibleOptions, dependencyDisabledHint, dependencyEmptyMessage, dependencyParentLabel,
   } from '$lib/optionDependency.js'
   import { getRegionName, resolveRegionName } from '$lib/regionNames.js'
-  import { MIN_SEARCH_CHARS, SEARCH_DEBOUNCE_MS, filterBySearch, debounce } from '$lib/optionSearch.js'
+  import { SEARCH_DEBOUNCE_MS, filterBySearch, effectiveMinChars, debounce } from '$lib/optionSearch.js'
   import { applyNumberInput, numberInputText, numberInputCompare } from '$lib/numberInput.js'
   import { fade, fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
@@ -215,15 +215,18 @@
   $effect(() => {
     setCheckboxDebouncedSearch(checkboxSearchQuery.toLowerCase())
   })
+  const checkboxSearchText = (o: { label: string, isOther?: boolean }) => [o.label, i18n.label(o)]
+  // Same per-question minimum as the dropdown search (see effectiveMinChars) —
+  // no separate bypass for "Sembunyikan Opsi".
+  const checkboxMinChars = $derived(effectiveMinChars(options, checkboxSearchText))
   const checkboxDisplayOptions = $derived.by(() => {
-    if (question.hideOptionsUntilSearch) {
-      return checkboxDebouncedSearch === '' ? [] : filterBySearch(options, checkboxDebouncedSearch, (o) => [o.label, i18n.label(o)])
-    }
-    // Below the minimum (but non-empty): same "don't narrow yet" gate as the
-    // dropdown's async/local search (§C cross-cutting decision) — show the
-    // full list rather than a half-typed, misleading narrow.
-    if (checkboxDebouncedSearch.length > 0 && checkboxDebouncedSearch.length < MIN_SEARCH_CHARS) return options
-    return filterBySearch(options, checkboxDebouncedSearch, (o) => [o.label, i18n.label(o)])
+    if (question.hideOptionsUntilSearch && checkboxDebouncedSearch === '') return []
+    // Below the minimum (but non-empty): show the full list rather than a
+    // half-typed, misleading narrow — the list stays visible on the page
+    // either way, unlike a dropdown's popover, so hiding it here would just
+    // make it flicker while the respondent is still typing.
+    if (checkboxDebouncedSearch.length > 0 && checkboxDebouncedSearch.length < checkboxMinChars) return options
+    return filterBySearch(options, checkboxDebouncedSearch, checkboxSearchText)
   })
 
   // Rating
@@ -898,6 +901,11 @@
   {:else if checkboxDisplayOptions.length === 0}
     <p class="checkbox-search-hint">{i18n.t('ddEmpty')}</p>
   {:else}
+  {#if checkboxDebouncedSearch.length > 0 && checkboxDebouncedSearch.length < checkboxMinChars}
+    <!-- Full list still shows below (no flicker) — this just tells the
+         respondent why it isn't narrowed yet. -->
+    <p class="checkbox-search-hint">{i18n.t('ddMinChars', { n: checkboxMinChars })}</p>
+  {/if}
   <div class="options-list">
     {#each checkboxDisplayOptions.filter(o => !o.isOther) as opt, i}
       {@const checked = arrValue.includes(opt.label)}
