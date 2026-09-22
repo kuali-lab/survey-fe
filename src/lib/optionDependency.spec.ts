@@ -169,6 +169,19 @@ describe('isDependentAnswerVisible', () => {
     expect(isDependentAnswerVisible(brand, { mall: 'Grand Indonesia', brand: 'Custom' }, questions)).toBe(false) // unknown label, no Lainnya: not selectable
     expect(isDependentAnswerVisible(kota, { kota: 'Jakarta' }, questions)).toBe(true) // inactive
   })
+
+  it('carryOver: a real option that fell out of the current exclude set is invisible, never Lainnya-rescued', () => {
+    // alergiAman (exclude mode) has its own Lainnya — the regression this
+    // guards is the Lainnya fallback wrongly rescuing a KNOWN label (Kacang,
+    // one of alergi's real options) just because it's currently excluded.
+    const answers = { alergi: ['Kacang'], alergiAman: 'Kacang' }
+    expect(isDependentAnswerVisible(alergiAman, answers, carryOverQuestions)).toBe(false)
+  })
+
+  it('carryOver: genuinely unrecognized free text is Lainnya-protected, same as mapped mode', () => {
+    const answers = { alergi: ['Kacang'], alergiAman: 'Udang' }
+    expect(isDependentAnswerVisible(alergiAman, answers, carryOverQuestions)).toBe(true)
+  })
 })
 
 describe('pruneDependentAnswers (draft self-heal)', () => {
@@ -245,18 +258,24 @@ describe('mock survey demo block', () => {
 })
 
 // ── carryOver mode (§B, "Hubungkan Jawaban/Pilihan Lain") ──────────────────
-// Dynamic: whatever the source answered becomes the include/exclude set for
-// the target's own options, live — no authored per-option map. Source:
-// dropdown / checkbox only (both natively multi-valued-friendly, unlike
-// mapped mode's single-key requirement).
+// Dynamic: the SOURCE's own options become the candidate list, narrowed to
+// whichever the respondent picked (include) or didn't (exclude) — no authored
+// per-option map, and the TARGET's own `options` are authoring leftovers
+// (unused for rendering, except its own "Lainnya" escape hatch).
+//
+// 🔴 The target is deliberately given options with DIFFERENT labels than the
+// source ("Pilihan N" placeholders never renamed by the author, exactly the
+// live bug this suite now guards against) — a fixture that copies the
+// source's own labels onto the target would pass even if the code wrongly
+// filtered the TARGET's options instead of the SOURCE's.
 const alergiOpts = () => [o('Kacang'), o('Susu'), o('Telur'), o('Lainnya', { isOther: true })]
 const alergi = q({ id: 'alergi', type: 'checkbox', sortOrder: 1, options: alergiOpts() })
 const alergiParah = q({
-  id: 'alergiParah', type: 'dropdown', sortOrder: 2, options: alergiOpts(),
+  id: 'alergiParah', type: 'dropdown', sortOrder: 2, options: [o('Pilihan 1'), o('Pilihan 2')],
   dependsOn: { sourceQuestionId: 'alergi', mode: 'carryOver', carryOverMode: 'include' },
 })
 const alergiAman = q({
-  id: 'alergiAman', type: 'dropdown', sortOrder: 2, options: alergiOpts(),
+  id: 'alergiAman', type: 'dropdown', sortOrder: 2, options: [o('Pilihan 1'), o('Pilihan 2'), o('Lainnya', { isOther: true })],
   dependsOn: { sourceQuestionId: 'alergi', mode: 'carryOver', carryOverMode: 'exclude' },
 })
 const ukuran = q({
@@ -264,36 +283,40 @@ const ukuran = q({
   options: [o('S'), o('M'), o('L'), o('Lainnya', { isOther: true })],
 })
 const ukuranGudang = q({
-  id: 'ukuranGudang', type: 'dropdown', sortOrder: 2,
-  options: [o('S'), o('M'), o('L'), o('Lainnya', { isOther: true })],
+  id: 'ukuranGudang', type: 'dropdown', sortOrder: 2, options: [],
   dependsOn: { sourceQuestionId: 'ukuran', mode: 'carryOver', carryOverMode: 'include' },
 })
 const carryOverQuestions = [alergi, alergiParah, alergiAman, ukuran, ukuranGudang]
 
 describe('sourceAnswerKeys', () => {
   it('single-value answer → one key', () => {
-    expect(sourceAnswerKeys(ukuran, 'M')).toEqual(['M'])
+    expect(sourceAnswerKeys(ukuran.options!, 'M')).toEqual(['M'])
   })
   it('array answer (checkbox / multi-select dropdown) → N keys', () => {
-    expect(sourceAnswerKeys(alergi, ['Kacang', 'Telur'])).toEqual(['Kacang', 'Telur'])
+    expect(sourceAnswerKeys(alergi.options!, ['Kacang', 'Telur'])).toEqual(['Kacang', 'Telur'])
   })
   it('unanswered / empty → no keys', () => {
-    expect(sourceAnswerKeys(ukuran, undefined)).toEqual([])
-    expect(sourceAnswerKeys(alergi, [])).toEqual([])
+    expect(sourceAnswerKeys(ukuran.options!, undefined)).toEqual([])
+    expect(sourceAnswerKeys(alergi.options!, [])).toEqual([])
   })
   it('free text ("Lainnya") falls back to the typed text itself, matching optionFilter.ts\'s resolveAttrValue fallback', () => {
-    expect(sourceAnswerKeys(alergi, ['Udang'])).toEqual(['Udang'])
+    expect(sourceAnswerKeys(alergi.options!, ['Udang'])).toEqual(['Udang'])
   })
 })
 
 describe('visibleOptions — carryOver mode', () => {
-  it('include: only the picked keys are shown, Lainnya always passes through', () => {
+  // 🔴 The target's own options ('Pilihan 1'/'Pilihan 2') never appear in any
+  // of these expectations — every visible label below is SOURCED FROM THE
+  // PARENT (alergi/ukuran). This is the live bug this suite now locks in: a
+  // survey author who never renamed the target's placeholder options must
+  // still see the source's real answers as choices.
+  it('include: only the picked keys are shown, sourced from the PARENT\'s own options', () => {
     const v = visibleOptions(alergiParah, { alergi: ['Kacang', 'Telur'] }, carryOverQuestions)
     expect(v.status).toBe('ready')
-    expect(labels(v.options)).toEqual(['Kacang', 'Telur', 'Lainnya'])
+    expect(labels(v.options)).toEqual(['Kacang', 'Telur'])
   })
 
-  it('exclude: the picked keys are hidden, everything else (+ Lainnya) stays', () => {
+  it('exclude: the picked keys are hidden, everything else from the parent (+ this question\'s own Lainnya) stays', () => {
     const v = visibleOptions(alergiAman, { alergi: ['Kacang'] }, carryOverQuestions)
     expect(v.status).toBe('ready')
     expect(labels(v.options)).toEqual(['Susu', 'Telur', 'Lainnya'])
@@ -302,7 +325,16 @@ describe('visibleOptions — carryOver mode', () => {
   it('a single-value dropdown source works the same way (one key)', () => {
     const v = visibleOptions(ukuranGudang, { ukuran: 'M' }, carryOverQuestions)
     expect(v.status).toBe('ready')
-    expect(labels(v.options)).toEqual(['M', 'Lainnya'])
+    expect(labels(v.options)).toEqual(['M'])
+  })
+
+  it('a source\'s "Lainnya" option is never part of the carried universe', () => {
+    // alergi's "Lainnya" itself is never a candidate to carry over, regardless
+    // of include/exclude — matching mapped mode's "Lainnya is never a valid
+    // source key" rule.
+    const v = visibleOptions(alergiAman, { alergi: ['Kacang', 'Susu', 'Telur'] }, carryOverQuestions)
+    expect(v.status).toBe('empty') // everything real got excluded
+    expect(labels(v.options)).toEqual(['Lainnya']) // only the TARGET's own Lainnya remains
   })
 
   it('waiting: source unanswered', () => {
@@ -313,10 +345,10 @@ describe('visibleOptions — carryOver mode', () => {
     expect(visibleOptions(alergiParah, { alergi: [] }, carryOverQuestions)).toEqual({ status: 'waiting', options: [] })
   })
 
-  it('empty: every picked key falls outside the target\'s own options (only Lainnya remains)', () => {
+  it('empty: the picked free-text answer matches none of the parent\'s own options', () => {
     const v = visibleOptions(alergiParah, { alergi: ['Udang'] }, carryOverQuestions)
     expect(v.status).toBe('empty')
-    expect(labels(v.options)).toEqual(['Lainnya'])
+    expect(labels(v.options)).toEqual([]) // alergiParah has no own "Lainnya" to fall back to
   })
 
   it('a downstream mapped-mode question still resolves correctly when its own source uses carryOver mode', () => {
@@ -382,5 +414,44 @@ describe('visibleOptions — carryOver mode, checkbox as TARGET', () => {
 
   it('getDependencySourceId resolves for a checkbox target under carryOver mode', () => {
     expect(getDependencySourceId(alergiParahCheckbox)).toBe('alergi')
+  })
+})
+
+// ── Real reported flow: dropdown (multi) → checkbox (carryOver) → checkbox
+// (carryOver again, sourced from the FIRST checkbox's own carried answer).
+// Every link's candidate pool must come from its immediate parent's TRUE
+// visible options, not from `options` any question happens to have authored.
+describe('visibleOptions — 3-level carryOver chain (dropdown → checkbox → checkbox)', () => {
+  const merek = q({
+    id: 'merek', type: 'dropdown', sortOrder: 1, multiSelect: true,
+    options: [o('Holcim'), o('Dynamix'), o('Tiga Roda'), o('Padang')],
+  })
+  const apalagi = q({
+    id: 'apalagi', type: 'checkbox', sortOrder: 2, options: [o('Pilihan 1'), o('Pilihan 2')],
+    dependsOn: { sourceQuestionId: 'merek', mode: 'carryOver', carryOverMode: 'include' },
+  })
+  const apalagi2 = q({
+    id: 'apalagi2', type: 'checkbox', sortOrder: 3, options: [],
+    dependsOn: { sourceQuestionId: 'apalagi', mode: 'carryOver', carryOverMode: 'exclude' },
+  })
+  const qs = [merek, apalagi, apalagi2]
+
+  it('level 2 carries the dropdown\'s real options, narrowed to what was picked', () => {
+    const v = visibleOptions(apalagi, { merek: ['Holcim', 'Dynamix', 'Tiga Roda'] }, qs)
+    expect(v.status).toBe('ready')
+    expect(labels(v.options)).toEqual(['Holcim', 'Dynamix', 'Tiga Roda'])
+  })
+
+  it('level 3 (exclude) carries level 2\'s OWN carried answer, not level 2\'s unused authored options', () => {
+    const answers = { merek: ['Holcim', 'Dynamix', 'Tiga Roda'], apalagi: ['Holcim', 'Dynamix'] }
+    const v = visibleOptions(apalagi2, answers, qs)
+    expect(v.status).toBe('ready')
+    // apalagi's true candidate pool is Holcim/Dynamix/Tiga Roda (from `merek`);
+    // apalagi's own answer picked Holcim/Dynamix, so exclude leaves Tiga Roda.
+    expect(labels(v.options)).toEqual(['Tiga Roda'])
+  })
+
+  it('level 3 waits while level 2 is unanswered, even though level 1 (merek) is answered', () => {
+    expect(visibleOptions(apalagi2, { merek: ['Holcim'] }, qs).status).toBe('waiting')
   })
 })
