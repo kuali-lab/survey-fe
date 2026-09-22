@@ -30,6 +30,18 @@ function isPlainChoice(q: Pick<Question, 'type' | 'hasAsyncOptions'> | undefined
   return !!q && DEPENDENCY_TYPES.has(q.type) && !q.hasAsyncOptions
 }
 
+// carryOver mode (§B) allows a DIFFERENT, narrower source allowlist than
+// mapped mode — dropdown and checkbox only (not single_choice) — and, unlike
+// mapped mode, deliberately does NOT exclude multi-select dropdowns or
+// checkbox: carryOver forwards whichever label(s) were picked directly, so a
+// multi-valued source is natively fine here.
+const CARRY_OVER_SOURCE_TYPES = new Set<Question['type']>(['dropdown', 'checkbox'])
+
+/** True when `q` is a valid carryOver mode SOURCE type (§B). */
+function isCarryOverSource(q: Pick<Question, 'type'> | undefined): boolean {
+  return !!q && CARRY_OVER_SOURCE_TYPES.has(q.type)
+}
+
 /** Parent question id of `q`, or '' when `q` carries no usable dependency. */
 export function getDependencySourceId(q: Pick<Question, 'type' | 'hasAsyncOptions' | 'dependsOn'>): string {
   if (!isPlainChoice(q)) return ''
@@ -91,6 +103,30 @@ export function parentKey(q: Question, answers: Answers, questions: Question[]):
   return opt ? optionKey(opt) : null
 }
 
+/**
+ * carryOver mode's one new primitive (§B): normalizes a SOURCE question's
+ * current answer to the set of option keys it resolves to — one key for a
+ * single-value answer (plain dropdown), N keys for an array answer (checkbox /
+ * multi-select dropdown, §A). A label that doesn't match a known option
+ * (free "Lainnya" text) falls back to the label itself, same convention as
+ * `resolveAttrValue` in optionFilter.ts — it then simply never coincides with
+ * a real target option key instead of needing special-case handling.
+ */
+export function sourceAnswerKeys(sourceQ: Pick<Question, 'options'> | undefined, answer: AnswerValue | undefined): string[] {
+  const keyForLabel = (label: string): string => {
+    const opt = findStandardOption(sourceQ, label)
+    return opt ? optionKey(opt) : label
+  }
+  if (Array.isArray(answer)) {
+    return (answer as string[])
+      .map((v) => (typeof v === 'string' ? v.trim() : ''))
+      .filter(Boolean)
+      .map(keyForLabel)
+  }
+  const label = answeredLabel(answer)
+  return label ? [keyForLabel(label)] : []
+}
+
 export type DependencyStatus =
   /** No dependency (or not applicable): show every option as usual. */
   | 'inactive'
@@ -109,14 +145,32 @@ export type VisibleOptions = {
 
 /**
  * Visible option set of `q` under the current answers. A dependency pointing at
- * a missing / non-plain-choice source is treated as inactive so a stale config
- * can never lock the respondent out.
+ * a missing / ineligible source is treated as inactive so a stale config can
+ * never lock the respondent out. Branches on `dependsOn.mode` — absent/
+ * `'mapped'` is the original authored per-option map (untouched below);
+ * `'carryOver'` (§B) is dynamic, computed from the source's live answer.
  */
 export function visibleOptions(q: Question, answers: Answers, questions: Question[]): VisibleOptions {
   const all = q.options ?? []
   const sourceId = getDependencySourceId(q)
   if (!sourceId || sourceId === q.id) return { status: 'inactive', options: all }
   const parent = questions.find((x) => x.id === sourceId)
+
+  if (q.dependsOn?.mode === 'carryOver') {
+    if (!isCarryOverSource(parent)) return { status: 'inactive', options: all }
+    const keys = sourceAnswerKeys(parent, answers[sourceId])
+    if (keys.length === 0) return { status: 'waiting', options: [] }
+    const keySet = new Set(keys)
+    const exclude = q.dependsOn?.carryOverMode === 'exclude'
+    const options = all.filter((o) => {
+      if (o.isOther) return true
+      const picked = keySet.has(optionKey(o))
+      return exclude ? !picked : picked
+    })
+    const hasMapped = options.some((o) => !o.isOther)
+    return { status: hasMapped ? 'ready' : 'empty', options }
+  }
+
   if (!isPlainChoice(parent)) return { status: 'inactive', options: all }
 
   const label = answeredLabel(answers[sourceId])

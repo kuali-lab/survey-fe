@@ -11,6 +11,7 @@ import {
   optionKey,
   parentKey,
   pruneDependentAnswers,
+  sourceAnswerKeys,
   visibleOptions,
 } from './optionDependency.js'
 import { buildMockSurvey } from './mockSurvey.js'
@@ -240,5 +241,98 @@ describe('mock survey demo block', () => {
     expect(gi).toContain('Zara')
     expect(tp).toContain('Zara')
     expect(visibleOptions(b, { 'cascade-mall': 'Trans Studio Mall Makassar' }, qs).status).toBe('empty')
+  })
+})
+
+// ── carryOver mode (§B, "Hubungkan Jawaban/Pilihan Lain") ──────────────────
+// Dynamic: whatever the source answered becomes the include/exclude set for
+// the target's own options, live — no authored per-option map. Source:
+// dropdown / checkbox only (both natively multi-valued-friendly, unlike
+// mapped mode's single-key requirement).
+const alergiOpts = () => [o('Kacang'), o('Susu'), o('Telur'), o('Lainnya', { isOther: true })]
+const alergi = q({ id: 'alergi', type: 'checkbox', sortOrder: 1, options: alergiOpts() })
+const alergiParah = q({
+  id: 'alergiParah', type: 'dropdown', sortOrder: 2, options: alergiOpts(),
+  dependsOn: { sourceQuestionId: 'alergi', mode: 'carryOver', carryOverMode: 'include' },
+})
+const alergiAman = q({
+  id: 'alergiAman', type: 'dropdown', sortOrder: 2, options: alergiOpts(),
+  dependsOn: { sourceQuestionId: 'alergi', mode: 'carryOver', carryOverMode: 'exclude' },
+})
+const ukuran = q({
+  id: 'ukuran', type: 'dropdown', sortOrder: 1,
+  options: [o('S'), o('M'), o('L'), o('Lainnya', { isOther: true })],
+})
+const ukuranGudang = q({
+  id: 'ukuranGudang', type: 'dropdown', sortOrder: 2,
+  options: [o('S'), o('M'), o('L'), o('Lainnya', { isOther: true })],
+  dependsOn: { sourceQuestionId: 'ukuran', mode: 'carryOver', carryOverMode: 'include' },
+})
+const carryOverQuestions = [alergi, alergiParah, alergiAman, ukuran, ukuranGudang]
+
+describe('sourceAnswerKeys', () => {
+  it('single-value answer → one key', () => {
+    expect(sourceAnswerKeys(ukuran, 'M')).toEqual(['M'])
+  })
+  it('array answer (checkbox / multi-select dropdown) → N keys', () => {
+    expect(sourceAnswerKeys(alergi, ['Kacang', 'Telur'])).toEqual(['Kacang', 'Telur'])
+  })
+  it('unanswered / empty → no keys', () => {
+    expect(sourceAnswerKeys(ukuran, undefined)).toEqual([])
+    expect(sourceAnswerKeys(alergi, [])).toEqual([])
+  })
+  it('free text ("Lainnya") falls back to the typed text itself, matching optionFilter.ts\'s resolveAttrValue fallback', () => {
+    expect(sourceAnswerKeys(alergi, ['Udang'])).toEqual(['Udang'])
+  })
+})
+
+describe('visibleOptions — carryOver mode', () => {
+  it('include: only the picked keys are shown, Lainnya always passes through', () => {
+    const v = visibleOptions(alergiParah, { alergi: ['Kacang', 'Telur'] }, carryOverQuestions)
+    expect(v.status).toBe('ready')
+    expect(labels(v.options)).toEqual(['Kacang', 'Telur', 'Lainnya'])
+  })
+
+  it('exclude: the picked keys are hidden, everything else (+ Lainnya) stays', () => {
+    const v = visibleOptions(alergiAman, { alergi: ['Kacang'] }, carryOverQuestions)
+    expect(v.status).toBe('ready')
+    expect(labels(v.options)).toEqual(['Susu', 'Telur', 'Lainnya'])
+  })
+
+  it('a single-value dropdown source works the same way (one key)', () => {
+    const v = visibleOptions(ukuranGudang, { ukuran: 'M' }, carryOverQuestions)
+    expect(v.status).toBe('ready')
+    expect(labels(v.options)).toEqual(['M', 'Lainnya'])
+  })
+
+  it('waiting: source unanswered', () => {
+    expect(visibleOptions(alergiParah, {}, carryOverQuestions)).toEqual({ status: 'waiting', options: [] })
+  })
+
+  it('waiting: checkbox source answered with an empty selection', () => {
+    expect(visibleOptions(alergiParah, { alergi: [] }, carryOverQuestions)).toEqual({ status: 'waiting', options: [] })
+  })
+
+  it('empty: every picked key falls outside the target\'s own options (only Lainnya remains)', () => {
+    const v = visibleOptions(alergiParah, { alergi: ['Udang'] }, carryOverQuestions)
+    expect(v.status).toBe('empty')
+    expect(labels(v.options)).toEqual(['Lainnya'])
+  })
+
+  it('a downstream mapped-mode question still resolves correctly when its own source uses carryOver mode', () => {
+    // alergiParah (carryOver target of `alergi`) is itself the MAPPED-mode
+    // source of `alergiFollow`. Mapped-mode resolution only reads
+    // alergiParah's own options + stored answer, independent of how
+    // alergiParah computed its own visible set.
+    const alergiFollow = q({
+      id: 'alergiFollow', type: 'single_choice', sortOrder: 3,
+      options: [o('AmanKacang'), o('AmanTelur')],
+      dependsOn: { sourceQuestionId: 'alergiParah', allowed: { AmanKacang: ['Kacang'], AmanTelur: ['Telur'] } },
+    })
+    const qs = [...carryOverQuestions, alergiFollow]
+    const answers = { alergi: ['Kacang'], alergiParah: 'Kacang' }
+    const v = visibleOptions(alergiFollow, answers, qs)
+    expect(v.status).toBe('ready')
+    expect(labels(v.options)).toEqual(['AmanKacang'])
   })
 })
