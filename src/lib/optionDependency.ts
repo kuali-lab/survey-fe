@@ -30,6 +30,13 @@ function isPlainChoice(q: Pick<Question, 'type' | 'hasAsyncOptions'> | undefined
   return !!q && DEPENDENCY_TYPES.has(q.type) && !q.hasAsyncOptions
 }
 
+// carryOver mode's TARGET type is dropdown/single_choice (whatever mapped
+// mode already allows) OR inline checkbox — additive, doesn't touch mapped
+// mode's own gate above.
+function isCarryOverTargetType(q: Pick<Question, 'type' | 'hasAsyncOptions'> | undefined): boolean {
+  return isPlainChoice(q) || (!!q && q.type === 'checkbox' && !q.hasAsyncOptions)
+}
+
 // carryOver mode (§B) allows a DIFFERENT, narrower source allowlist than
 // mapped mode — dropdown and checkbox only (not single_choice) — and, unlike
 // mapped mode, deliberately does NOT exclude multi-select dropdowns or
@@ -44,7 +51,10 @@ function isCarryOverSource(q: Pick<Question, 'type'> | undefined): boolean {
 
 /** Parent question id of `q`, or '' when `q` carries no usable dependency. */
 export function getDependencySourceId(q: Pick<Question, 'type' | 'hasAsyncOptions' | 'dependsOn'>): string {
-  if (!isPlainChoice(q)) return ''
+  // carryOver mode's target-type gate is wider (adds checkbox) than mapped
+  // mode's — checked only for carryOver so mapped mode is untouched.
+  const usable = q.dependsOn?.mode === 'carryOver' ? isCarryOverTargetType(q) : isPlainChoice(q)
+  if (!usable) return ''
   return q.dependsOn?.sourceQuestionId ?? ''
 }
 

@@ -406,6 +406,45 @@ function keyPress(r: SurveyRunner, key: string) {
   ;(r as unknown as { handleKeydown: (e: KeyboardEvent) => void }).handleKeydown(e)
 }
 
+describe('SurveyRunner — dropdown multi-select auto-advance (§A)', () => {
+  function makeMultiDropdownRunner() {
+    const survey: Survey = {
+      id: 'sv', title: 'PID',
+      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
+      skipRules: [], closeMessage: null, closeImageUrl: null,
+      questions: [
+        q({
+          id: 'd', type: 'dropdown', sortOrder: 1, multiSelect: true,
+          options: [{ id: 'o1', label: 'Merah', value: 'Merah', sortOrder: 0 }, { id: 'o2', label: 'Biru', value: 'Biru', sortOrder: 1 }],
+        }),
+        q({ id: 'n', type: 'short_text', sortOrder: 2 }),
+      ],
+    }
+    return new SurveyRunner({ getSurvey: () => survey, onFinish: () => {}, autoSubmit: false })
+  }
+
+  it('does not auto-advance on the first pick — the respondent may want a second', () => {
+    const r = makeMultiDropdownRunner()
+    r.handleAnswer('d', ['Merah'])
+    expect(r.autoAdvancing).toBe(false)
+  })
+
+  it('a plain (non-multi) dropdown still auto-advances — regression guard', () => {
+    const survey: Survey = {
+      id: 'sv', title: 'PID',
+      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
+      skipRules: [], closeMessage: null, closeImageUrl: null,
+      questions: [
+        q({ id: 'd', type: 'dropdown', sortOrder: 1, options: [{ id: 'o1', label: 'Merah', value: 'Merah', sortOrder: 0 }] }),
+        q({ id: 'n', type: 'short_text', sortOrder: 2 }),
+      ],
+    }
+    const r = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {}, autoSubmit: false })
+    r.handleAnswer('d', 'Merah')
+    expect(r.autoAdvancing).toBe(true)
+  })
+})
+
 describe('SurveyRunner — Top of Mind', () => {
   it('required: no first pick blocks with the stage-1 message', async () => {
     const r = makeTomRunner({ required: true })

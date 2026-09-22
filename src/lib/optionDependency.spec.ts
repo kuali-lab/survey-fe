@@ -336,3 +336,51 @@ describe('visibleOptions — carryOver mode', () => {
     expect(labels(v.options)).toEqual(['AmanKacang'])
   })
 })
+
+// ── carryOver TARGET may now be checkbox too (inline only), not dropdown-only
+// — locked cross-repo contract. The target's own type must not matter to
+// visibleOptions(): same source, same answers, same result whether the
+// target is a dropdown or a checkbox.
+describe('visibleOptions — carryOver mode, checkbox as TARGET', () => {
+  const alergiParahCheckbox = q({
+    id: 'alergiParahCheckbox', type: 'checkbox', sortOrder: 2, options: alergiOpts(),
+    dependsOn: { sourceQuestionId: 'alergi', mode: 'carryOver', carryOverMode: 'include' },
+  })
+  const alergiAmanCheckbox = q({
+    id: 'alergiAmanCheckbox', type: 'checkbox', sortOrder: 2, options: alergiOpts(),
+    dependsOn: { sourceQuestionId: 'alergi', mode: 'carryOver', carryOverMode: 'exclude' },
+  })
+  const ukuranGudangCheckbox = q({
+    id: 'ukuranGudangCheckbox', type: 'checkbox', sortOrder: 2,
+    options: [o('S'), o('M'), o('L'), o('Lainnya', { isOther: true })],
+    dependsOn: { sourceQuestionId: 'ukuran', mode: 'carryOver', carryOverMode: 'include' },
+  })
+  const qs = [...carryOverQuestions, alergiParahCheckbox, alergiAmanCheckbox, ukuranGudangCheckbox]
+
+  it('include: checkbox target, checkbox source — same result as the dropdown-target test above', () => {
+    const v = visibleOptions(alergiParahCheckbox, { alergi: ['Kacang', 'Telur'] }, qs)
+    expect(v.status).toBe('ready')
+    expect(labels(v.options)).toEqual(['Kacang', 'Telur', 'Lainnya'])
+  })
+
+  it('exclude: checkbox target, checkbox source', () => {
+    const v = visibleOptions(alergiAmanCheckbox, { alergi: ['Kacang'] }, qs)
+    expect(v.status).toBe('ready')
+    expect(labels(v.options)).toEqual(['Susu', 'Telur', 'Lainnya'])
+  })
+
+  it('include: checkbox target, dropdown source (single-value answer)', () => {
+    const v = visibleOptions(ukuranGudangCheckbox, { ukuran: 'M' }, qs)
+    expect(v.status).toBe('ready')
+    expect(labels(v.options)).toEqual(['M', 'Lainnya'])
+  })
+
+  it('waiting / empty behave the same regardless of the target\'s own type', () => {
+    expect(visibleOptions(alergiParahCheckbox, {}, qs)).toEqual({ status: 'waiting', options: [] })
+    expect(visibleOptions(alergiParahCheckbox, { alergi: ['Udang'] }, qs).status).toBe('empty')
+  })
+
+  it('getDependencySourceId resolves for a checkbox target under carryOver mode', () => {
+    expect(getDependencySourceId(alergiParahCheckbox)).toBe('alergi')
+  })
+})

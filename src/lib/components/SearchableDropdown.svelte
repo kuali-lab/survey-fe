@@ -16,7 +16,7 @@
 
   import { fetchAsyncOptions } from '$lib/api';
   import { optionFilterKey, type OptionFilter } from '$lib/optionFilter';
-  import { MIN_SEARCH_CHARS, SEARCH_DEBOUNCE_MS, filterBySearch, debounce } from '$lib/optionSearch.js';
+  import { MIN_SEARCH_CHARS, SEARCH_DEBOUNCE_MS, filterBySearch, effectiveMinChars, debounce } from '$lib/optionSearch.js';
   import { useI18n } from '$lib/i18n/context.js';
   import type { TranslatedText } from '$lib/types.js';
 
@@ -60,10 +60,9 @@
     multiple?: boolean;
     atLimit?: boolean;
     // "Sembunyikan Opsi" (§C): the option list starts empty with a "Ketik
-    // untuk mencari…" placeholder until the respondent types anything — no
-    // MIN_SEARCH_CHARS gate here (that gate is for large/async lists; this
-    // toggle's whole point is forcing a search first, so an extra minimum on
-    // top would just be more friction).
+    // untuk mencari…" placeholder until the respondent types anything. The
+    // usual `minChars` gate still applies once they do — this toggle changes
+    // when the list starts hidden, not how many characters narrow it.
     hideUntilSearch?: boolean;
   }>();
 
@@ -121,14 +120,15 @@
   let asyncHasMore = $state(false);
   const ASYNC_LIMIT = 50;
 
-  // True when the user typed a non-empty term below the minimum — we skip the
+  // No separate bypass for "Sembunyikan Opsi" — see effectiveMinChars.
+  let minChars = $derived(hasAsyncOptions ? MIN_SEARCH_CHARS : effectiveMinChars(options || [], (o: Opt) => [o.label, i18n.label(o)]));
+
+  // True when the user typed a non-empty term below `minChars` — we skip the
   // fetch and show a hint instead (empty term still loads the first page).
   // A filtered request already narrows the scan (contract §3 lifts the server
   // minimum too), so the guard applies only to unfiltered searches.
-  // `hideUntilSearch` (§C) has its own, looser gate (any non-empty query
-  // reveals results, no minimum) — it wins over this one.
   let searchTooShort = $derived(
-    !hideUntilSearch && !filter && debouncedSearch.length > 0 && debouncedSearch.length < MIN_SEARCH_CHARS
+    !filter && debouncedSearch.length > 0 && debouncedSearch.length < minChars
   );
 
   // First page: (re)load whenever the (debounced) search, question identity or
@@ -273,7 +273,7 @@
       {#if hideUntilSearch && debouncedSearch === ''}
         <div class="empty-state">{i18n.t('ddTypeToSearch')}</div>
       {:else if searchTooShort}
-        <div class="empty-state">{i18n.t('ddMinChars', { n: MIN_SEARCH_CHARS })}</div>
+        <div class="empty-state">{i18n.t('ddMinChars', { n: minChars })}</div>
       {:else if filteredOptions.length === 0 && isFetching}
         <div class="empty-state">{i18n.t('ddLoading')}</div>
       {:else if filteredOptions.length === 0 && (filter || !hasAsyncOptions) && filterEmptyMessage && debouncedSearch === ''}

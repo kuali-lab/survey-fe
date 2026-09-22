@@ -550,6 +550,10 @@ export class SurveyRunner {
 
   private shouldAutoAdvance(q: Question, v: AnswerValue): boolean {
     if (!AUTO_ADVANCE_TYPES.has(q.type)) return false
+    // Multi-select dropdown (§A): one tap is one pick among several, not an
+    // answer — auto-advancing off the first tap would end the question before
+    // the respondent can pick a second option.
+    if (q.type === 'dropdown' && q.multiSelect) return false
     if (v === null || v === undefined) return false
     if (typeof v === 'string' && v === '') return false
 
