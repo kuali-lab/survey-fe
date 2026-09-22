@@ -1,3 +1,15 @@
+<script module lang="ts">
+  /**
+   * Pure toggle-membership helper for multi-select mode (§A) — add the key if
+   * absent, remove it if present. Exported from module context so it's
+   * testable without mounting the component (this repo's vitest runs in a
+   * DOM-less `node` environment, see vitest.config.ts).
+   */
+  export function toggleOption(current: string[], key: string): string[] {
+    return current.includes(key) ? current.filter((v) => v !== key) : [...current, key];
+  }
+</script>
+
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { fade } from 'svelte/transition';
@@ -10,13 +22,16 @@
   let {
     options = [], value = '', onChange, placeholder = '', hasAsyncOptions = false, questionId = '', slug = '',
     filterActive = false, filter = null, filterHint = '', filterEmptyMessage = '',
-    disabled = false, notice = '',
+    disabled = false, notice = '', multiple = false, atLimit = false,
   } = $props<{
     // `label` = the VALUE emitted through onChange (primary language). `translations`
     // only affects the text that is displayed and searched.
     options?: { label: string, isOther?: boolean, translations?: TranslatedText }[];
-    value: string;
-    onChange: (val: string) => void;
+    // Multi-select mode (`multiple`): `value` is the full selection array and
+    // `onChange` receives the full new array on every toggle — never a single
+    // label. Single mode (default) keeps the original string shape.
+    value: string | string[];
+    onChange: (val: string | string[]) => void;
     placeholder?: string;
     hasAsyncOptions?: boolean;
     questionId?: string;
@@ -36,6 +51,13 @@
     // message when the parent answer allows nothing.
     disabled?: boolean;
     notice?: string;
+    // Dropdown "Pilih Lebih dari Satu" (§A): selecting a row toggles
+    // membership instead of closing the menu; the closed control shows a
+    // count summary. `atLimit` mirrors checkbox's `atSelectLimit` (maxSelections
+    // reached) — disables not-yet-selected rows, computed by the caller so this
+    // component doesn't need to know about `maxSelections` itself.
+    multiple?: boolean;
+    atLimit?: boolean;
   }>();
 
   // Disabled until every source answer is present. The catalog filter only
@@ -46,8 +68,17 @@
 
   const i18n = useI18n();
   type Opt = { label: string, isOther?: boolean, translations?: TranslatedText };
-  /** The stored value (a primary-language label) → its display text. Free "Lainnya" text shows as-is. */
+  // Multi mode: `value` is the full selection array (checkbox's arrValue shape).
+  let multiValue = $derived(multiple && Array.isArray(value) ? (value as string[]) : []);
+  /**
+   * The stored value → its display text. Single mode: a primary-language label
+   * → its display text (free "Lainnya" text shows as-is). Multi mode: a count
+   * summary ("2 dipilih") — individual labels don't fit the closed control.
+   */
   let selectedText = $derived.by(() => {
+    if (multiple) {
+      return multiValue.length > 0 ? i18n.t('ddMultiCount', { n: multiValue.length }) : '';
+    }
     if (!value) return '';
     const match = ((options || []) as Opt[]).find((o) => o.label === value);
     return match ? i18n.label(match) : value;
@@ -173,6 +204,14 @@
   }
 
   function selectOption(label: string) {
+    if (multiple) {
+      if (atLimit && !multiValue.includes(label)) return; // batas tercapai
+      onChange(toggleOption(multiValue, label));
+      // Stay open and keep the search query — picking more is the point, and
+      // the query only ever filters the rendered list (see `filteredOptions`
+      // above, which never reads `value`), so it can never hide/reset a pick.
+      return;
+    }
     onChange(label);
     isOpen = false;
     searchQuery = '';
@@ -249,12 +288,25 @@
           <div class="virtual-spacer" style="height: {filteredOptions.length * 40}px;">
             <div class="visible-items" style="transform: translateY({startIndex * 40}px);">
               {#each visibleOptions as opt (opt.label)}
-                <button 
-                  type="button" 
-                  class="option-item" 
-                  class:selected={value === opt.label}
+                {@const isChecked = multiple ? multiValue.includes(opt.label) : value === opt.label}
+                {@const isDisabled = multiple && atLimit && !isChecked}
+                <button
+                  type="button"
+                  class="option-item"
+                  class:selected={isChecked}
+                  disabled={isDisabled}
+                  style={isDisabled ? 'opacity:0.55;cursor:not-allowed;' : ''}
                   onclick={() => selectOption(opt.label)}
                 >
+                  {#if multiple}
+                    <span class="multi-check {isChecked ? 'selected' : ''}">
+                      {#if isChecked}
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                          <path d="M5 12.5l5 5 9-10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                      {/if}
+                    </span>
+                  {/if}
                   <span class="truncate">{i18n.label(opt)}</span>
                 </button>
               {/each}
@@ -415,6 +467,23 @@
     background: var(--primary-20);
     color: var(--primary-text);
     font-weight: 600;
+  }
+  /* Multi-select mode checkmark — mirrors checkbox's .checkbox-indicator in
+     QuestionInput.svelte so the two controls read as the same interaction. */
+  .multi-check {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    margin-right: 8px;
+    border: 1.5px solid var(--hairline);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .multi-check.selected {
+    background: var(--primary);
+    border-color: var(--primary);
   }
   .empty-state {
     padding: 1rem;

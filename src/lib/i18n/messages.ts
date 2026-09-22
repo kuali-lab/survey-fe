@@ -82,6 +82,7 @@ const id = {
   ddMinChars: 'Ketik minimal {n} huruf untuk mencari.',
   ddLoading: 'Memuat...',
   ddEmpty: 'Tidak ada pilihan yang cocok.',
+  ddMultiCount: '{n} dipilih',
 }
 
 export type MessageKey = keyof typeof id
@@ -158,6 +159,7 @@ const en: Record<MessageKey, string> = {
   ddMinChars: 'Type at least {n} characters to search.',
   ddLoading: 'Loading...',
   ddEmpty: 'No matching options.',
+  ddMultiCount: '{n} selected',
 }
 
 const PACKS: Record<string, Record<MessageKey, string>> = { id, en }

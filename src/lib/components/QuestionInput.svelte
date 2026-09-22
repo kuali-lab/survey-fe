@@ -172,9 +172,16 @@
   // Checkbox / single_choice helpers
   const arrValue = $derived(Array.isArray(value) ? (value as string[]) : [])
 
+  // Dropdown "Pilih Lebih dari Satu" (§A, inline-only — mirrors the
+  // isPlainChoice/hasAsyncOptions guard already gating filterActive above).
+  // Its answer is the same string[] shape checkbox uses, so it reuses
+  // `arrValue`/`selectLimit`/`atSelectLimit` below instead of a second set.
+  const isMultiDropdown = $derived(question.type === 'dropdown' && question.multiSelect === true)
+
   // Checkbox multi-select limit (0/undefined = unlimited). When the limit is
   // reached, unselected options are disabled; deselecting one frees a slot.
   // Answer shape (array) is unchanged → skip-logic / dataset / export unaffected.
+  // Also used by multi-select dropdown (same convention, see isMultiDropdown above).
   const selectLimit = $derived(question.maxSelections && question.maxSelections > 0 ? question.maxSelections : 0)
   const atSelectLimit = $derived(selectLimit > 0 && arrValue.length >= selectLimit)
 
@@ -254,12 +261,14 @@
   // ── is_other ("Lainnya") state ──
   const otherOption = $derived(options.find(o => o.isOther))
 
-  // For single_choice: selected = strValue matches the isOther label OR user typed its own text.
-  // Compared against the FULL option list so a narrowed (Pilihan Bertingkat)
-  // list never mistakes a standard label for "Lainnya" free text.
+  // For single_choice / single-value dropdown: selected = strValue matches the
+  // isOther label OR user typed its own text. Compared against the FULL option
+  // list so a narrowed (Pilihan Bertingkat) list never mistakes a standard
+  // label for "Lainnya" free text. Checkbox and multi-select dropdown (§A)
+  // share the array-shaped branch — value is a string[] either way.
   const isOtherSelected = $derived(
     otherOption ? (
-      question.type === 'single_choice' || question.type === 'dropdown'
+      (question.type === 'single_choice' || question.type === 'dropdown') && !isMultiDropdown
         ? strValue !== '' && !allOptions.filter(o => !o.isOther).some(o => o.label === strValue)
         : arrValue.some(v => !allOptions.filter(o => !o.isOther).some(o => o.label === v) && v !== '')
     ) : false
@@ -270,11 +279,15 @@
     const otherOpt = opts.find(o => o.isOther)
     if (!otherOpt) return ''
     const standardLabels = opts.filter(o => !o.isOther).map(o => o.label)
-    if (question.type === 'single_choice' || question.type === 'dropdown') {
+    // Read `question.multiSelect` directly (not the $derived `isMultiDropdown`)
+    // — this runs once at $state init, before rune declarations further down
+    // the script are guaranteed ordered.
+    const isMulti = question.type === 'dropdown' && question.multiSelect === true
+    if ((question.type === 'single_choice' || question.type === 'dropdown') && !isMulti) {
       const sv = typeof value === 'string' ? value : ''
       return sv && !standardLabels.includes(sv) && sv !== otherOpt.label ? sv : ''
     }
-    if (question.type === 'checkbox') {
+    if (question.type === 'checkbox' || isMulti) {
       const av = Array.isArray(value) ? (value as string[]) : []
       return av.find(v => !standardLabels.includes(v) && v !== otherOpt.label) ?? ''
     }
@@ -906,8 +919,18 @@
            identical to large/async ones — no more native/unstyled <select>. -->
       <SearchableDropdown
         options={options}
-        value={isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue}
+        multiple={isMultiDropdown}
+        atLimit={isMultiDropdown && atSelectLimit}
+        value={
+          isMultiDropdown
+            ? arrValue
+            : (isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue)
+        }
         onChange={(val) => {
+          if (isMultiDropdown) {
+            onChange(val as string[]);
+            return;
+          }
           if (otherOption && val === otherOption.label) {
             onChange(otherText || otherOption.label);
           } else {
@@ -930,8 +953,11 @@
         type="text"
         placeholder={i18n.t('otherPlaceholder')}
         value={otherText}
-        oninput={(e) => updateOtherSingle((e.currentTarget as HTMLInputElement).value)}
+        oninput={(e) => (isMultiDropdown ? updateOtherCheckbox : updateOtherSingle)((e.currentTarget as HTMLInputElement).value)}
       />
+    {/if}
+    {#if isMultiDropdown && selectLimit > 0}
+      <p style="margin-top:8px;font-size:0.85rem;color:var(--text-body);">{i18n.t('selectLimit', { limit: selectLimit, n: arrValue.length })}</p>
     {/if}
   </div>
 

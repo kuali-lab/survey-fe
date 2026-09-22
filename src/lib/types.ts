@@ -147,6 +147,12 @@ export interface Question {
   // akan membuat kelimanya salah sekaligus — dan salahnya senyap.
   fields?: Question[]
 
+  // Dropdown "Pilih Lebih dari Satu" (inline-only — see optionDependency.ts's
+  // isPlainChoice guard, which also excludes it as a mapped-mode dependency
+  // source since it has no single resolvable key). Reuses `maxSelections` for
+  // the "maksimal N dipilih" cap, same convention as checkbox.
+  multiSelect?: boolean
+
   // Relational config
   hasAsyncOptions?: boolean
   filterConfig?: FilterConfig
