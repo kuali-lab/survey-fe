@@ -85,6 +85,8 @@ const id = {
   repeatRemove: 'Hapus jawaban ke-{n}',
   ddLoading: 'Memuat...',
   ddEmpty: 'Tidak ada pilihan yang cocok.',
+  ddMultiCount: '{n} dipilih',
+  ddTypeToSearch: 'Ketik untuk mencari…',
 }
 
 export type MessageKey = keyof typeof id
@@ -164,6 +166,8 @@ const en: Record<MessageKey, string> = {
   repeatRemove: 'Remove answer {n}',
   ddLoading: 'Loading...',
   ddEmpty: 'No matching options.',
+  ddMultiCount: '{n} selected',
+  ddTypeToSearch: 'Type to search…',
 }
 
 const PACKS: Record<string, Record<MessageKey, string>> = { id, en }

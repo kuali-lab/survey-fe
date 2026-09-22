@@ -83,15 +83,27 @@ export interface FilterConfig {
 }
 
 /**
- * "Pilihan Bertingkat" (plan §0): a plain single_choice / dropdown question
- * whose inline options are narrowed by the answer to ONE earlier plain choice
- * question. `allowed` maps a dependent option key to the parent option keys it
- * is shown under (key = trimmed `value`, else trimmed `label`). Absent = no
- * dependency.
+ * "Pilihan Bertingkat" (plan §0) / "Hubungkan Jawaban/Pilihan Lain" (§B): a
+ * dependent question whose inline options are narrowed by an earlier
+ * question's answer. `mode` discriminates the two mechanisms — absent/omitted
+ * means `'mapped'`, every `dependsOn` written before §B shipped, and is read
+ * exactly as before (back-compat, byte-for-byte).
+ *
+ * - `mode: 'mapped'` (default): an authored, static, per-option map. `allowed`
+ *   maps a dependent option key to the parent option keys it is shown under
+ *   (key = trimmed `value`, else trimmed `label`). Source: single_choice /
+ *   dropdown only (one resolvable key).
+ * - `mode: 'carryOver'`: dynamic — whatever the source question's answer
+ *   currently resolves to (directly, no authored map) becomes the
+ *   include/exclude set for the target's own options. Source: dropdown /
+ *   checkbox only (natively multi-valued, unlike mapped mode). `carryOverMode`
+ *   only present in this mode; `allowed` is absent.
  */
 export interface OptionDependency {
   sourceQuestionId: string
-  allowed: Record<string, string[]>
+  mode?: 'mapped' | 'carryOver'
+  allowed?: Record<string, string[]>
+  carryOverMode?: 'include' | 'exclude'
 }
 
 export interface Question {
@@ -146,6 +158,17 @@ export interface Question {
   // auto-advance, maupun skip-logic. Meratakan field jadi pertanyaan tingkat atas
   // akan membuat kelimanya salah sekaligus — dan salahnya senyap.
   fields?: Question[]
+
+  // Dropdown "Pilih Lebih dari Satu" (inline-only — see optionDependency.ts's
+  // isPlainChoice guard, which also excludes it as a mapped-mode dependency
+  // source since it has no single resolvable key). Reuses `maxSelections` for
+  // the "maksimal N dipilih" cap, same convention as checkbox.
+  multiSelect?: boolean
+  // "Sembunyikan Opsi": checkbox + inline dropdown start with an empty option
+  // list ("Ketik untuk mencari…") until the respondent types anything. Pure
+  // display flag — the submitted answer is still a label match either way, no
+  // storage/validation impact.
+  hideOptionsUntilSearch?: boolean
 
   // Relational config
   hasAsyncOptions?: boolean

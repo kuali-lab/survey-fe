@@ -16,6 +16,7 @@
     visibleOptions, dependencyDisabledHint, dependencyEmptyMessage, dependencyParentLabel,
   } from '$lib/optionDependency.js'
   import { getRegionName, resolveRegionName } from '$lib/regionNames.js'
+  import { MIN_SEARCH_CHARS, SEARCH_DEBOUNCE_MS, filterBySearch, debounce } from '$lib/optionSearch.js'
   import { applyNumberInput, numberInputText, numberInputCompare } from '$lib/numberInput.js'
   import { fade, fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
@@ -175,9 +176,16 @@
   // Checkbox / single_choice helpers
   const arrValue = $derived(Array.isArray(value) ? (value as string[]) : [])
 
+  // Dropdown "Pilih Lebih dari Satu" (§A, inline-only — mirrors the
+  // isPlainChoice/hasAsyncOptions guard already gating filterActive above).
+  // Its answer is the same string[] shape checkbox uses, so it reuses
+  // `arrValue`/`selectLimit`/`atSelectLimit` below instead of a second set.
+  const isMultiDropdown = $derived(question.type === 'dropdown' && question.multiSelect === true)
+
   // Checkbox multi-select limit (0/undefined = unlimited). When the limit is
   // reached, unselected options are disabled; deselecting one frees a slot.
   // Answer shape (array) is unchanged → skip-logic / dataset / export unaffected.
+  // Also used by multi-select dropdown (same convention, see isMultiDropdown above).
   const selectLimit = $derived(question.maxSelections && question.maxSelections > 0 ? question.maxSelections : 0)
   const atSelectLimit = $derived(selectLimit > 0 && arrValue.length >= selectLimit)
 
@@ -197,6 +205,29 @@
   const options = $derived(
     dependency.status === 'inactive' || dependencyWaiting ? allOptions : dependency.options,
   )
+
+  // ── Checkbox search + "Sembunyikan Opsi" (§C) ──────────────────────────────
+  // Search only ever narrows what's RENDERED — `options`/`arrValue` (the
+  // answer) stay untouched, same principle as multi-select dropdown's search
+  // (§A). Filters the FULL `options` list (incl. "Lainnya") so an unmatched
+  // "Lainnya" row hides like any other row — the two loops below both read
+  // `checkboxDisplayOptions`, never `options` directly.
+  let checkboxSearchQuery = $state('')
+  let checkboxDebouncedSearch = $state('')
+  const setCheckboxDebouncedSearch = debounce((q: string) => { checkboxDebouncedSearch = q }, SEARCH_DEBOUNCE_MS)
+  $effect(() => {
+    setCheckboxDebouncedSearch(checkboxSearchQuery.toLowerCase())
+  })
+  const checkboxDisplayOptions = $derived.by(() => {
+    if (question.hideOptionsUntilSearch) {
+      return checkboxDebouncedSearch === '' ? [] : filterBySearch(options, checkboxDebouncedSearch, (o) => [o.label, i18n.label(o)])
+    }
+    // Below the minimum (but non-empty): same "don't narrow yet" gate as the
+    // dropdown's async/local search (§C cross-cutting decision) — show the
+    // full list rather than a half-typed, misleading narrow.
+    if (checkboxDebouncedSearch.length > 0 && checkboxDebouncedSearch.length < MIN_SEARCH_CHARS) return options
+    return filterBySearch(options, checkboxDebouncedSearch, (o) => [o.label, i18n.label(o)])
+  })
 
   // Rating
   const ratingScale = $derived(question.maxStars ?? 5)
@@ -257,12 +288,14 @@
   // ── is_other ("Lainnya") state ──
   const otherOption = $derived(options.find(o => o.isOther))
 
-  // For single_choice: selected = strValue matches the isOther label OR user typed its own text.
-  // Compared against the FULL option list so a narrowed (Pilihan Bertingkat)
-  // list never mistakes a standard label for "Lainnya" free text.
+  // For single_choice / single-value dropdown: selected = strValue matches the
+  // isOther label OR user typed its own text. Compared against the FULL option
+  // list so a narrowed (Pilihan Bertingkat) list never mistakes a standard
+  // label for "Lainnya" free text. Checkbox and multi-select dropdown (§A)
+  // share the array-shaped branch — value is a string[] either way.
   const isOtherSelected = $derived(
     otherOption ? (
-      question.type === 'single_choice' || question.type === 'dropdown'
+      (question.type === 'single_choice' || question.type === 'dropdown') && !isMultiDropdown
         ? strValue !== '' && !allOptions.filter(o => !o.isOther).some(o => o.label === strValue)
         : arrValue.some(v => !allOptions.filter(o => !o.isOther).some(o => o.label === v) && v !== '')
     ) : false
@@ -273,11 +306,15 @@
     const otherOpt = opts.find(o => o.isOther)
     if (!otherOpt) return ''
     const standardLabels = opts.filter(o => !o.isOther).map(o => o.label)
-    if (question.type === 'single_choice' || question.type === 'dropdown') {
+    // Read `question.multiSelect` directly (not the $derived `isMultiDropdown`)
+    // — this runs once at $state init, before rune declarations further down
+    // the script are guaranteed ordered.
+    const isMulti = question.type === 'dropdown' && question.multiSelect === true
+    if ((question.type === 'single_choice' || question.type === 'dropdown') && !isMulti) {
       const sv = typeof value === 'string' ? value : ''
       return sv && !standardLabels.includes(sv) && sv !== otherOpt.label ? sv : ''
     }
-    if (question.type === 'checkbox') {
+    if (question.type === 'checkbox' || isMulti) {
       const av = Array.isArray(value) ? (value as string[]) : []
       return av.find(v => !standardLabels.includes(v) && v !== otherOpt.label) ?? ''
     }
@@ -871,8 +908,22 @@
   </div>
 
 {:else if question.type === 'checkbox'}
+  <div class="search-box checkbox-search-box">
+    <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+    <input
+      type="text"
+      placeholder={i18n.t('ddSearch')}
+      value={checkboxSearchQuery}
+      oninput={(e) => { checkboxSearchQuery = (e.currentTarget as HTMLInputElement).value }}
+    />
+  </div>
+  {#if question.hideOptionsUntilSearch && checkboxDebouncedSearch === ''}
+    <p class="checkbox-search-hint">{i18n.t('ddTypeToSearch')}</p>
+  {:else if checkboxDisplayOptions.length === 0}
+    <p class="checkbox-search-hint">{i18n.t('ddEmpty')}</p>
+  {:else}
   <div class="options-list">
-    {#each options.filter(o => !o.isOther) as opt, i}
+    {#each checkboxDisplayOptions.filter(o => !o.isOther) as opt, i}
       {@const checked = arrValue.includes(opt.label)}
       <button
         class="option-card {checked ? 'selected' : ''}"
@@ -891,8 +942,7 @@
         <span class="option-label">{i18n.label(opt)}</span>
       </button>
     {/each}
-    {#if otherOption}
-      {@const otherIdx = options.filter(o => !o.isOther).length}
+    {#if otherOption && checkboxDisplayOptions.some(o => o.isOther)}
       <button
         class="option-card {isOtherSelected ? 'selected' : ''}"
         type="button"
@@ -920,6 +970,7 @@
       {/if}
     {/if}
   </div>
+  {/if}
   {#if selectLimit > 0}
     <p style="margin-top:8px;font-size:0.85rem;color:var(--text-body);">{i18n.t('selectLimit', { limit: selectLimit, n: arrValue.length })}</p>
   {/if}
@@ -930,8 +981,18 @@
            identical to large/async ones — no more native/unstyled <select>. -->
       <SearchableDropdown
         options={options}
-        value={isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue}
+        multiple={isMultiDropdown}
+        atLimit={isMultiDropdown && atSelectLimit}
+        value={
+          isMultiDropdown
+            ? arrValue
+            : (isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue)
+        }
         onChange={(val) => {
+          if (isMultiDropdown) {
+            onChange(val as string[]);
+            return;
+          }
           if (otherOption && val === otherOption.label) {
             onChange(otherText || otherOption.label);
           } else {
@@ -947,6 +1008,7 @@
         filterEmptyMessage={dependencyEmptyText || filterEmptyText}
         disabled={dependencyWaiting}
         notice={dependencyEmptyText}
+        hideUntilSearch={question.hideOptionsUntilSearch === true}
       />
     {#if isOtherSelected}
       <input
@@ -954,8 +1016,11 @@
         type="text"
         placeholder={i18n.t('otherPlaceholder')}
         value={otherText}
-        oninput={(e) => updateOtherSingle((e.currentTarget as HTMLInputElement).value)}
+        oninput={(e) => (isMultiDropdown ? updateOtherCheckbox : updateOtherSingle)((e.currentTarget as HTMLInputElement).value)}
       />
+    {/if}
+    {#if isMultiDropdown && selectLimit > 0}
+      <p style="margin-top:8px;font-size:0.85rem;color:var(--text-body);">{i18n.t('selectLimit', { limit: selectLimit, n: arrValue.length })}</p>
     {/if}
   </div>
 
@@ -1341,6 +1406,41 @@
   }
 
   /* ── Option cards ── */
+  /* Checkbox search box (§C) — same look as SearchableDropdown's own
+     .search-box (that one is scoped to a different component, so it can't be
+     reused directly; kept visually identical). */
+  .checkbox-search-box {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--canvas-soft);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-input);
+    margin-bottom: 8px;
+  }
+  .checkbox-search-box .search-icon {
+    color: var(--text-body);
+    flex-shrink: 0;
+  }
+  .checkbox-search-box input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    caret-color: var(--primary);
+    font-family: var(--font);
+    font-size: 0.9375rem;
+    outline: none;
+  }
+  .checkbox-search-box input::placeholder { color: var(--text-muted); }
+  .checkbox-search-hint {
+    padding: 1rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+  }
+
   .options-list {
     display: flex;
     flex-direction: column;
