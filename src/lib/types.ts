@@ -164,6 +164,11 @@ export interface Question {
   // source since it has no single resolvable key). Reuses `maxSelections` for
   // the "maksimal N dipilih" cap, same convention as checkbox.
   multiSelect?: boolean
+  // "Sembunyikan Opsi": checkbox + inline dropdown start with an empty option
+  // list ("Ketik untuk mencari…") until the respondent types anything. Pure
+  // display flag — the submitted answer is still a label match either way, no
+  // storage/validation impact.
+  hideOptionsUntilSearch?: boolean
 
   // Relational config
   hasAsyncOptions?: boolean

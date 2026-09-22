@@ -16,6 +16,7 @@
     visibleOptions, dependencyDisabledHint, dependencyEmptyMessage, dependencyParentLabel,
   } from '$lib/optionDependency.js'
   import { getRegionName, resolveRegionName } from '$lib/regionNames.js'
+  import { MIN_SEARCH_CHARS, SEARCH_DEBOUNCE_MS, filterBySearch, debounce } from '$lib/optionSearch.js'
   import { applyNumberInput, numberInputText, numberInputCompare } from '$lib/numberInput.js'
   import { fade, fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
@@ -201,6 +202,29 @@
   const options = $derived(
     dependency.status === 'inactive' || dependencyWaiting ? allOptions : dependency.options,
   )
+
+  // ── Checkbox search + "Sembunyikan Opsi" (§C) ──────────────────────────────
+  // Search only ever narrows what's RENDERED — `options`/`arrValue` (the
+  // answer) stay untouched, same principle as multi-select dropdown's search
+  // (§A). Filters the FULL `options` list (incl. "Lainnya") so an unmatched
+  // "Lainnya" row hides like any other row — the two loops below both read
+  // `checkboxDisplayOptions`, never `options` directly.
+  let checkboxSearchQuery = $state('')
+  let checkboxDebouncedSearch = $state('')
+  const setCheckboxDebouncedSearch = debounce((q: string) => { checkboxDebouncedSearch = q }, SEARCH_DEBOUNCE_MS)
+  $effect(() => {
+    setCheckboxDebouncedSearch(checkboxSearchQuery.toLowerCase())
+  })
+  const checkboxDisplayOptions = $derived.by(() => {
+    if (question.hideOptionsUntilSearch) {
+      return checkboxDebouncedSearch === '' ? [] : filterBySearch(options, checkboxDebouncedSearch, (o) => [o.label, i18n.label(o)])
+    }
+    // Below the minimum (but non-empty): same "don't narrow yet" gate as the
+    // dropdown's async/local search (§C cross-cutting decision) — show the
+    // full list rather than a half-typed, misleading narrow.
+    if (checkboxDebouncedSearch.length > 0 && checkboxDebouncedSearch.length < MIN_SEARCH_CHARS) return options
+    return filterBySearch(options, checkboxDebouncedSearch, (o) => [o.label, i18n.label(o)])
+  })
 
   // Rating
   const ratingScale = $derived(question.maxStars ?? 5)
@@ -860,8 +884,22 @@
   </div>
 
 {:else if question.type === 'checkbox'}
+  <div class="search-box checkbox-search-box">
+    <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+    <input
+      type="text"
+      placeholder={i18n.t('ddSearch')}
+      value={checkboxSearchQuery}
+      oninput={(e) => { checkboxSearchQuery = (e.currentTarget as HTMLInputElement).value }}
+    />
+  </div>
+  {#if question.hideOptionsUntilSearch && checkboxDebouncedSearch === ''}
+    <p class="checkbox-search-hint">{i18n.t('ddTypeToSearch')}</p>
+  {:else if checkboxDisplayOptions.length === 0}
+    <p class="checkbox-search-hint">{i18n.t('ddEmpty')}</p>
+  {:else}
   <div class="options-list">
-    {#each options.filter(o => !o.isOther) as opt, i}
+    {#each checkboxDisplayOptions.filter(o => !o.isOther) as opt, i}
       {@const checked = arrValue.includes(opt.label)}
       <button
         class="option-card {checked ? 'selected' : ''}"
@@ -880,8 +918,7 @@
         <span class="option-label">{i18n.label(opt)}</span>
       </button>
     {/each}
-    {#if otherOption}
-      {@const otherIdx = options.filter(o => !o.isOther).length}
+    {#if otherOption && checkboxDisplayOptions.some(o => o.isOther)}
       <button
         class="option-card {isOtherSelected ? 'selected' : ''}"
         type="button"
@@ -909,6 +946,7 @@
       {/if}
     {/if}
   </div>
+  {/if}
   {#if selectLimit > 0}
     <p style="margin-top:8px;font-size:0.85rem;color:var(--text-body);">{i18n.t('selectLimit', { limit: selectLimit, n: arrValue.length })}</p>
   {/if}
@@ -946,6 +984,7 @@
         filterEmptyMessage={dependencyEmptyText || filterEmptyText}
         disabled={dependencyWaiting}
         notice={dependencyEmptyText}
+        hideUntilSearch={question.hideOptionsUntilSearch === true}
       />
     {#if isOtherSelected}
       <input
@@ -1332,6 +1371,41 @@
   }
 
   /* ── Option cards ── */
+  /* Checkbox search box (§C) — same look as SearchableDropdown's own
+     .search-box (that one is scoped to a different component, so it can't be
+     reused directly; kept visually identical). */
+  .checkbox-search-box {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--canvas-soft);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-input);
+    margin-bottom: 8px;
+  }
+  .checkbox-search-box .search-icon {
+    color: var(--text-body);
+    flex-shrink: 0;
+  }
+  .checkbox-search-box input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    caret-color: var(--primary);
+    font-family: var(--font);
+    font-size: 0.9375rem;
+    outline: none;
+  }
+  .checkbox-search-box input::placeholder { color: var(--text-muted); }
+  .checkbox-search-hint {
+    padding: 1rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+  }
+
   .options-list {
     display: flex;
     flex-direction: column;

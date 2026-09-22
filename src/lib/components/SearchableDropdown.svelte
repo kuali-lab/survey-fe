@@ -16,13 +16,14 @@
 
   import { fetchAsyncOptions } from '$lib/api';
   import { optionFilterKey, type OptionFilter } from '$lib/optionFilter';
+  import { MIN_SEARCH_CHARS, SEARCH_DEBOUNCE_MS, filterBySearch, debounce } from '$lib/optionSearch.js';
   import { useI18n } from '$lib/i18n/context.js';
   import type { TranslatedText } from '$lib/types.js';
 
   let {
     options = [], value = '', onChange, placeholder = '', hasAsyncOptions = false, questionId = '', slug = '',
     filterActive = false, filter = null, filterHint = '', filterEmptyMessage = '',
-    disabled = false, notice = '', multiple = false, atLimit = false,
+    disabled = false, notice = '', multiple = false, atLimit = false, hideUntilSearch = false,
   } = $props<{
     // `label` = the VALUE emitted through onChange (primary language). `translations`
     // only affects the text that is displayed and searched.
@@ -58,6 +59,12 @@
     // component doesn't need to know about `maxSelections` itself.
     multiple?: boolean;
     atLimit?: boolean;
+    // "Sembunyikan Opsi" (§C): the option list starts empty with a "Ketik
+    // untuk mencari…" placeholder until the respondent types anything — no
+    // MIN_SEARCH_CHARS gate here (that gate is for large/async lists; this
+    // toggle's whole point is forcing a search first, so an extra minimum on
+    // top would just be more friction).
+    hideUntilSearch?: boolean;
   }>();
 
   // Disabled until every source answer is present. The catalog filter only
@@ -87,22 +94,16 @@
   let isOpen = $state(false);
   let searchQuery = $state('');
   let searchInput: HTMLInputElement;
-  
-  // Create debounced search to avoid lagging with 100k items
+
+  // Debounced search — one timing everywhere a search box exists (§C), not
+  // just the async/catalog path: the respondent should feel the same thing
+  // whether the list behind it has 5 options or 287,000. Only the FILTER
+  // SOURCE still branches on hasAsyncOptions (local slice vs server fetch,
+  // see filteredOptions below) — never the timing.
   let debouncedSearch = $state('');
-  let timeoutId: number;
-  
+  const setDebouncedSearch = debounce((q: string) => { debouncedSearch = q; }, SEARCH_DEBOUNCE_MS);
   $effect(() => {
-    const q = searchQuery.toLowerCase();
-    // Local options filter instantly (realtime); only async fetches are debounced.
-    if (!hasAsyncOptions) {
-      debouncedSearch = q;
-      return;
-    }
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => {
-      debouncedSearch = q;
-    }, 300) as unknown as number;
+    setDebouncedSearch(searchQuery.toLowerCase());
   });
 
   // Reset the virtual-scroll window whenever the search changes — a stale
@@ -119,17 +120,15 @@
   let asyncOffset = $state(0);
   let asyncHasMore = $state(false);
   const ASYNC_LIMIT = 50;
-  // Must match the server-side minSearchChars guard: a 1–2 char infix search on
-  // a huge option set (287k-row school lists) forces a full scan and saturates
-  // the DB, so we don't even fire the request for terms this short.
-  const MIN_SEARCH_CHARS = 3;
 
   // True when the user typed a non-empty term below the minimum — we skip the
   // fetch and show a hint instead (empty term still loads the first page).
   // A filtered request already narrows the scan (contract §3 lifts the server
-  // minimum too), so the guard applies only to unfiltered async searches.
+  // minimum too), so the guard applies only to unfiltered searches.
+  // `hideUntilSearch` (§C) has its own, looser gate (any non-empty query
+  // reveals results, no minimum) — it wins over this one.
   let searchTooShort = $derived(
-    !filter && debouncedSearch.length > 0 && debouncedSearch.length < MIN_SEARCH_CHARS
+    !hideUntilSearch && !filter && debouncedSearch.length > 0 && debouncedSearch.length < MIN_SEARCH_CHARS
   );
 
   // First page: (re)load whenever the (debounced) search, question identity or
@@ -177,11 +176,11 @@
   }
 
   let filteredOptions = $derived(
-    hasAsyncOptions
-      ? asyncOptions
-      : (debouncedSearch === '' 
-        ? (options || [])
-        : (options || []).filter((o: Opt) => o.label.toLowerCase().includes(debouncedSearch) || i18n.label(o).toLowerCase().includes(debouncedSearch)))
+    hideUntilSearch && debouncedSearch === ''
+      ? [] // "Sembunyikan Opsi" (§C): nothing shown (and nothing counted in the footer) until a query is typed.
+      : hasAsyncOptions
+        ? asyncOptions
+        : filterBySearch(options || [], debouncedSearch, (o: Opt) => [o.label, i18n.label(o)])
   );
 
   // Virtual scrolling
@@ -271,7 +270,9 @@
         />
       </div>
 
-      {#if searchTooShort}
+      {#if hideUntilSearch && debouncedSearch === ''}
+        <div class="empty-state">{i18n.t('ddTypeToSearch')}</div>
+      {:else if searchTooShort}
         <div class="empty-state">{i18n.t('ddMinChars', { n: MIN_SEARCH_CHARS })}</div>
       {:else if filteredOptions.length === 0 && isFetching}
         <div class="empty-state">{i18n.t('ddLoading')}</div>
