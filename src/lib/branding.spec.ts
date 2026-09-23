@@ -251,7 +251,8 @@ describe('halaman gerbang — logo per survei (P4/K29)', () => {
       // lama yang tidak punya kunci branding sama sekali — harus tampak persis
       // seperti sebelum M2.
       const body = gate.withoutLogo()
-      expect(body).toContain('aria-label="Logika Statistik"')
+      expect(body).toContain('alt="Logika Statistik"')
+      expect(body).toContain(PLATFORM_LOGO_URL)
       expect(body).not.toContain('alt="Logo survei"')
       expect(body).not.toContain(CLIENT_LOGO_URL)
     })
@@ -259,14 +260,13 @@ describe('halaman gerbang — logo per survei (P4/K29)', () => {
 })
 
 describe('Logo — prop opsional yang bawaannya tetap merek platform (K29)', () => {
-  it('tanpa prop baru, merender SVG platform persis seperti sebelumnya', () => {
+  it('tanpa prop baru, merender logo platform (aset saat ini) persis seperti sebelumnya', () => {
     // Logo.svelte dipakai 10 berkas dan lima di antaranya SENGAJA tetap merek
     // platform. Selama pemanggil tidak mengoper logo, keluarannya wajib tidak
     // bergerak satu atribut pun.
     const { body } = render(Logo, { props: {} })
-    expect(body).toContain('aria-label="Logika Statistik"')
-    expect(body).toContain('viewBox="0 0 173 35"')
-    expect(body).toContain('#F6C400')
+    expect(body).toContain('alt="Logika Statistik"')
+    expect(body).toContain(PLATFORM_LOGO_URL)
     expect(body).not.toContain('alt="Logo survei"')
   })
 
@@ -282,7 +282,7 @@ describe('Logo — prop opsional yang bawaannya tetap merek platform (K29)', () 
     for (const value of [null, undefined, '']) {
       expect(isCustomLogo(value)).toBe(false)
       const { body } = render(Logo, { props: { logoUrl: value } })
-      expect(body).toContain('aria-label="Logika Statistik"')
+      expect(body).toContain('alt="Logika Statistik"')
       expect(body).not.toContain('alt="Logo survei"')
     }
 
@@ -290,7 +290,7 @@ describe('Logo — prop opsional yang bawaannya tetap merek platform (K29)', () 
     const { body } = render(Logo, { props: { logoUrl: CLIENT_LOGO_URL } })
     expect(body).toContain(`src="${resolveLogoUrl(CLIENT_LOGO_URL)}"`)
     expect(body).toContain('alt="Logo survei"')
-    expect(body).not.toContain('aria-label="Logika Statistik"')
+    expect(body).not.toContain(PLATFORM_LOGO_URL)
   })
 })
 
