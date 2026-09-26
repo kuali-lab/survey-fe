@@ -211,6 +211,15 @@ export interface SurveySettings {
   requireSelfie?: boolean
   oneResponsePerDevice?: boolean
   /**
+   * Gerbang "hanya lewat tautan cabang" (Ihatec F1): survei ini hanya menerima
+   * jawaban lewat tautan/QR yang bawa kode cabang (`?c=`), bukan tautan umum.
+   *
+   * 🔴 Opsional dengan alasan yang sama seperti `allowBack`/branding di atas:
+   * muatan publik lama (sebelum field ini ada) tidak punya kunci ini. Ketiadaan
+   * field berarti TIDAK ada gerbang — bukan gerbang aktif.
+   */
+  requireLinkCode?: boolean
+  /**
    * Responden boleh kembali ke pertanyaan sebelumnya (M1 No-Back).
    *
    * 🔴 Opsional dengan sengaja: `fetchSurvey` menyinggahkan objek survei ke
