@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readLinkCodeFromUrl, stripLinkCodeFromUrl, resolveResumeLinkCode } from './linkCode.js'
+import { readLinkCodeFromUrl, stripLinkCodeFromUrl, resolveResumeLinkCode, requiresLinkGate } from './linkCode.js'
 
 describe('readLinkCodeFromUrl', () => {
   it('reads ?c=', () => {
@@ -68,5 +68,24 @@ describe('resolveResumeLinkCode', () => {
     ['x', null, 'x'],
   ] as const)('(%s, %s) → %s', (current, fromDraft, expected) => {
     expect(resolveResumeLinkCode(current, fromDraft)).toBe(expected)
+  })
+})
+
+describe('requiresLinkGate', () => {
+  it('blocks when required and no linkCode is known from any source', () => {
+    expect(requiresLinkGate(true, null)).toBe(true)
+  })
+
+  it('does not block when required but a linkCode is already known (URL or draft)', () => {
+    expect(requiresLinkGate(true, 'k7')).toBe(false)
+  })
+
+  it('does not block when not required, regardless of linkCode', () => {
+    expect(requiresLinkGate(false, null)).toBe(false)
+    expect(requiresLinkGate(undefined, null)).toBe(false)
+  })
+
+  it('treats an absent requireLinkCode (old payload) as false', () => {
+    expect(requiresLinkGate(undefined, null)).toBe(false)
   })
 })

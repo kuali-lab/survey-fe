@@ -25,6 +25,23 @@ describe('InviteBlockedPage — state "link" (M6a)', () => {
     expect(withTitle).toContain('Tautan tidak berlaku')
     expect(noTitle).not.toContain('class="eyebrow')
   })
+
+  it('defaults linkReason to "invalid" (old callers unaffected)', () => {
+    const { body } = render(InviteBlockedPage, { props: { state: 'link', title: 'Survei X' } })
+    expect(body).toContain('Tautan ini tidak berlaku')
+  })
+})
+
+describe('InviteBlockedPage — state "link", linkReason "required" (Ihatec F1)', () => {
+  it('renders the required-link-code gate copy instead of the invalid-link copy', () => {
+    const { body } = render(InviteBlockedPage, {
+      props: { state: 'link', linkReason: 'required', title: 'Survei X', logoUrl: LOGO },
+    })
+    expect(body).toContain('Survei ini hanya bisa diisi lewat tautan petugas')
+    expect(body).toContain('Pakai tautan atau QR yang dibagikan petugas. Tautan umum tidak menerima jawaban.')
+    expect(body).toContain(LOGO)
+    expect(body).not.toContain('Tautan ini tidak berlaku')
+  })
 })
 
 describe('InviteBlockedPage — existing states unchanged', () => {

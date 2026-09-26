@@ -3,6 +3,7 @@ import {
   ANSWER_VALIDATION_ERROR,
   BAD_REQUEST_ERROR,
   LINK_INVALID_ERROR,
+  LINK_REQUIRED_ERROR,
   submitErrorFromResponse,
   serverMessageOf,
   isPermanentSubmitFailure,
@@ -277,5 +278,20 @@ describe('submitErrorFromResponse — 410 discriminated by code (M6a)', () => {
   it('treats link_invalid as permanent', () => {
     expect(isPermanentSubmitFailure(LINK_INVALID_ERROR)).toBe(true)
     expect(isPermanentSubmitFailure('link_invalid')).toBe(true)
+  })
+
+  it('maps 410 LINK_REQUIRED to link_required', async () => {
+    const res = fakeResponse(410, {
+      error: { code: 'LINK_REQUIRED', message: 'Survei ini hanya menerima tautan cabang.', status: 410 },
+    })
+    const err = await submitErrorFromResponse(res)
+    expect(err?.message).toBe(LINK_REQUIRED_ERROR)
+    expect(err?.message).toBe('link_required')
+    expect(serverMessageOf(err)).toBeNull()
+  })
+
+  it('treats link_required as permanent', () => {
+    expect(isPermanentSubmitFailure(LINK_REQUIRED_ERROR)).toBe(true)
+    expect(isPermanentSubmitFailure('link_required')).toBe(true)
   })
 })

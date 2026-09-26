@@ -47,3 +47,16 @@ export function resolveResumeLinkCode(
   if (typeof fromDraft === 'string' && fromDraft.length > 0) return fromDraft
   return null
 }
+
+/**
+ * Gerbang "hanya lewat tautan cabang" (Ihatec F1): apakah `requireLinkCode`
+ * harus memblokir form karena, di titik pemeriksaan ini, TIDAK ADA linkCode
+ * yang diketahui dari sumber manapun (URL atau draf) — bukan cuma `?c=`
+ * mentah. `requireLinkCode` absen/false → tidak pernah menggerbang.
+ */
+export function requiresLinkGate(
+  requireLinkCode: boolean | undefined,
+  knownLinkCode: string | null,
+): boolean {
+  return Boolean(requireLinkCode) && !knownLinkCode
+}

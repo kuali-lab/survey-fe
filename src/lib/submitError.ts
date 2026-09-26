@@ -24,6 +24,8 @@ export const ANSWER_VALIDATION_ERROR = 'answer_validation_error'
 export const BAD_REQUEST_ERROR = 'bad_request_error'
 /** 410 dengan `code: LINK_INVALID` — kode cabang tautan (M6a) tidak aktif/tak dikenal. */
 export const LINK_INVALID_ERROR = 'link_invalid'
+/** 410 dengan `code: LINK_REQUIRED` — survei hanya menerima tautan cabang, payload tanpa `linkCode` (Ihatec F1). */
+export const LINK_REQUIRED_ERROR = 'link_required'
 export const OPTION_OUT_OF_FILTER = 'OPTION_OUT_OF_FILTER'
 
 /**
@@ -58,6 +60,8 @@ const PERMANENT_CODES = new Set([
   'survey_closed',
   // Kode cabang menempel di payload; mengirim ulang payload yang sama ditolak sama.
   LINK_INVALID_ERROR,
+  // Payload tanpa `linkCode` ditolak sama persis kalau dikirim ulang apa adanya.
+  LINK_REQUIRED_ERROR,
   ANSWER_VALIDATION_ERROR,
   BAD_REQUEST_ERROR,
   // Re-sending the identical payload is rejected identically: the stale pick is
@@ -129,16 +133,21 @@ async function readErrorEnvelope(res: JsonResponse): Promise<ErrorEnvelope> {
  * Map a submit response onto the Error to throw, or null when it succeeded.
  * The 401 / 409 / fallback mappings are the long-standing contract and must
  * not shift. 400 and 422 carry a server sentence; 410 branches on the envelope
- * `code` (LINK_INVALID → link_invalid, otherwise the old survey_closed).
+ * `code` (LINK_INVALID → link_invalid, LINK_REQUIRED → link_required,
+ * otherwise the old survey_closed).
  */
 export async function submitErrorFromResponse(res: JsonResponse): Promise<Error | null> {
   if (res.status === 401) return new Error('unauthorized')
   if (res.status === 409) return new Error('already_submitted')
   if (res.status === 410) {
-    // 410 kini dua arti: survei ditutup (kontrak lama) atau tautan cabang tidak
-    // aktif (M6a). Dibedakan lewat `code`; badan yang tak terbaca jatuh ke arti lama.
+    // 410 kini TIGA arti: survei ditutup (kontrak lama), tautan cabang tidak
+    // aktif/tak dikenal (LINK_INVALID, M6a), atau survei hanya menerima tautan
+    // cabang dan payload datang tanpa `linkCode` (LINK_REQUIRED, Ihatec F1).
+    // Dibedakan lewat `code`; badan yang tak terbaca jatuh ke arti lama.
     const envelope = await readErrorEnvelope(res)
-    return new Error(envelope.code === 'LINK_INVALID' ? LINK_INVALID_ERROR : 'survey_closed')
+    if (envelope.code === 'LINK_INVALID') return new Error(LINK_INVALID_ERROR)
+    if (envelope.code === 'LINK_REQUIRED') return new Error(LINK_REQUIRED_ERROR)
+    return new Error('survey_closed')
   }
 
   const code = MESSAGE_BEARING_CODES[res.status]

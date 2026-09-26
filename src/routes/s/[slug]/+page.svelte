@@ -3,7 +3,7 @@
   import type { ViewState, Answers } from '$lib/types.js'
   import { parseSavedState, serializeSavedState, type SavedState } from '$lib/savedState.js'
   import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress, getInvitationStatus, getDeviceStatus, getLinkStatus, OptionOutOfFilterError } from '$lib/api.js'
-  import { readLinkCodeFromUrl, stripLinkCodeFromUrl, resolveResumeLinkCode } from '$lib/linkCode.js'
+  import { readLinkCodeFromUrl, stripLinkCodeFromUrl, resolveResumeLinkCode, requiresLinkGate } from '$lib/linkCode.js'
   import { computeFingerprint } from '$lib/fingerprint.js'
   import { serverMessageOf } from '$lib/submitError.js'
   import { page } from '$app/stores'
@@ -54,8 +54,13 @@
   let invitationToken = $state<string | null>(null)
   let invitationStartedFired = false
   // Item 4 — one-time link gate: 'done' (already completed) | 'expired' | null.
-  // 'link' = kode cabang tautan (?c=, M6a) tidak aktif.
+  // 'link' = kode cabang tautan (?c=, M6a) tidak aktif ATAU survei mewajibkan
+  // tautan cabang dan tidak ada kode yang diketahui (Ihatec F1) — dibedakan
+  // lewat `linkBlockReason` di bawah, bukan state baru.
   let inviteBlocked = $state<'done' | 'expired' | 'device' | 'link' | null>(null)
+  // Alasan gerbang 'link' (Ihatec F1). Dibaca InviteBlockedPage HANYA saat
+  // inviteBlocked === 'link'. Bawaan 'invalid' = teks lama tak berubah.
+  let linkBlockReason = $state<'invalid' | 'required'>('invalid')
   // Final-step confirm modal: pressing "Kirim Jawaban" opens it instead of
   // submitting straight away, so the respondent can review before committing.
   let showSubmitConfirm = $state(false)
@@ -197,8 +202,29 @@
         try { history.replaceState({}, '', stripLinkCodeFromUrl(new URL(window.location.href))) } catch {}
         // Gerbang dini, fail-open; gerbang undangan/perangkat yang sudah terpasang menang.
         getLinkStatus(data.slug, codeFromUrl).then((st) => {
-          if (st === 'invalid' && !inviteBlocked) inviteBlocked = 'link'
+          if (st === 'invalid' && !inviteBlocked) {
+            linkBlockReason = 'invalid'
+            inviteBlocked = 'link'
+          }
         })
+      }
+
+      // Ihatec F1 — gerbang "hanya lewat tautan cabang": kalau sakelar hidup,
+      // blokir SEBELUM form kalau linkCode tidak diketahui dari sumber manapun
+      // yang bisa dibaca SINKRON di sini — bukan cuma `?c=` mentah (`linkCode`
+      // di atas), tapi juga draf LOKAL (localStorage, dibaca langsung, tanpa
+      // jaringan) supaya responden yang linkCode-nya sudah tersimpan dari sesi
+      // sebelumnya tidak salah diblokir saat reload tanpa `?c=`.
+      // 🔴 Draf SERVER (fingerprint + `getDraft`, di bawah) baru diketahui
+      // belakangan lewat jaringan — kalau linkCode ternyata cuma ada di sana,
+      // gerbang ini sudah kadung tampil. Diterima sebagai batas yang sama
+      // dengan gerbang LINK_INVALID di atas (fail dulu, baca-ulang manual bila
+      // petugas memberi tautan baru); draf lokal TIDAK dihapus oleh gerbang ini.
+      const savedForGate = loadSavedState(data.slug)
+      const knownLinkCode = linkCode ?? savedForGate?.linkCode ?? null
+      if (requiresLinkGate(settings.requireLinkCode, knownLinkCode) && !inviteBlocked) {
+        linkBlockReason = 'required'
+        inviteBlocked = 'link'
       }
     }
 
@@ -478,6 +504,13 @@
       } else if (msg === 'link_invalid') {
         // Gerbang, bukan toast — dan draf TIDAK dihapus: kalau petugas memberi
         // tautan baru, jawabannya masih ada.
+        linkBlockReason = 'invalid'
+        inviteBlocked = 'link'
+      } else if (msg === 'link_required') {
+        // Ihatec F1 — 410 LINK_REQUIRED: sakelar hidup dan payload dikirim tanpa
+        // linkCode. Gerbang yang sama dengan link_invalid, teks beda; draf TIDAK
+        // dihapus (pola v1 dipertahankan persis).
+        linkBlockReason = 'required'
         inviteBlocked = 'link'
       } else if (msg === 'survey_closed') {
         viewState = 'closed'
@@ -632,6 +665,7 @@
     <div class="centered-wrap">
       <InviteBlockedPage
         state={inviteBlocked}
+        linkReason={linkBlockReason}
         title={survey?.title ?? ''}
         {logoUrl}
       />
