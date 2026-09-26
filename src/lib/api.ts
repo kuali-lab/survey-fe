@@ -1,6 +1,6 @@
 import { PUBLIC_API_BASE_URL } from '$env/static/public'
 import { env as publicEnv } from '$env/dynamic/public'
-import type { Survey, Question } from './types.js'
+import type { Survey, Question, TranslatedText } from './types.js'
 import type { Answers } from './types.js'
 import type { OptionFilter } from './optionFilter.js'
 import { buildMockSurvey } from './mockSurvey.js'
@@ -46,6 +46,10 @@ function normalizeQuestion(q: Record<string, unknown>): Question {
       imageUrl: o.imageUrl as string | undefined,
       sortOrder: (o.sortOrder as number) ?? 0,
       isOther: Boolean(o.isOther),
+      // Peta ini memilih field satu per satu, jadi field baru HILANG kalau tidak
+      // didaftarkan. Baris/kolom matriks dan `question.translations` lolos lewat
+      // spread di atas; pilihan tidak.
+      translations: o.translations as TranslatedText | undefined,
     })),
     optionImages: hasOptionImages ? optionImages : undefined,
   } as Question
@@ -313,6 +317,13 @@ export async function submitSurveyAnswers(
   submissionId?: string,
   invitationToken?: string | null,
   linkCode?: string | null,
+  /**
+   * The language the respondent actually FILLED the survey in (two-language
+   * surveys). A record only: the answers themselves are always primary-language
+   * labels whatever this says. A code the survey does not offer is stored as NULL
+   * by the backend rather than rejected.
+   */
+  language?: string,
 ): Promise<void> {
   // Dev mock: pretend the submission succeeded so the closing journey renders
   // without a backend. Mirrors the fetchSurvey() gate.
@@ -340,6 +351,7 @@ export async function submitSurveyAnswers(
       // Kode cabang tautan (M6a), mentah; server yang trim/lowercase. Kode
       // tidak aktif → 410 LINK_INVALID, diperiksa sebelum kuota & validasi.
       linkCode: linkCode ?? undefined,
+      language: language || undefined,
     })
   })
   // Status mapping lives in submitError.ts so the outbox drain and the

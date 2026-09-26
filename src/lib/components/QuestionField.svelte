@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Question, AnswerValue, Answers } from '$lib/types.js'
   import QuestionInput from './QuestionInput.svelte'
+  import { useI18n } from '$lib/i18n/context.js'
   import {
     canAddCard,
     canAddRow,
@@ -50,6 +51,8 @@
     pratinjau?: boolean
     paged?: boolean
   } = $props()
+
+  const i18n = useI18n()
 
   const berulang = $derived(questionRepeats(question))
   const rows = $derived(toRows(value))
@@ -118,7 +121,7 @@
               type="button"
               class="repeat-remove"
               onclick={() => hapusKartu(ci)}
-              aria-label="Hapus jawaban ke-{ci + 1}"
+              aria-label={i18n.t('repeatRemove', { n: ci + 1 })}
             >
               &times;
             </button>
@@ -127,7 +130,11 @@
         <div class="kartu-grid" style="--kolom-kartu: {kolomKartu}">
           {#each question.fields ?? [] as f (f.id)}
             <div class="kartu-field">
-              <span class="kartu-label">{f.titlePlain || f.title}</span>
+              <!-- Card field labels follow the active language. The `QuestionInput`
+                   below already translates its own contents through the same
+                   context; without this line only the labels would be left behind
+                   in the primary language. -->
+              <span class="kartu-label">{i18n.plain(f, 'title')}</span>
               <QuestionInput
                 question={f}
                 value={kartu[f.id] ?? ''}
@@ -138,6 +145,7 @@
                 {questions}
                 {pratinjau}
                 {paged}
+                grow
               />
             </div>
           {/each}
@@ -146,9 +154,9 @@
     {/each}
 
     {#if canAddCard(question, cards)}
-      <button type="button" class="repeat-add" onclick={tambahKartu}>+ Tambah jawaban</button>
+      <button type="button" class="repeat-add" onclick={tambahKartu}>{i18n.t('repeatAdd')}</button>
     {:else}
-      <p class="repeat-limit">Maksimal {batasKartu} jawaban.</p>
+      <p class="repeat-limit">{i18n.t('repeatLimit', { n: batasKartu })}</p>
     {/if}
   </div>
 {:else if berulang}
@@ -166,6 +174,7 @@
             {questions}
             {pratinjau}
             {paged}
+            grow
           />
         </div>
         {#if rows.length > 1}
@@ -173,7 +182,7 @@
             type="button"
             class="repeat-remove"
             onclick={() => hapus(i)}
-            aria-label="Hapus jawaban ke-{i + 1}"
+            aria-label={i18n.t('repeatRemove', { n: i + 1 })}
           >
             &times;
           </button>
@@ -182,9 +191,9 @@
     {/each}
 
     {#if canAddRow(question, rows)}
-      <button type="button" class="repeat-add" onclick={tambah}>+ Tambah jawaban</button>
+      <button type="button" class="repeat-add" onclick={tambah}>{i18n.t('repeatAdd')}</button>
     {:else}
-      <p class="repeat-limit">Maksimal {batas} jawaban.</p>
+      <p class="repeat-limit">{i18n.t('repeatLimit', { n: batas })}</p>
     {/if}
   </div>
 {:else}

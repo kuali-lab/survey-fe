@@ -406,6 +406,45 @@ function keyPress(r: SurveyRunner, key: string) {
   ;(r as unknown as { handleKeydown: (e: KeyboardEvent) => void }).handleKeydown(e)
 }
 
+describe('SurveyRunner — dropdown multi-select auto-advance (§A)', () => {
+  function makeMultiDropdownRunner() {
+    const survey: Survey = {
+      id: 'sv', title: 'PID',
+      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
+      skipRules: [], closeMessage: null, closeImageUrl: null,
+      questions: [
+        q({
+          id: 'd', type: 'dropdown', sortOrder: 1, multiSelect: true,
+          options: [{ id: 'o1', label: 'Merah', value: 'Merah', sortOrder: 0 }, { id: 'o2', label: 'Biru', value: 'Biru', sortOrder: 1 }],
+        }),
+        q({ id: 'n', type: 'short_text', sortOrder: 2 }),
+      ],
+    }
+    return new SurveyRunner({ getSurvey: () => survey, onFinish: () => {}, autoSubmit: false })
+  }
+
+  it('does not auto-advance on the first pick — the respondent may want a second', () => {
+    const r = makeMultiDropdownRunner()
+    r.handleAnswer('d', ['Merah'])
+    expect(r.autoAdvancing).toBe(false)
+  })
+
+  it('a plain (non-multi) dropdown still auto-advances — regression guard', () => {
+    const survey: Survey = {
+      id: 'sv', title: 'PID',
+      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
+      skipRules: [], closeMessage: null, closeImageUrl: null,
+      questions: [
+        q({ id: 'd', type: 'dropdown', sortOrder: 1, options: [{ id: 'o1', label: 'Merah', value: 'Merah', sortOrder: 0 }] }),
+        q({ id: 'n', type: 'short_text', sortOrder: 2 }),
+      ],
+    }
+    const r = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {}, autoSubmit: false })
+    r.handleAnswer('d', 'Merah')
+    expect(r.autoAdvancing).toBe(true)
+  })
+})
+
 describe('SurveyRunner — Top of Mind', () => {
   it('required: no first pick blocks with the stage-1 message', async () => {
     const r = makeTomRunner({ required: true })
@@ -486,19 +525,19 @@ describe('SurveyRunner — Top of Mind', () => {
     expect(r.answers.brand).toEqual({ first: 'Aqua', selected: ['Aqua'] }) // intact: lands on stage 2
   })
 
-  it('scroll mode: back never touches the answer', () => {
+  it('forces one-per-page even when the survey is stored as scroll', () => {
+    // Stage 2 is an extended question on its own screen, so a survey with a Top
+    // of Mind question can never run as one long scroll — same rule as skip logic.
     const r = makeTomRunner({ displayMode: 'scroll' })
+    expect(r.effectiveDisplayMode).toBe('one_per_page')
+    expect(r.isScrollMode).toBe(false)
+    expect(r.surveyPages.length).toBe(2)
     r.handleAnswer('brand', { first: 'Aqua', selected: ['Aqua'] })
-    expect(r.tomStage2QuestionId).toBeNull()
-    expect(r.canGoBack).toBe(false)
-    r.handleBack()
-    expect(r.answers.brand).toEqual({ first: 'Aqua', selected: ['Aqua'] })
+    expect(r.tomStage2QuestionId).toBe('brand')
   })
 
-  it('scroll-mode progress counts a first-pick-only answer as answered', () => {
-    const r = makeTomRunner({ displayMode: 'scroll' })
-    const before = r.progress
-    r.handleAnswer('brand', { first: 'Aqua', selected: ['Aqua'] })
-    expect(r.progress).toBeGreaterThan(before)
+  it('a single-pick checkbox with the flag does not force the mode', () => {
+    const r = makeTomRunner({ displayMode: 'scroll', maxSelections: 1 })
+    expect(r.effectiveDisplayMode).toBe('scroll')
   })
 })

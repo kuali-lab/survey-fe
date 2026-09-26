@@ -24,6 +24,10 @@
   import SurveyStage from '$lib/components/SurveyStage.svelte'
   import { loadSurveyorSession } from '$lib/surveyorAuth.js'
   import { SurveyRunner } from '$lib/runner/SurveyRunner.svelte.js'
+  import LanguagePicker from '$lib/components/LanguagePicker.svelte'
+  import LanguageSelectPage from '$lib/components/LanguageSelectPage.svelte'
+  import { provideI18n } from '$lib/i18n/context.js'
+  import { languageChoices, needsLanguageStep, pickInitialLocale, questionPlainText, surveyLanguages } from '$lib/i18n/content.js'
 
   let { data }: { data: PageData } = $props()
 
@@ -37,6 +41,10 @@
     // and resolves to the real survey or a real error — no 500 flash.
     if (data.deferred) return 'loading'
     if (!survey || data.error) return 'error'
+    // Two-language surveys: the respondent picks a language FIRST. Decided here
+    // rather than in onMount so the server already renders the language screen and
+    // the primary-language welcome page never flashes.
+    if (needsLanguageStep(survey)) return 'language'
     return 'welcome'
   }
 
@@ -65,6 +73,52 @@
   // submitting straight away, so the respondent can review before committing.
   let showSubmitConfirm = $state(false)
 
+  // ── Two-language surveys ──────────────────────────────────────────────────────
+  // The respondent's active language. It affects ONLY displayed text: answers are
+  // still stored as primary-language labels (see `$lib/i18n/content.ts`), so
+  // switching at any point is safe and the resulting dataset stays single-language.
+  //
+  // Start from the primary language — that is what the server renders (SEO/OG stay
+  // primary too). A saved choice or the browser language is applied in onMount,
+  // because both exist only in the browser.
+  const surveyLangs = $derived(surveyLanguages(survey))
+  const languages = $derived(languageChoices(survey))
+  function initialLocale(): string {
+    return surveyLanguages(data.survey).primary
+  }
+  let locale = $state(initialLocale())
+  const i18n = provideI18n(() => locale, () => surveyLangs.primary)
+  const localeKey = (s: string) => `survey-fe:lang:${s}`
+
+  // Bahasa yang cocok dengan peramban: hanya DITONJOLKAN di layar pilih bahasa,
+  // tidak dipilihkan — responden tetap yang memutuskan.
+  let suggestedLocale = $state<string | null>(null)
+  // Judul survei per bahasa, ditampilkan di tiap tombol layar pilih bahasa.
+  const languageTitles = $derived(
+    Object.fromEntries(languages.map((l) => [
+      l.code,
+      (welcomeQuestion && questionPlainText(welcomeQuestion, 'title', l.code, surveyLangs.primary)) || survey?.title || '',
+    ])),
+  )
+
+  /** Langkah pertama: satu ketukan = pilih bahasa + lanjut ke halaman pembuka. */
+  function chooseLanguage(code: string) {
+    setLocale(code)
+    viewState = 'welcome'
+  }
+
+  function setLocale(code: string) {
+    locale = code
+    // Disimpan terpisah dari draf jawaban: draf baru ada setelah jawaban
+    // pertama, sedangkan bahasa dipilih sebelum survei dimulai.
+    try { if (data.slug) localStorage.setItem(localeKey(data.slug), code) } catch {}
+  }
+
+  $effect(() => {
+    // Pembaca layar melafalkan halaman menurut `<html lang>`; app.html menetapkannya statis "id".
+    if (typeof document !== 'undefined') document.documentElement.lang = locale
+  })
+
   const runner = new SurveyRunner({
     getSurvey: () => survey ?? null,
     // Pressing the last-page button opens the confirm modal rather than
@@ -73,6 +127,7 @@
     // Never auto-submit — the respondent must press "Kirim Jawaban" so they can
     // review their answers first (covers the last page and skip-to-END rules).
     autoSubmit: false,
+    getLocale: () => locale,
     // A filtered dropdown was wiped because its source answer changed: push the
     // trimmed answer map to the server draft now (it is otherwise only written
     // on page change), so a resume never brings the stale pick back. The local
@@ -160,6 +215,20 @@
   }
 
   onMount(() => {
+    if (languages.length > 1 && data.slug) {
+      let saved: string | null = null
+      try { saved = localStorage.getItem(localeKey(data.slug)) } catch {}
+      const browser = navigator.languages ?? [navigator.language]
+      if (saved && languages.some((l) => l.code === saved)) {
+        // Responden yang kembali sudah pernah memilih: jangan ditanya lagi. Pil
+        // di pojok tetap ada kalau ia ingin berganti.
+        locale = saved
+        if (viewState === 'language') viewState = 'welcome'
+      } else {
+        suggestedLocale = pickInitialLocale(surveyLangs, null, browser)
+      }
+    }
+
     // Capture ?t= invitation token before we strip it from the URL. Persisted
     // to sessionStorage so a mid-survey reload retains the link to the invite.
     if (typeof window !== 'undefined' && data.slug) {
@@ -472,7 +541,7 @@
       const respondentEmail = emailQuestion ? (runner.answers[emailQuestion.id] as string | undefined) : undefined
       const durationSeconds = runner.getDurationSeconds()
 
-      await submitSurveyAnswers(slug, runner.answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie, undefined, undefined, invitationToken, linkCode)
+      await submitSurveyAnswers(slug, runner.answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie, undefined, undefined, invitationToken, linkCode, locale)
 
       clearSavedState()
       if (fingerprintHash && slug) deleteDraft(slug, draftSessionKey(fingerprintHash)).catch(() => {})
@@ -498,7 +567,7 @@
           }, 300)
         }
       } else if (msg === 'already_submitted') {
-        submitError = 'Survei ini sudah pernah Anda isi sebelumnya.'
+        submitError = i18n.t('alreadySubmitted')
         viewState = 'question'
         clearSavedState()
       } else if (msg === 'link_invalid') {
@@ -523,7 +592,7 @@
         submitError = serverMessage
         viewState = 'question'
       } else {
-        submitError = 'Terjadi kesalahan saat mengirim jawaban. Silakan coba lagi.'
+        submitError = i18n.t('submitFailed')
         viewState = 'question'
       }
     } finally {
@@ -661,6 +730,9 @@
 />
 
 <div class="page" class:page-question={viewState === 'question'}>
+  {#if !inviteBlocked && (viewState === 'welcome' || viewState === 'question')}
+    <LanguagePicker choices={languages} {locale} onChange={setLocale} />
+  {/if}
   {#if inviteBlocked}
     <div class="centered-wrap">
       <InviteBlockedPage
@@ -675,7 +747,7 @@
     <div class="centered-wrap">
       <div class="submitting-card">
         <span class="big-spinner" aria-hidden="true"></span>
-        <p>Memuat survei…</p>
+        <p>{i18n.t('loading')}</p>
       </div>
     </div>
 
@@ -693,27 +765,38 @@
       />
     </div>
 
+  {:else if viewState === 'language'}
+    <div class="centered-wrap">
+      <LanguageSelectPage
+        choices={languages}
+        titles={languageTitles}
+        suggested={suggestedLocale}
+        onSelect={chooseLanguage}
+        {logoUrl}
+      />
+    </div>
+
   {:else if viewState === 'welcome'}
     <div class="centered-wrap">
       {#if resumePrompt}
-        <div class="resume-card" role="region" aria-label="Lanjutkan survei">
-          <h2 class="resume-title">Lanjutkan survei Anda</h2>
+        <div class="resume-card" role="region" aria-label={i18n.t('resumeRegion')}>
+          <h2 class="resume-title">{i18n.t('resumeTitle')}</h2>
           <p class="resume-description">
-            Jawaban sebelumnya tersimpan di perangkat ini. Anda dapat melanjutkan dari pertanyaan terakhir, atau memulai ulang dari awal.
+            {i18n.t('resumeBody')}
           </p>
           <div class="resume-actions">
-            <button class="resume-btn primary" type="button" onclick={resumeSurvey}>Lanjutkan</button>
-            <button class="resume-btn secondary" type="button" onclick={discardSavedState}>Mulai dari awal</button>
+            <button class="resume-btn primary" type="button" onclick={resumeSurvey}>{i18n.t('resumeContinue')}</button>
+            <button class="resume-btn secondary" type="button" onclick={discardSavedState}>{i18n.t('resumeRestart')}</button>
           </div>
         </div>
       {:else}
         <WelcomePage
-          title={welcomeQuestion?.title || survey?.title || ''}
-          titlePlain={welcomeQuestion?.titlePlain || survey?.title || ''}
-          description={welcomeQuestion?.description ?? null}
+          title={(welcomeQuestion && i18n.text(welcomeQuestion, 'title')) || survey?.title || ''}
+          titlePlain={(welcomeQuestion && i18n.plain(welcomeQuestion, 'title')) || survey?.title || ''}
+          description={(welcomeQuestion && i18n.text(welcomeQuestion, 'description')) || null}
           imageUrl={welcomeQuestion?.imageUrl ?? null}
           imageLayout={welcomeQuestion?.imageLayout ?? 'center'}
-          ctaText={'Mulai Survei'}
+          ctaText={i18n.t('start')}
           onStart={handleStart}
           error={validationError}
           {logoUrl}
@@ -775,7 +858,7 @@
     <div class="centered-wrap">
       <div class="submitting-card">
         <span class="big-spinner" aria-hidden="true"></span>
-        <p>Mengirim jawaban…</p>
+        <p>{i18n.t('submitting')}</p>
       </div>
     </div>
 
@@ -804,9 +887,9 @@
           aria-labelledby="confirm-title"
           aria-describedby="confirm-desc"
         >
-          <h2 id="confirm-title" class="confirm-title">Kirim jawaban Anda?</h2>
+          <h2 id="confirm-title" class="confirm-title">{i18n.t('confirmTitle')}</h2>
           <p id="confirm-desc" class="confirm-desc">
-            Jawaban yang sudah dikirim tidak bisa diubah lagi. Pastikan jawaban sudah benar.
+            {i18n.t('confirmBody')}
           </p>
           <div class="confirm-actions">
             <button
@@ -814,13 +897,13 @@
               type="button"
               onclick={cancelSubmit}
               use:focusOnMount
-            >Periksa lagi</button>
+            >{i18n.t('confirmReview')}</button>
             <button
               class="confirm-btn primary"
               type="button"
               onclick={confirmSubmit}
               disabled={submitting}
-            >Ya, kirim</button>
+            >{i18n.t('confirmSend')}</button>
           </div>
         </div>
       </div>
@@ -829,9 +912,9 @@
   {:else if viewState === 'closing'}
     <div class="centered-wrap">
       <ClosingPage
-        title={closingQuestion?.title ?? 'Terima Kasih!'}
-        titlePlain={closingQuestion?.titlePlain ?? 'Terima Kasih!'}
-        description={closingQuestion?.description ?? null}
+        title={(closingQuestion && i18n.text(closingQuestion, 'title')) || i18n.t('closingTitle')}
+        titlePlain={(closingQuestion && i18n.plain(closingQuestion, 'title')) || i18n.t('closingTitle')}
+        description={(closingQuestion && i18n.text(closingQuestion, 'description')) || null}
         imageUrl={closingQuestion?.imageUrl ?? null}
         imageLayout={closingQuestion?.imageLayout ?? 'center'}
         {logoUrl}

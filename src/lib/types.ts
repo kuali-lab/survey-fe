@@ -10,19 +10,46 @@ export type QuestionType =
   // yang menyimpan, masing-masing dengan `repeat_index` = nomor kartu.
   | 'repeat_group'
 
+// ── Two-language surveys ─────────────────────────────────────────────────────
+// The same shape the builder writes (dashboard-fe). ALL optional: older surveys,
+// copies in `survey-fe:surveyCache:*` and saved drafts do not carry these fields
+// and must keep working exactly as before.
+export interface SurveyLanguages {
+  primary: string
+  /** Absent = a single-language survey. */
+  secondary?: string
+}
+
+/** Translated text per language code, e.g. `{ en: 'Yes' }`. */
+export type TranslatedText = Record<string, string>
+
+export interface QuestionTextTranslation {
+  title?: string
+  description?: string
+  placeholder?: string
+  minLabel?: string
+  midLabel?: string
+  maxLabel?: string
+}
+
 export interface QuestionOption {
   id: string
+  // 🔴 `label` is the DATA IDENTITY, not just display text: answers, skip logic,
+  // Pilihan Bertingkat, drafts and the submit body all store and compare this
+  // string. A translation may only be used when RENDERING (`/i18n`).
   label: string
   value?: string
   imageUrl?: string
   sortOrder: number
   isOther?: boolean
+  translations?: TranslatedText
 }
 
 export interface MatrixRow {
   id: string
   label: string
   sortOrder: number
+  translations?: TranslatedText
 }
 
 export interface MatrixCol {
@@ -30,6 +57,7 @@ export interface MatrixCol {
   label: string
   value?: string
   sortOrder: number
+  translations?: TranslatedText
 }
 
 /**
@@ -55,15 +83,27 @@ export interface FilterConfig {
 }
 
 /**
- * "Pilihan Bertingkat" (plan §0): a plain single_choice / dropdown question
- * whose inline options are narrowed by the answer to ONE earlier plain choice
- * question. `allowed` maps a dependent option key to the parent option keys it
- * is shown under (key = trimmed `value`, else trimmed `label`). Absent = no
- * dependency.
+ * "Pilihan Bertingkat" (plan §0) / "Hubungkan Jawaban/Pilihan Lain" (§B): a
+ * dependent question whose inline options are narrowed by an earlier
+ * question's answer. `mode` discriminates the two mechanisms — absent/omitted
+ * means `'mapped'`, every `dependsOn` written before §B shipped, and is read
+ * exactly as before (back-compat, byte-for-byte).
+ *
+ * - `mode: 'mapped'` (default): an authored, static, per-option map. `allowed`
+ *   maps a dependent option key to the parent option keys it is shown under
+ *   (key = trimmed `value`, else trimmed `label`). Source: single_choice /
+ *   dropdown only (one resolvable key).
+ * - `mode: 'carryOver'`: dynamic — whatever the source question's answer
+ *   currently resolves to (directly, no authored map) becomes the
+ *   include/exclude set for the target's own options. Source: dropdown /
+ *   checkbox only (natively multi-valued, unlike mapped mode). `carryOverMode`
+ *   only present in this mode; `allowed` is absent.
  */
 export interface OptionDependency {
   sourceQuestionId: string
-  allowed: Record<string, string[]>
+  mode?: 'mapped' | 'carryOver'
+  allowed?: Record<string, string[]>
+  carryOverMode?: 'include' | 'exclude'
 }
 
 export interface Question {
@@ -119,6 +159,17 @@ export interface Question {
   // akan membuat kelimanya salah sekaligus — dan salahnya senyap.
   fields?: Question[]
 
+  // Dropdown "Pilih Lebih dari Satu" (inline-only — see optionDependency.ts's
+  // isPlainChoice guard, which also excludes it as a mapped-mode dependency
+  // source since it has no single resolvable key). Reuses `maxSelections` for
+  // the "maksimal N dipilih" cap, same convention as checkbox.
+  multiSelect?: boolean
+  // "Sembunyikan Opsi": checkbox + inline dropdown start with an empty option
+  // list ("Ketik untuk mencari…") until the respondent types anything. Pure
+  // display flag — the submitted answer is still a label match either way, no
+  // storage/validation impact.
+  hideOptionsUntilSearch?: boolean
+
   // Relational config
   hasAsyncOptions?: boolean
   filterConfig?: FilterConfig
@@ -136,6 +187,8 @@ export interface Question {
   showLabel?: boolean | null
   matrixRows?: MatrixRow[]
   matrixCols?: MatrixCol[]
+  /** Scalar text translations per language code. Option/row/column labels carry their own. */
+  translations?: Record<string, QuestionTextTranslation>
 }
 
 export interface SkipRule {
@@ -196,6 +249,8 @@ export interface Survey {
   settings: SurveySettings
   questions: Question[]
   skipRules: SkipRule[]
+  /** Absen = survei satu bahasa (perilaku lama). */
+  languages?: SurveyLanguages
   closeMessage: string | null
   closeImageUrl: string | null
 }
@@ -242,4 +297,5 @@ export type AnswerValue = string | number | string[] | Record<string, string> | 
 
 export type Answers = Record<string, AnswerValue>
 
-export type ViewState = 'loading' | 'welcome' | 'selfie_capture' | 'selfie_denied' | 'location_prompt' | 'location_denied' | 'question' | 'submitting' | 'closing' | 'closed' | 'error'
+// 'language' = the first step of a two-language survey (choose language), before 'welcome'.
+export type ViewState = 'loading' | 'language' | 'welcome' | 'selfie_capture' | 'selfie_denied' | 'location_prompt' | 'location_denied' | 'question' | 'submitting' | 'closing' | 'closed' | 'error'

@@ -16,12 +16,13 @@
     visibleOptions, dependencyDisabledHint, dependencyEmptyMessage, dependencyParentLabel,
   } from '$lib/optionDependency.js'
   import { getRegionName, resolveRegionName } from '$lib/regionNames.js'
+  import { SEARCH_DEBOUNCE_MS, filterBySearch, effectiveMinChars, debounce } from '$lib/optionSearch.js'
   import { applyNumberInput, numberInputText, numberInputCompare } from '$lib/numberInput.js'
   import { fade, fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
+  import { useI18n } from '$lib/i18n/context.js'
   import { cubicOut } from 'svelte/easing'
   import {
-    TOM_STAGE2_HINT,
     isTopOfMindQuestion, topOfMindFirst, topOfMindRest, remainingOptions, restLimit, restAtLimit,
     setTopOfMindFirst, toggleTopOfMindRest, clearTopOfMind, normalizeTopOfMind, topOfMindOtherText, firstIsOther,
   } from '$lib/topOfMind.js'
@@ -42,6 +43,7 @@
     // Top of Mind: one-per-page mode renders stage 2 as an "extended question"
     // (first pick excluded, intro line) instead of pinning the first pick.
     paged = false,
+    grow = false,
   }: {
     question: Question
     value: AnswerValue
@@ -54,7 +56,17 @@
     questions?: Question[]
     pratinjau?: boolean
     paged?: boolean
+    /** Isian teks pendek yang tumbuh ke bawah mengikuti isinya (isian kartu Grup Jawaban). */
+    grow?: boolean
   } = $props()
+
+  // ── Two-language surveys ──────────────────────────────────────────────────────
+  // 🔴 `i18n.label(...)` / `i18n.text(...)` are ONLY for displayed text. Every
+  // `onChange(...)`, `includes(...)` and comparison in this file keeps using
+  // `opt.label` (the primary language): that is the answer value that gets stored,
+  // compared by skip logic / Pilihan Bertingkat, and sent to the backend.
+  const i18n = useI18n()
+  const placeholderText = $derived(i18n.text(question, 'placeholder'))
 
   // ── Filtered dropdown (contract §8) ─────────────────────────────────────────
   const filterActive = $derived(question.type === 'dropdown' && hasOptionFilter(question))
@@ -164,9 +176,16 @@
   // Checkbox / single_choice helpers
   const arrValue = $derived(Array.isArray(value) ? (value as string[]) : [])
 
+  // Dropdown "Pilih Lebih dari Satu" (§A, inline-only — mirrors the
+  // isPlainChoice/hasAsyncOptions guard already gating filterActive above).
+  // Its answer is the same string[] shape checkbox uses, so it reuses
+  // `arrValue`/`selectLimit`/`atSelectLimit` below instead of a second set.
+  const isMultiDropdown = $derived(question.type === 'dropdown' && question.multiSelect === true)
+
   // Checkbox multi-select limit (0/undefined = unlimited). When the limit is
   // reached, unselected options are disabled; deselecting one frees a slot.
   // Answer shape (array) is unchanged → skip-logic / dataset / export unaffected.
+  // Also used by multi-select dropdown (same convention, see isMultiDropdown above).
   const selectLimit = $derived(question.maxSelections && question.maxSelections > 0 ? question.maxSelections : 0)
   const atSelectLimit = $derived(selectLimit > 0 && arrValue.length >= selectLimit)
 
@@ -187,6 +206,32 @@
     dependency.status === 'inactive' || dependencyWaiting ? allOptions : dependency.options,
   )
 
+  // ── Checkbox search + "Sembunyikan Opsi" (§C) ──────────────────────────────
+  // Search only ever narrows what's RENDERED — `options`/`arrValue` (the
+  // answer) stay untouched, same principle as multi-select dropdown's search
+  // (§A). Filters the FULL `options` list (incl. "Lainnya") so an unmatched
+  // "Lainnya" row hides like any other row — the two loops below both read
+  // `checkboxDisplayOptions`, never `options` directly.
+  let checkboxSearchQuery = $state('')
+  let checkboxDebouncedSearch = $state('')
+  const setCheckboxDebouncedSearch = debounce((q: string) => { checkboxDebouncedSearch = q }, SEARCH_DEBOUNCE_MS)
+  $effect(() => {
+    setCheckboxDebouncedSearch(checkboxSearchQuery.toLowerCase())
+  })
+  const checkboxSearchText = (o: { label: string, isOther?: boolean }) => [o.label, i18n.label(o)]
+  // Same per-question minimum as the dropdown search (see effectiveMinChars) —
+  // no separate bypass for "Sembunyikan Opsi".
+  const checkboxMinChars = $derived(effectiveMinChars(options, checkboxSearchText))
+  const checkboxDisplayOptions = $derived.by(() => {
+    if (question.hideOptionsUntilSearch && checkboxDebouncedSearch === '') return []
+    // Below the minimum (but non-empty): show the full list rather than a
+    // half-typed, misleading narrow — the list stays visible on the page
+    // either way, unlike a dropdown's popover, so hiding it here would just
+    // make it flicker while the respondent is still typing.
+    if (checkboxDebouncedSearch.length > 0 && checkboxDebouncedSearch.length < checkboxMinChars) return options
+    return filterBySearch(options, checkboxDebouncedSearch, checkboxSearchText)
+  })
+
   // Rating
   const ratingScale = $derived(question.maxStars ?? 5)
   const ratingStars = $derived(Array.from({ length: ratingScale }, (_, i) => i + 1))
@@ -202,9 +247,9 @@
   const opMax = $derived(question.maxValue ?? 10)
   const opButtons = $derived(Array.from({ length: opMax - opMin + 1 }, (_, i) => opMin + i))
   const opValue = $derived(typeof value === 'number' ? value : null)
-  const opMinLabel = $derived(question.minLabel || 'Sangat Tidak Setuju')
-  const opMaxLabel = $derived(question.maxLabel || 'Sangat Setuju')
-  const opMidLabel = $derived(question.midLabel || '')
+  const opMinLabel = $derived(i18n.text(question, 'minLabel') || i18n.t('scaleDisagree'))
+  const opMaxLabel = $derived(i18n.text(question, 'maxLabel') || i18n.t('scaleAgree'))
+  const opMidLabel = $derived(i18n.text(question, 'midLabel') || '')
 
   // Matrix — value is Record<rowLabel, colLabel>
   const matrixRows = $derived(question.matrixRows ?? [])
@@ -246,12 +291,14 @@
   // ── is_other ("Lainnya") state ──
   const otherOption = $derived(options.find(o => o.isOther))
 
-  // For single_choice: selected = strValue matches the isOther label OR user typed its own text.
-  // Compared against the FULL option list so a narrowed (Pilihan Bertingkat)
-  // list never mistakes a standard label for "Lainnya" free text.
+  // For single_choice / single-value dropdown: selected = strValue matches the
+  // isOther label OR user typed its own text. Compared against the FULL option
+  // list so a narrowed (Pilihan Bertingkat) list never mistakes a standard
+  // label for "Lainnya" free text. Checkbox and multi-select dropdown (§A)
+  // share the array-shaped branch — value is a string[] either way.
   const isOtherSelected = $derived(
     otherOption ? (
-      question.type === 'single_choice' || question.type === 'dropdown'
+      (question.type === 'single_choice' || question.type === 'dropdown') && !isMultiDropdown
         ? strValue !== '' && !allOptions.filter(o => !o.isOther).some(o => o.label === strValue)
         : arrValue.some(v => !allOptions.filter(o => !o.isOther).some(o => o.label === v) && v !== '')
     ) : false
@@ -262,11 +309,15 @@
     const otherOpt = opts.find(o => o.isOther)
     if (!otherOpt) return ''
     const standardLabels = opts.filter(o => !o.isOther).map(o => o.label)
-    if (question.type === 'single_choice' || question.type === 'dropdown') {
+    // Read `question.multiSelect` directly (not the $derived `isMultiDropdown`)
+    // — this runs once at $state init, before rune declarations further down
+    // the script are guaranteed ordered.
+    const isMulti = question.type === 'dropdown' && question.multiSelect === true
+    if ((question.type === 'single_choice' || question.type === 'dropdown') && !isMulti) {
       const sv = typeof value === 'string' ? value : ''
       return sv && !standardLabels.includes(sv) && sv !== otherOpt.label ? sv : ''
     }
-    if (question.type === 'checkbox') {
+    if (question.type === 'checkbox' || isMulti) {
       const av = Array.isArray(value) ? (value as string[]) : []
       return av.find(v => !standardLabels.includes(v) && v !== otherOpt.label) ?? ''
     }
@@ -433,25 +484,31 @@
   let tomOtherText = $state(untrack(() => topOfMindOtherText(value, question.options ?? [])))
 
   const TOM_OTHER_KEY = '__other__'
-  type TomRow = { key: string; label: string; isOther: boolean; isFirst: boolean; checked: boolean; disabled: boolean }
+  // The stored first pick (a primary-language label, or free "Lainnya" text)
+  // → its display text.
+  const tomFirstText = $derived.by(() => {
+    const match = allOptions.find((o) => !o.isOther && o.label === tomFirst)
+    return match ? i18n.label(match) : tomFirst
+  })
+  type TomRow = { key: string; label: string; display: string; isOther: boolean; isFirst: boolean; checked: boolean; disabled: boolean }
   // Keyed rows: the first pick keeps the key of the option it came from, so
   // animate:flip slides it to the top instead of re-rendering it.
   const tomRows = $derived.by<TomRow[]>(() => {
     const ordered = [...options.filter(o => !o.isOther), ...options.filter(o => o.isOther)]
     if (tomStage === 1) {
       return ordered.map(o => ({
-        key: o.isOther ? TOM_OTHER_KEY : o.label, label: o.label, isOther: !!o.isOther,
+        key: o.isOther ? TOM_OTHER_KEY : o.label, label: o.label, display: i18n.label(o), isOther: !!o.isOther,
         isFirst: false, checked: !!o.isOther && tomOtherPending, disabled: false,
       }))
     }
     const first: TomRow = {
-      key: tomFirstIsOther ? TOM_OTHER_KEY : tomFirst, label: tomFirst, isOther: tomFirstIsOther,
+      key: tomFirstIsOther ? TOM_OTHER_KEY : tomFirst, label: tomFirst, display: tomFirstText, isOther: tomFirstIsOther,
       isFirst: true, checked: true, disabled: false,
     }
     const rest = [...tomRemaining.filter(o => !o.isOther), ...tomRemaining.filter(o => o.isOther)].map(o => {
       const checked = o.isOther ? tomOtherInRest : tomRest.includes(o.label)
       return {
-        key: o.isOther ? TOM_OTHER_KEY : o.label, label: o.label, isOther: !!o.isOther,
+        key: o.isOther ? TOM_OTHER_KEY : o.label, label: o.label, display: i18n.label(o), isOther: !!o.isOther,
         isFirst: false, checked, disabled: !checked && tomRestAtLimit,
       }
     })
@@ -462,10 +519,10 @@
   const tomShowOtherInput = $derived(tomStage === 1 ? tomOtherPending : tomOtherInRest)
   const tomHintText = $derived(
     tomRemaining.length === 0
-      ? 'Tidak ada pilihan lain.'
+      ? i18n.t('tomNoMore')
       : tomRestLimit > 0
-        ? `Bisa pilih hingga ${tomRestLimit} jawaban lagi (${tomRest.length}/${tomRestLimit}).`
-        : TOM_STAGE2_HINT,
+        ? i18n.t('tomRestLimit', { limit: tomRestLimit, n: tomRest.length })
+        : i18n.t('tomStage2Hint'),
   )
 
   const tomReduceMotion =
@@ -540,7 +597,7 @@
       >
         <div class="image-option-img-wrap">
           {#if question.optionImages && question.optionImages[idx]}
-            <img src={question.optionImages[idx]} alt={opt.label} class="image-option-img" />
+            <img src={question.optionImages[idx]} alt={i18n.label(opt)} class="image-option-img" />
           {:else}
             <div class="image-option-placeholder">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
@@ -554,18 +611,39 @@
         {#if question.showLabel !== false}
           <div class="image-option-footer">
             <span class="radio-indicator {strValue === opt.label ? 'selected' : ''}"></span>
-            <span class="image-option-label">{opt.label}</span>
+            <span class="image-option-label">{i18n.label(opt)}</span>
           </div>
         {/if}
       </button>
     {/each}
   </div>
 
+{:else if question.type === 'short_text' && grow}
+  <!-- Satu baris saat pendek, membungkus dan tumbuh saat panjang. Enter tidak
+       menyisipkan baris baru: jawabannya tetap satu baris logis. -->
+  <textarea
+    class="text-input grow-input"
+    rows="1"
+    placeholder={placeholderText}
+    value={strValue}
+    maxlength={question.maxLength ?? undefined}
+    minlength={question.minLength ?? undefined}
+    oninput={(e) => onChange((e.currentTarget as HTMLTextAreaElement).value)}
+    onkeydown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
+    onblur={() => onBlur?.()}
+    use:autoExpand
+  ></textarea>
+  {#if question.maxLength || question.minLength}
+    <div class="char-count" style="text-align: right; margin-top: 6px; font-size: 0.85rem; color: var(--text-body);">
+      {strValue.length}{question.maxLength ? '/' + question.maxLength : ''}
+    </div>
+  {/if}
+
 {:else if question.type === 'short_text'}
   <input
     class="text-input"
     type="text"
-    placeholder={question.placeholder ?? ''}
+    placeholder={placeholderText}
     value={strValue}
     maxlength={question.maxLength ?? undefined}
     minlength={question.minLength ?? undefined}
@@ -582,7 +660,7 @@
   <textarea
     class="textarea-input"
     rows="4"
-    placeholder={question.placeholder ?? ''}
+    placeholder={placeholderText}
     value={strValue}
     maxlength={question.maxLength ?? undefined}
     minlength={question.minLength ?? undefined}
@@ -623,7 +701,7 @@
     <input
       class="url-input"
       type="text"
-      placeholder={question.placeholder ?? 'contoh.com'}
+      placeholder={placeholderText || 'contoh.com'}
       value={websiteDisplay}
       oninput={(e) => onChange('https://' + (e.currentTarget as HTMLInputElement).value)}
       onblur={() => onBlur?.()}
@@ -676,11 +754,11 @@
   <div style="display: flex; justify-content: space-between; align-items: flex-start;">
     <div>
       {#if question.minValue !== undefined && question.minValue !== null && question.maxValue !== undefined && question.maxValue !== null}
-        <p class="number-hint" style="margin-top: 6px;">Antara {question.minValue} dan {question.maxValue}.</p>
+        <p class="number-hint" style="margin-top: 6px;">{i18n.t('numBetween', { min: question.minValue, max: question.maxValue })}</p>
       {:else if question.minValue !== undefined && question.minValue !== null}
-        <p class="number-hint" style="margin-top: 6px;">Minimal {question.minValue}.</p>
+        <p class="number-hint" style="margin-top: 6px;">{i18n.t('numMin', { min: question.minValue })}</p>
       {:else if question.maxValue !== undefined && question.maxValue !== null}
-        <p class="number-hint" style="margin-top: 6px;">Maksimal {question.maxValue}.</p>
+        <p class="number-hint" style="margin-top: 6px;">{i18n.t('numMax', { max: question.maxValue })}</p>
       {/if}
     </div>
     {#if question.maxLength || question.minLength}
@@ -731,7 +809,7 @@
         onclick={() => onChange(opt.label)}
       >
         <span class="radio-indicator {strValue === opt.label ? 'selected' : ''}"></span>
-        <span class="option-label">{opt.label}</span>
+        <span class="option-label">{i18n.label(opt)}</span>
       </button>
     {/each}
     {#if otherOption}
@@ -743,13 +821,13 @@
         onclick={selectOtherSingle}
       >
         <span class="radio-indicator {isOtherSelected ? 'selected' : ''}"></span>
-        <span class="option-label">{otherOption.label}</span>
+        <span class="option-label">{i18n.label(otherOption)}</span>
       </button>
       {#if isOtherSelected}
         <input
           class="text-input other-text-input"
           type="text"
-          placeholder="Tuliskan jawaban Anda..."
+          placeholder={i18n.t('otherPlaceholder')}
           value={otherText}
           oninput={(e) => updateOtherSingle((e.currentTarget as HTMLInputElement).value)}
         />
@@ -768,8 +846,8 @@
     <div class="tom-stage" in:fly={tomFly}>
     {#if paged && tomStage === 2}
       <p class="tom-intro" data-test="tom-intro">
-        Pilihan pertama Anda: <strong>{tomFirst}</strong>.
-        <span class="tom-intro-more">Ada lagi yang terlintas? {tomHintText}</span>
+        {i18n.t('tomFirst')} <strong>{tomFirstText}</strong>.
+        <span class="tom-intro-more">{i18n.t('tomMore')} {tomHintText}</span>
       </p>
     {/if}
     <div class="options-list" role="group">
@@ -791,7 +869,7 @@
                 </svg>
               {/if}
             </span>
-            <span class="option-label">{row.label}</span>
+            <span class="option-label">{row.display}</span>
           </button>
           {#if row.isOther && !row.isFirst && tomShowOtherInput}
             {#if tomStage === 1}
@@ -799,7 +877,7 @@
                 <input
                   class="text-input other-text-input tom-other-input"
                   type="text"
-                  placeholder="Tuliskan jawaban Anda..."
+                  placeholder={i18n.t('otherPlaceholder')}
                   value={tomOtherDraft}
                   use:tomFocus
                   oninput={(e) => { tomOtherDraft = (e.currentTarget as HTMLInputElement).value }}
@@ -810,13 +888,13 @@
                   type="button"
                   disabled={!tomOtherDraft.trim()}
                   onclick={tomConfirmOtherFirst}
-                >Lanjut</button>
+                >{i18n.t('tomContinue')}</button>
               </div>
             {:else}
               <input
                 class="text-input other-text-input"
                 type="text"
-                placeholder="Tuliskan jawaban Anda..."
+                placeholder={i18n.t('otherPlaceholder')}
                 value={tomOtherText}
                 oninput={(e) => tomUpdateOtherRest((e.currentTarget as HTMLInputElement).value)}
               />
@@ -833,13 +911,32 @@
   </div>
 
 {:else if question.type === 'checkbox'}
-  <div class="options-list">
-    {#each options.filter(o => !o.isOther) as opt, i}
+  <div class="search-box checkbox-search-box">
+    <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+    <input
+      type="text"
+      placeholder={i18n.t('ddSearch')}
+      value={checkboxSearchQuery}
+      oninput={(e) => { checkboxSearchQuery = (e.currentTarget as HTMLInputElement).value }}
+    />
+  </div>
+  {#if question.hideOptionsUntilSearch && checkboxDebouncedSearch === ''}
+    <p class="checkbox-search-hint">{i18n.t('ddTypeToSearch')}</p>
+  {:else if checkboxDisplayOptions.length === 0}
+    <p class="checkbox-search-hint">{i18n.t('ddEmpty')}</p>
+  {:else}
+  {#if checkboxDebouncedSearch.length > 0 && checkboxDebouncedSearch.length < checkboxMinChars}
+    <!-- Full list still shows below (no flicker) — this just tells the
+         respondent why it isn't narrowed yet. -->
+    <p class="checkbox-search-hint">{i18n.t('ddMinChars', { n: checkboxMinChars })}</p>
+  {/if}
+  <div class="options-list" class:dependency-waiting={dependencyWaiting} aria-disabled={dependencyWaiting}>
+    {#each checkboxDisplayOptions.filter(o => !o.isOther) as opt, i}
       {@const checked = arrValue.includes(opt.label)}
       <button
         class="option-card {checked ? 'selected' : ''}"
         type="button"
-        disabled={!checked && atSelectLimit}
+        disabled={dependencyWaiting || (!checked && atSelectLimit)}
         style={!checked && atSelectLimit ? 'opacity:0.55;cursor:not-allowed;' : ''}
         onclick={() => toggleCheckbox(opt.label)}
       >
@@ -850,15 +947,14 @@
             </svg>
           {/if}
         </span>
-        <span class="option-label">{opt.label}</span>
+        <span class="option-label">{i18n.label(opt)}</span>
       </button>
     {/each}
-    {#if otherOption}
-      {@const otherIdx = options.filter(o => !o.isOther).length}
+    {#if otherOption && checkboxDisplayOptions.some(o => o.isOther)}
       <button
         class="option-card {isOtherSelected ? 'selected' : ''}"
         type="button"
-        disabled={!isOtherSelected && atSelectLimit}
+        disabled={dependencyWaiting || (!isOtherSelected && atSelectLimit)}
         style={!isOtherSelected && atSelectLimit ? 'opacity:0.55;cursor:not-allowed;' : ''}
         onclick={toggleOtherCheckbox}
       >
@@ -869,21 +965,27 @@
             </svg>
           {/if}
         </span>
-        <span class="option-label">{otherOption.label}</span>
+        <span class="option-label">{i18n.label(otherOption)}</span>
       </button>
       {#if isOtherSelected}
         <input
           class="text-input other-text-input"
           type="text"
-          placeholder="Tuliskan jawaban Anda..."
+          placeholder={i18n.t('otherPlaceholder')}
           value={otherText}
           oninput={(e) => updateOtherCheckbox((e.currentTarget as HTMLInputElement).value)}
         />
       {/if}
     {/if}
   </div>
+  {/if}
+  {#if dependencyHint}
+    <p class="dependency-note">{dependencyHint}</p>
+  {:else if dependencyEmptyText}
+    <p class="dependency-note dependency-empty">{dependencyEmptyText}</p>
+  {/if}
   {#if selectLimit > 0}
-    <p style="margin-top:8px;font-size:0.85rem;color:var(--text-body);">Pilih maksimal {selectLimit} jawaban ({arrValue.length}/{selectLimit}).</p>
+    <p style="margin-top:8px;font-size:0.85rem;color:var(--text-body);">{i18n.t('selectLimit', { limit: selectLimit, n: arrValue.length })}</p>
   {/if}
 
 {:else if question.type === 'dropdown'}
@@ -892,8 +994,18 @@
            identical to large/async ones — no more native/unstyled <select>. -->
       <SearchableDropdown
         options={options}
-        value={isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue}
+        multiple={isMultiDropdown}
+        atLimit={isMultiDropdown && atSelectLimit}
+        value={
+          isMultiDropdown
+            ? arrValue
+            : (isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue)
+        }
         onChange={(val) => {
+          if (isMultiDropdown) {
+            onChange(val as string[]);
+            return;
+          }
           if (otherOption && val === otherOption.label) {
             onChange(otherText || otherOption.label);
           } else {
@@ -909,15 +1021,19 @@
         filterEmptyMessage={dependencyEmptyText || filterEmptyText}
         disabled={dependencyWaiting}
         notice={dependencyEmptyText}
+        hideUntilSearch={question.hideOptionsUntilSearch === true}
       />
     {#if isOtherSelected}
       <input
         class="text-input other-text-input"
         type="text"
-        placeholder="Tuliskan jawaban Anda..."
+        placeholder={i18n.t('otherPlaceholder')}
         value={otherText}
-        oninput={(e) => updateOtherSingle((e.currentTarget as HTMLInputElement).value)}
+        oninput={(e) => (isMultiDropdown ? updateOtherCheckbox : updateOtherSingle)((e.currentTarget as HTMLInputElement).value)}
       />
+    {/if}
+    {#if isMultiDropdown && selectLimit > 0}
+      <p style="margin-top:8px;font-size:0.85rem;color:var(--text-body);">{i18n.t('selectLimit', { limit: selectLimit, n: arrValue.length })}</p>
     {/if}
   </div>
 
@@ -932,7 +1048,7 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path d="M5 12.5l5 5 9-10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        Ya
+        {i18n.t('yes')}
       </span>
     </button>
     <button
@@ -944,7 +1060,7 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
         </svg>
-        Tidak
+        {i18n.t('no')}
       </span>
     </button>
   </div>
@@ -956,7 +1072,7 @@
         <button
           class="star-btn"
           type="button"
-          aria-label="Beri nilai {star}"
+          aria-label={i18n.t('ratingStar', { n: star })}
           onmouseenter={() => hoverRating = star}
           onmouseleave={() => hoverRating = 0}
           onclick={() => { onChange(star); hoverRating = 0 }}
@@ -974,7 +1090,7 @@
       {/each}
     </div>
     {#if ratingValue > 0}
-      <p class="rating-label" aria-live="polite">{ratingValue} dari {ratingScale}</p>
+      <p class="rating-label" aria-live="polite">{i18n.t('ratingOf', { n: ratingValue, max: ratingScale })}</p>
     {/if}
   </div>
 
@@ -990,8 +1106,8 @@
       {/each}
     </div>
     <div class="nps-labels">
-      <span>{question.minLabel || 'Sangat Tidak Mungkin'}</span>
-      <span>{question.maxLabel || 'Sangat Mungkin'}</span>
+      <span>{i18n.text(question, 'minLabel') || i18n.t('npsUnlikely')}</span>
+      <span>{i18n.text(question, 'maxLabel') || i18n.t('npsLikely')}</span>
     </div>
   </div>
 
@@ -1026,14 +1142,14 @@
     <input
       class="text-input"
       type="text"
-      placeholder="Nama Depan"
+      placeholder={i18n.t('firstName')}
       value={contactValue.firstName}
       oninput={(e) => updateContact('firstName', (e.currentTarget as HTMLInputElement).value)}
     />
     <input
       class="text-input"
       type="text"
-      placeholder="Nama Belakang"
+      placeholder={i18n.t('lastName')}
       value={contactValue.lastName}
       oninput={(e) => updateContact('lastName', (e.currentTarget as HTMLInputElement).value)}
     />
@@ -1041,14 +1157,14 @@
       class="text-input"
       type="tel"
       inputmode="numeric"
-      placeholder="Nomor Telepon"
+      placeholder={i18n.t('phone')}
       value={contactValue.phone}
       oninput={(e) => updateContact('phone', sanitizePhoneInput((e.currentTarget as HTMLInputElement).value))}
     />
     <input
       class="text-input"
       type="email"
-      placeholder="Email"
+      placeholder={i18n.t('email')}
       value={contactValue.email}
       oninput={(e) => updateContact('email', (e.currentTarget as HTMLInputElement).value)}
     />
@@ -1122,7 +1238,7 @@
 {:else if question.type === 'statement'}
   {#if question.description}
     <div class="statement-body">
-      <p>{@html question.description}</p>
+      <p>{@html i18n.text(question, 'description')}</p>
     </div>
   {/if}
 
@@ -1154,6 +1270,17 @@
   }
 
   .text-input::placeholder { color: var(--text-muted); }
+
+  /* Varian tumbuh: tinggi minimal sama dengan kotak biasa, sisanya mengikuti isi. */
+  .grow-input {
+    height: auto;
+    min-height: 52px;
+    padding: 14px 16px;
+    line-height: 1.4;
+    resize: none;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
 
   .text-input:focus {
     outline: none;
@@ -1292,6 +1419,41 @@
   }
 
   /* ── Option cards ── */
+  /* Checkbox search box (§C) — same look as SearchableDropdown's own
+     .search-box (that one is scoped to a different component, so it can't be
+     reused directly; kept visually identical). */
+  .checkbox-search-box {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--canvas-soft);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-input);
+    margin-bottom: 8px;
+  }
+  .checkbox-search-box .search-icon {
+    color: var(--text-body);
+    flex-shrink: 0;
+  }
+  .checkbox-search-box input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    caret-color: var(--primary);
+    font-family: var(--font);
+    font-size: 0.9375rem;
+    outline: none;
+  }
+  .checkbox-search-box input::placeholder { color: var(--text-muted); }
+  .checkbox-search-hint {
+    padding: 1rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+  }
+
   .options-list {
     display: flex;
     flex-direction: column;

@@ -8,6 +8,7 @@
  * build where it is never imported. The gate lives in api.ts.
  */
 import type { Survey, Question } from './types.js'
+import { buildBilingualMockSurvey } from './mockSurveyBilingual.js'
 
 let order = 0
 const next = () => order++
@@ -169,6 +170,7 @@ function matrixBlock(): Question[] {
 
 export function buildMockSurvey(slug: string): Survey {
   order = 0
+  if (slug === 'mock-bilingual') return buildBilingualMockSurvey()
   if (slug === 'mock-matrix') {
     const survey = buildMockSurvey('mock')
     order = 0
