@@ -1,3 +1,5 @@
+import type { SurveyStyle } from './surveyStyle'
+
 export type QuestionType =
   | 'welcome_page' | 'closing_page' | 'question_group' | 'statement'
   | 'short_text' | 'long_text'
@@ -239,6 +241,16 @@ export interface SurveySettings {
   logoUrl?: string | null
   faviconUrl?: string | null
   ogImageUrl?: string | null
+  /**
+   * Gaya visual per survei (Kustom Styling Survei): lima slot warna, latar, dan
+   * radius sudut yang dipilih pemilik survei.
+   *
+   * 🔴 Opsional dengan alasan yang sama seperti `logoUrl` di atas: salinan
+   * survei di localStorage bisa lebih tua daripada field ini. Ketiadaannya
+   * berarti PAKAI GAYA PLATFORM. Penerjemahannya ke CSS dipusatkan di
+   * `$lib/surveyStyle.ts` — jangan membaca isinya langsung di komponen.
+   */
+  style?: SurveyStyle | null
   displayMode: 'scroll' | 'one_per_page'
 }
 
