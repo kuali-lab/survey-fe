@@ -22,6 +22,8 @@
  *    tetap menyisakan kartu berpermukaan platform yang teksnya pasti terbaca.
  */
 
+import { resolveMediaUrl } from './mediaUrl'
+
 /** Dokumen gaya, cermin surveyStyleDoc di internal/service/survey_style.go. */
 export type SurveyStyle = {
 	colors?: {
@@ -43,12 +45,32 @@ export type SurveyStyle = {
 const HEX_PATTERN = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/
 
 /**
- * Bentuk URL media platform yang boleh dimuat sebagai gambar latar. Sengaja
- * dipatok ke pola, bukan sekadar "bukan javascript:", supaya tanda kutip,
- * tanda kurung, dan baris baru — bahan untuk keluar dari `url("...")` — tidak
- * punya jalan masuk.
+ * Bentuk relatif URL media, yaitu yang dikirim backend saat CDN tidak
+ * dikonfigurasi: /api/v1/media/<id>/file.
  */
 const MEDIA_PATH_PATTERN = /^\/api\/v1\/media\/[A-Za-z0-9_-]+\/file$/
+
+/**
+ * Bentuk absolut, yaitu yang dikirim backend saat MEDIA_CDN_URL aktif. Asalnya
+ * TIDAK diperiksa di sini — itu tugas ValidateSurveyStyle di BE, satu-satunya
+ * pihak yang tahu asal mana yang dikonfigurasi. Yang diperiksa di sini adalah
+ * hal yang hanya penting di titik ini: bahwa nilainya tidak bisa keluar dari
+ * `url("...")`.
+ */
+const MEDIA_ABSOLUTE_PATTERN = /^https?:\/\/[^\s"'();\\]+$/
+
+/**
+ * Apakah URL ini boleh dipasang sebagai gambar latar. Menerima kedua bentuk yang
+ * benar-benar dikirim backend — relatif (tanpa CDN) dan absolut (dengan CDN).
+ *
+ * 🔴 Hanya menerima bentuk relatif akan membuat latar DIAM-DIAM tidak tampil di
+ * setiap lingkungan yang memakai CDN: tidak ada galat, gambarnya sekadar absen,
+ * dan halaman jatuh ke warna latar. Itu kelas bug yang sama seperti favicon
+ * branding yang rusak saat CDN mati (lihat $lib/mediaUrl.ts).
+ */
+function isPlatformMediaUrl(url: string): boolean {
+	return MEDIA_PATH_PATTERN.test(url) || MEDIA_ABSOLUTE_PATTERN.test(url)
+}
 
 /** Jumlah gelap yang dipakai untuk keadaan hover/tekan tombol. */
 const PRESSED_SHADE = -0.15
@@ -171,8 +193,11 @@ export function surveyStyleAttr(style: SurveyStyle | null | undefined): string {
 	// Gambar latar hanya dipasang kalau URL-nya berbentuk media platform. Tanpa
 	// gambar, seluruh field latar lain tidak punya arti dan diabaikan — overlay
 	// kecerahan tanpa gambar hanya akan menutupi warna latar yang baru dipilih.
-	if (background?.imageUrl && MEDIA_PATH_PATTERN.test(background.imageUrl)) {
-		vars['--page-bg-image'] = `url("${background.imageUrl}")`
+	if (background?.imageUrl && isPlatformMediaUrl(background.imageUrl)) {
+		// Bentuk relatif diselesaikan terhadap origin API, bukan origin halaman:
+		// tanpa ini `/api/v1/media/...` menunjuk ke host survey-fe yang tidak
+		// punya berkasnya. Alasan lengkapnya di $lib/mediaUrl.ts.
+		vars['--page-bg-image'] = `url("${resolveMediaUrl(background.imageUrl)}")`
 
 		const layout = background.layout ?? 'cover'
 		if (layout === 'repeat') {

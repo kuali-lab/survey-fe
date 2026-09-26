@@ -137,7 +137,10 @@ describe('surveyStyleAttr', () => {
 			colors: { background: '#0f172a' },
 			background: { imageUrl: '/api/v1/media/abc/file', layout: 'cover' }
 		})
-		expect(attr).toContain('--page-bg-image:url("/api/v1/media/abc/file")')
+		// Jalur relatif diselesaikan terhadap origin API (lihat $lib/mediaUrl.ts),
+		// jadi yang dikunci adalah jalurnya — bukan origin yang berbeda per lingkungan.
+		expect(attr).toContain('/api/v1/media/abc/file")')
+		expect(attr).toContain('--page-bg-image:url("')
 		// cover = mengisi layar di desktop maupun ponsel, tanpa mengulang.
 		expect(attr).toContain('--page-bg-size:cover')
 		expect(attr).toContain('--page-bg-repeat:no-repeat')
@@ -165,13 +168,28 @@ describe('surveyStyleAttr', () => {
 			.not.toContain('--page-bg-overlay')
 	})
 
+	it('menerima URL absolut saat CDN media aktif', () => {
+		// Backend mengirim bentuk absolut begitu MEDIA_CDN_URL diset. Kalau modul ini
+		// hanya menerima bentuk relatif, latar DIAM-DIAM tidak tampil di seluruh
+		// lingkungan ber-CDN: nol galat, gambarnya sekadar absen.
+		const attr = surveyStyleAttr({ background: { imageUrl: 'https://cdn.contoh.id/media/abc.jpg' } })
+		expect(attr).toContain('--page-bg-image:url("https://cdn.contoh.id/media/abc.jpg")')
+	})
+
 	it('menolak URL gambar yang bisa keluar dari deklarasi CSS', () => {
 		// Ini lapis kedua: BE sudah membatasi imageUrl ke media platform. Yang
-		// dijaga di sini adalah bentuknya, karena nilainya masuk ke atribut style.
+		// dijaga di sini adalah BENTUKNYA, karena nilainya masuk ke atribut style.
+		//
+		// 🔴 Yang sengaja TIDAK dijaga di sini: asal URL. survey-fe tidak tahu
+		// origin CDN mana yang dikonfigurasi backend, sementara backend adalah
+		// satu-satunya penulis kolom ini. Penjaga asal tiruan di sisi ini justru
+		// berbahaya: ia akan menolak CDN yang sah dan membuat latar hilang tanpa
+		// satu pun galat. Otoritas asal = ValidateSurveyStyle.
 		for (const imageUrl of [
 			'/api/v1/media/a/file") ; background:red; x:url("',
 			'javascript:alert(1)',
-			'https://jahat.example/x.jpg',
+			'https://cdn.contoh.id/x.jpg") ; background:red; x:url("',
+			'https://cdn.contoh.id/ruang kosong.jpg',
 			'/api/v1/media/a/file\n'
 		]) {
 			expect(surveyStyleAttr({ background: { imageUrl } })).not.toContain('--page-bg-image')
