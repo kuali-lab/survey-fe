@@ -73,8 +73,12 @@
 </div>
 
 <style>
+  /* Tanpa permukaan kartu (T1): isinya cuma judul, keterangan pendek, dan satu
+     tombol, jadi kartu di sini tidak menambah apa pun sambil memotong latar
+     kustom pemilik survei. Judul dan keterangan tetap membaca --text-primary /
+     --text-body, yang ikut slot gaya survei — jadi keterbacaan di atas latar
+     halaman adalah pilihan pemiliknya, bukan warna tetap yang dipaksa di sini. */
   .welcome {
-    background: var(--canvas);
     max-width: 560px;
     width: 100%;
     display: flex;

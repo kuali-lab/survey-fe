@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { shadeHex, surveyStyleVars, surveyStyleAttr, type SurveyStyle } from './surveyStyle'
 
 // Gaya kustom survei: dokumen `settings.style` dari BE diubah menjadi custom
@@ -75,9 +77,10 @@ describe('surveyStyleVars', () => {
 	})
 
 	it('memetakan slot card ke --canvas dan menurunkan sub-permukaannya', () => {
-		// Tujuh halaman keadaan memakai --canvas sebagai permukaan kartunya, jadi
-		// satu penimpaan mewarnai ketujuhnya. --canvas-soft/-softer diturunkan
-		// supaya blok DI DALAM kartu tidak tertinggal abu platform.
+		// Lima halaman keadaan memakai --canvas sebagai permukaan kartunya — T1
+		// mengeluarkan sambutan dan penutup dari cakupan ini — jadi satu
+		// penimpaan mewarnai kelimanya. --canvas-soft/-softer diturunkan supaya
+		// blok DI DALAM kartu tidak tertinggal abu platform.
 		const terang = surveyStyleVars({ colors: { card: '#ffffff' } })
 		expect(terang['--canvas']).toBe('#ffffff')
 		expect(terang['--canvas-soft']).toBe(shadeHex('#ffffff', -0.03))
@@ -228,5 +231,41 @@ describe('surveyStyleAttr', () => {
 		const attr = surveyStyleAttr({ background: { layout: 'cover', brightness: -0.5 } })
 		expect(attr).not.toContain('--page-bg-image')
 		expect(attr).not.toContain('--page-bg-overlay')
+	})
+})
+
+// Cakupan slot `card` (T1, keputusan user 27 Sep 2026). Halaman sambutan dan
+// penutup dibuat transparan supaya latar kustom terlihat utuh; lima halaman
+// keadaan lain mempertahankan permukaannya karena memuat daftar syarat, ikon
+// status, dan aksi yang butuh terbaca sebagai satu blok keputusan. Tujuh berkas
+// di bawah, bukan lima: gerbang lokasi dan selfie masing-masing punya varian
+// "ditolak" tersendiri.
+//
+// Diuji dari sumber karena yang dijaga adalah BATAS keputusannya, bukan nilai
+// warnanya: satu `background: var(--canvas)` yang kembali ke sambutan/penutup
+// mengembalikan kartu yang memotong latar, tanpa satu pun uji lain memerah.
+// Kontrol positifnya adalah berkas yang WAJIB masih memuatnya — tanpa itu, uji
+// ini juga lulus kalau penanda permukaannya sekadar berganti nama.
+describe('cakupan slot card di halaman keadaan (T1)', () => {
+	const CARD_SURFACE = 'background: var(--canvas);'
+
+	function componentSource(name: string): string {
+		return readFileSync(fileURLToPath(new URL(`./components/${name}.svelte`, import.meta.url)), 'utf8')
+	}
+
+	it.each([
+		'LocationPromptPage',
+		'LocationDeniedPage',
+		'SelfieCapturePage',
+		'SelfieDeniedPage',
+		'InviteBlockedPage',
+		'ErrorPage',
+		'ClosedPage'
+	])('%s mempertahankan permukaan kartunya', (name) => {
+		expect(componentSource(name)).toContain(CARD_SURFACE)
+	})
+
+	it.each(['WelcomePage', 'ClosingPage'])('%s tidak memakai permukaan kartu', (name) => {
+		expect(componentSource(name)).not.toContain(CARD_SURFACE)
 	})
 })
