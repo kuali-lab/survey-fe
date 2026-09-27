@@ -943,7 +943,10 @@
      tidak pernah menyisakan halaman tanpa latar. */
   .page {
     min-height: 100vh;
-    background-color: var(--page-bg, var(--canvas));
+    /* Cadangan LITERAL, bukan var(--canvas): sejak slot `card` ada, --canvas bisa
+       ikut diwarnai pemilik survei, dan halaman akan diam-diam ikut berubah warna
+       hanya karena kartunya diatur. #ffffff adalah nilai --canvas platform. */
+    background-color: var(--page-bg, #ffffff);
     background-image: linear-gradient(var(--page-bg-overlay, transparent), var(--page-bg-overlay, transparent)), var(--page-bg-image, none);
     background-size: auto, var(--page-bg-size, cover);
     background-repeat: repeat, var(--page-bg-repeat, no-repeat);

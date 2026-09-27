@@ -32,6 +32,7 @@ export type SurveyStyle = {
 		button?: string
 		buttonText?: string
 		background?: string
+		card?: string
 	}
 	background?: {
 		imageUrl?: string
@@ -108,6 +109,18 @@ const RADIUS_PRESETS: Record<NonNullable<SurveyStyle['borderRadius']>, Record<st
 	}
 }
 
+/**
+ * Arah tint sub-permukaan kartu: kartu terang digelapkan (seperti platform),
+ * kartu gelap justru DICERAHKAN. Menggelapkan kartu yang sudah gelap membuat
+ * sub-bloknya melebur jadi satu bidang hitam tanpa batas yang terlihat.
+ */
+function cardTintDirection(card: string): number {
+	const full = card.length === 4 ? `#${card[1]}${card[1]}${card[2]}${card[2]}${card[3]}${card[3]}` : card
+	const channels = [1, 3, 5].map((index) => parseInt(full.slice(index, index + 2), 16))
+	const perceived = (channels[0] * 299 + channels[1] * 587 + channels[2] * 114) / 1000
+	return perceived < 128 ? 1 : -1
+}
+
 function isHex(value: unknown): value is string {
 	return typeof value === 'string' && HEX_PATTERN.test(value)
 }
@@ -175,6 +188,24 @@ export function surveyStyleVars(style: SurveyStyle | null | undefined): Record<s
 
 	// Latar HALAMAN saja — lihat catatan di kepala berkas soal --canvas.
 	if (isHex(colors.background)) vars['--page-bg'] = colors.background
+
+	// Permukaan KARTU. Tujuh halaman keadaan (sambutan, penutup, gerbang
+	// lokasi/selfie, gerbang undangan, galat, tutup) memakai --canvas sebagai
+	// permukaan kartunya, jadi satu penimpaan mewarnai ketujuhnya.
+	//
+	// --canvas-soft dan --canvas-softer DITURUNKAN dari warna kartu, bukan
+	// dibiarkan abu platform: keduanya adalah blok di DALAM kartu (baris petunjuk
+	// gerbang, sub-blok QuestionCard), dan abu terang di dalam kartu gelap
+	// terbaca sebagai tambalan yang salah tempel. Selisih 3% dan 8% menyalin
+	// hubungan yang sudah ada di app.css antara --canvas, --canvas-soft, dan
+	// --canvas-softer.
+	if (isHex(colors.card)) {
+		vars['--canvas'] = colors.card
+		const soft = shadeHex(colors.card, cardTintDirection(colors.card) * 0.03)
+		const softer = shadeHex(colors.card, cardTintDirection(colors.card) * 0.08)
+		if (soft) vars['--canvas-soft'] = soft
+		if (softer) vars['--canvas-softer'] = softer
+	}
 
 	const radius = style.borderRadius
 	if (radius && radius in RADIUS_PRESETS) Object.assign(vars, RADIUS_PRESETS[radius])
