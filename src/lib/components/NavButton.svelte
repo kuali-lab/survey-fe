@@ -63,13 +63,21 @@
     background: var(--ink-elevated);
   }
 
+  /* Varian sekunder ("Sebelumnya") mengikuti warna TOMBOL pemilik survei sebagai
+     garis dan tulisan, dengan latar transparan — bukan lagi abu platform.
+
+     Sebelumnya ia memakai --canvas + --tertiary-100, dua token netral yang tidak
+     ikut slot mana pun, jadi di survei bergaya kustom ia tampil sebagai gumpalan
+     abu yang jelas bukan bagian dari gayanya. Latar dibuat transparan (bukan
+     --canvas) supaya tombol ini benar sekaligus di atas kartu maupun di atas
+     latar halaman: keduanya sama-sama jadi latarnya. */
   .btn.secondary {
-    background: var(--canvas);
-    color: var(--tertiary-100);
-    border-color: var(--tertiary-100);
+    background: transparent;
+    color: var(--ink);
+    border-color: var(--ink);
   }
   .btn.secondary:hover:not(:disabled) {
-    background: var(--surface);
+    background: color-mix(in srgb, var(--ink) 12%, transparent);
   }
 
   .spinner {

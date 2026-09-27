@@ -74,10 +74,38 @@ describe('surveyStyleVars', () => {
 		expect(vars['--text-on-ink']).toBe('#ffffff')
 	})
 
+	it('memetakan slot card ke --canvas dan menurunkan sub-permukaannya', () => {
+		// Tujuh halaman keadaan memakai --canvas sebagai permukaan kartunya, jadi
+		// satu penimpaan mewarnai ketujuhnya. --canvas-soft/-softer diturunkan
+		// supaya blok DI DALAM kartu tidak tertinggal abu platform.
+		const terang = surveyStyleVars({ colors: { card: '#ffffff' } })
+		expect(terang['--canvas']).toBe('#ffffff')
+		expect(terang['--canvas-soft']).toBe(shadeHex('#ffffff', -0.03))
+		expect(terang['--canvas-softer']).toBe(shadeHex('#ffffff', -0.08))
+
+		// Kartu GELAP dicerahkan, bukan digelapkan: menggelapkan yang sudah gelap
+		// melebur sub-bloknya jadi satu bidang tanpa batas yang terlihat.
+		const gelap = surveyStyleVars({ colors: { card: '#111827' } })
+		expect(gelap['--canvas-soft']).toBe(shadeHex('#111827', 0.03))
+		expect(gelap['--canvas-softer']).toBe(shadeHex('#111827', 0.08))
+	})
+
+	it('slot card TIDAK menyentuh latar halaman, dan sebaliknya', () => {
+		// Keduanya permukaan berbeda: latar halaman ada di belakang kartu.
+		const kartuSaja = surveyStyleVars({ colors: { card: '#111827' } })
+		expect(kartuSaja['--page-bg']).toBeUndefined()
+
+		const latarSaja = surveyStyleVars({ colors: { background: '#0b1220' } })
+		expect(latarSaja['--canvas']).toBeUndefined()
+		expect(latarSaja['--canvas-soft']).toBeUndefined()
+	})
+
 	it('memetakan slot background ke --page-bg, BUKAN ke --canvas', () => {
 		// --canvas dipakai kartu dan kotak isian. Kalau latar kustom menimpanya,
 		// latar gelap pilihan pemilik survei membuat teks di dalam kotak isian
 		// tidak terbaca, dan itu terjadi tanpa galat apa pun.
+		// --canvas hanya berubah lewat slot `card` yang eksplisit, tidak pernah
+		// sebagai efek samping slot latar.
 		const vars = surveyStyleVars({ colors: { background: '#0f172a' } })
 		expect(vars['--page-bg']).toBe('#0f172a')
 		expect(vars['--canvas']).toBeUndefined()
