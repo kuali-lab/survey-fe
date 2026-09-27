@@ -10,6 +10,7 @@
   import { goto } from '$app/navigation'
   import { env } from '$env/dynamic/public'
   import { resolveOgImageUrl } from '$lib/branding.js'
+  import { surveyStyleAttr } from '$lib/surveyStyle.js'
   import { onMount, tick, untrack } from 'svelte'
 
   import WelcomePage from '$lib/components/WelcomePage.svelte'
@@ -406,6 +407,14 @@
   // cadangan `settings` tidak punya `logoUrl`, jadi `settings.logoUrl` tidak
   // lolos typecheck.
   const logoUrl = $derived(survey?.settings?.logoUrl ?? null)
+  // Gaya kustom per survei (Kustom Styling Survei), dipasang SATU KALI di elemen
+  // akar sebagai custom property CSS. Semua komponen di bawahnya sudah membaca
+  // token app.css, jadi tidak ada satu pun prop warna yang perlu dioper — dan
+  // permukaan baru nanti ikut terwarnai tanpa perubahan apa pun di sini.
+  //
+  // Dibaca dari `survey` langsung, bukan dari `settings`, dengan alasan yang
+  // sama seperti logoUrl di atas: literal cadangan tidak punya field ini.
+  const styleAttr = $derived(surveyStyleAttr(survey?.settings?.style ?? null))
 
   async function handleStart() {
     validationError = null
@@ -729,7 +738,7 @@
   ontouchend={onTouchEnd}
 />
 
-<div class="page" class:page-question={viewState === 'question'}>
+<div class="page" class:page-question={viewState === 'question'} style={styleAttr}>
   {#if !inviteBlocked && (viewState === 'welcome' || viewState === 'question')}
     <LanguagePicker choices={languages} {locale} onChange={setLocale} />
   {/if}
@@ -924,14 +933,26 @@
 </div>
 
 <style>
+  /* Latar halaman responden. Ketiga lapisannya dibaca dari custom property yang
+     dipasang $lib/surveyStyle.ts di elemen ini; tanpa gaya kustom seluruhnya
+     jatuh ke cadangan dan hasilnya sama persis dengan sebelum fitur ini ada.
+
+     Urutan lapisan: overlay kecerahan PALING ATAS (supaya ia menggelapkan atau
+     mencerahkan gambar, bukan tertimpa olehnya), lalu gambar latar, lalu warna
+     latar sebagai dasar yang selalu ada — itulah yang membuat gambar gagal muat
+     tidak pernah menyisakan halaman tanpa latar. */
   .page {
     min-height: 100vh;
-    background: var(--canvas);
+    background-color: var(--page-bg, var(--canvas));
+    background-image: linear-gradient(var(--page-bg-overlay, transparent), var(--page-bg-overlay, transparent)), var(--page-bg-image, none);
+    background-size: auto, var(--page-bg-size, cover);
+    background-repeat: repeat, var(--page-bg-repeat, no-repeat);
+    background-position: center, center;
+    /* Gambar latar ikut bergulir bersama isi. `fixed` menghasilkan latar yang
+       melompat dan terpotong di Safari iOS, dan itu peranti yang paling sering
+       dipakai responden. */
+    background-attachment: scroll, scroll;
     transition: background-color 0.2s ease;
-  }
-
-  .page.page-question {
-    background: var(--canvas);
   }
 
   .centered-wrap {
