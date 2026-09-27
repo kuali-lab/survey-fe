@@ -246,14 +246,14 @@ describe('surveyStyleAttr', () => {
 // mengembalikan kartu yang memotong latar, tanpa satu pun uji lain memerah.
 // Kontrol positifnya adalah berkas yang WAJIB masih memuatnya — tanpa itu, uji
 // ini juga lulus kalau penanda permukaannya sekadar berganti nama.
-describe('cakupan slot card di halaman keadaan (T1)', () => {
+describe('cakupan slot card di halaman keadaan (T1, T5)', () => {
 	const CARD_SURFACE = 'background: var(--canvas);'
 
 	function componentSource(name: string): string {
 		return readFileSync(fileURLToPath(new URL(`./components/${name}.svelte`, import.meta.url)), 'utf8')
 	}
 
-	it.each([
+	const BERKARTU = [
 		'LocationPromptPage',
 		'LocationDeniedPage',
 		'SelfieCapturePage',
@@ -261,11 +261,39 @@ describe('cakupan slot card di halaman keadaan (T1)', () => {
 		'InviteBlockedPage',
 		'ErrorPage',
 		'ClosedPage'
-	])('%s mempertahankan permukaan kartunya', (name) => {
+	]
+
+	// Isi aturan kartu saja, bukan seluruh berkas: padding/radius yang nyasar ke
+	// elemen lain tidak boleh ikut meluluskan uji T5 di bawah.
+	function cardRuleBody(name: string): string {
+		const src = componentSource(name)
+		const at = src.indexOf(CARD_SURFACE)
+		expect(at).toBeGreaterThan(-1)
+		return src.slice(at, src.indexOf('}', at))
+	}
+
+	it.each(BERKARTU)('%s mempertahankan permukaan kartunya', (name) => {
 		expect(componentSource(name)).toContain(CARD_SURFACE)
 	})
 
 	it.each(['WelcomePage', 'ClosingPage'])('%s tidak memakai permukaan kartu', (name) => {
 		expect(componentSource(name)).not.toContain(CARD_SURFACE)
+	})
+
+	// T5: permukaan tanpa padding dan radius menggugurkan alasan T1 mempertahankan
+	// kartunya — begitu slot `card` diwarnai ia jadi blok warna bertepi keras.
+	it.each(BERKARTU)('%s memberi kartunya padding dan radius (T5)', (name) => {
+		const rule = cardRuleBody(name)
+		expect(rule).toMatch(/padding: \d+px/)
+		expect(rule).toContain('border-radius: var(--radius-card)')
+	})
+
+	// Gambar penutup melebar menembus padding kartu supaya lebarnya persis seperti
+	// sebelum T5. Angkanya terikat padding 24px: kalau paddingnya diubah tanpa
+	// kompensasi ini disesuaikan, survei TANPA gaya kustom ikut berubah tampilannya.
+	it('ClosedPage menjaga gambar penutup selebar kartu', () => {
+		const src = componentSource('ClosedPage')
+		expect(src).toContain('width: calc(100% + 48px)')
+		expect(src).toContain('margin: -24px -24px 0')
 	})
 })

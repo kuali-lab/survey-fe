@@ -48,8 +48,12 @@
 </div>
 
 <style>
+  /* Padding + radius (T5): tanpa keduanya kartu ini jadi bidang warna bertepi
+     keras dengan teks menempel ke tepi begitu pemiliknya mewarnai slot `card`. */
   .error-page {
     background: var(--canvas);
+    padding: 24px;
+    border-radius: var(--radius-card);
     max-width: 480px;
     width: 100%;
     display: flex;
@@ -57,10 +61,6 @@
     align-items: center;
     text-align: center;
     gap: 20px;
-  }
-
-  .illustration {
-    padding: 16px 0 0;
   }
 
   .body {

@@ -42,8 +42,12 @@
 </div>
 
 <style>
+  /* Padding + radius (T5): tanpa keduanya kartu ini jadi bidang warna bertepi
+     keras dengan teks menempel ke tepi begitu pemiliknya mewarnai slot `card`. */
   .closed {
     background: var(--canvas);
+    padding: 24px;
+    border-radius: var(--radius-card);
     max-width: 560px;
     width: 100%;
     display: flex;
@@ -53,8 +57,11 @@
     gap: 20px;
   }
 
+  /* Melebar menembus padding kartu supaya gambar penutup tetap selebar kartu
+     seperti sebelum T5 — survei tanpa gaya kustom tidak bergeser sepiksel. */
   .cover {
-    width: 100%;
+    width: calc(100% + 48px);
+    margin: -24px -24px 0;
     aspect-ratio: 16 / 9;
     overflow: hidden;
     background: var(--canvas-soft);
@@ -67,8 +74,9 @@
     object-fit: cover;
   }
 
+  /* Jarak atas kini datang dari padding kartu (T5); sisa 8px di bawah tetap. */
   .illustration {
-    padding: 24px 0 8px;
+    padding: 0 0 8px;
   }
 
   .body {

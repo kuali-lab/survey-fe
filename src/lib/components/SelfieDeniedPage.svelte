@@ -84,8 +84,12 @@
 </div>
 
 <style>
+  /* Padding + radius (T5): tanpa keduanya kartu ini jadi bidang warna bertepi
+     keras dengan teks menempel ke tepi begitu pemiliknya mewarnai slot `card`. */
   .gate {
     background: var(--canvas);
+    padding: 24px;
+    border-radius: var(--radius-card);
     max-width: 480px;
     width: 100%;
     display: flex;
