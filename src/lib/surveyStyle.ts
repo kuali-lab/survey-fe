@@ -16,10 +16,15 @@
  *    nilainya benar-benar dipasang, karena itulah satu-satunya titik yang tahu
  *    nilai itu akan jadi CSS.
  *
- * 2. **Latar kustom tidak boleh membuat isian tak terbaca.** Slot `background`
- *    dipetakan ke `--page-bg` (khusus latar halaman), BUKAN ke `--canvas` yang
- *    dipakai kartu dan kotak isian. Dengan begitu latar gelap atau foto ramai
- *    tetap menyisakan kartu berpermukaan platform yang teksnya pasti terbaca.
+ * 2. **Slot `background` dan `card` adalah dua permukaan berbeda.** `background`
+ *    dipetakan ke `--page-bg` (latar halaman), `card` ke `--canvas` (permukaan
+ *    kartu). Kotak isian ikut `--canvas`, jadi mewarnai kartu ikut mewarnai
+ *    isian — itu disengaja, keduanya permukaan yang sama bagi responden.
+ *
+ *    🔴 Latar gelap TIDAK lagi otomatis aman: sejak halaman sambutan dan penutup
+ *    kartunya dibuat transparan, teks di sana berdiri langsung di atas latar
+ *    halaman. Yang mencegah kombinasi tak terbaca adalah peringatan kontras di
+ *    dashboard, bukan kartu putih.
  */
 
 import { resolveMediaUrl } from './mediaUrl'
@@ -189,9 +194,10 @@ export function surveyStyleVars(style: SurveyStyle | null | undefined): Record<s
 	// Latar HALAMAN saja — lihat catatan di kepala berkas soal --canvas.
 	if (isHex(colors.background)) vars['--page-bg'] = colors.background
 
-	// Permukaan KARTU. Tujuh halaman keadaan (sambutan, penutup, gerbang
-	// lokasi/selfie, gerbang undangan, galat, tutup) memakai --canvas sebagai
-	// permukaan kartunya, jadi satu penimpaan mewarnai ketujuhnya.
+	// Permukaan KARTU. Lima halaman keadaan memakainya: gerbang lokasi, gerbang
+	// selfie, gerbang undangan, galat, dan tutup. Sambutan dan penutup TIDAK lagi
+	// ikut — kartunya dibuat transparan (T1) karena isinya cuma judul, keterangan
+	// pendek, dan satu tombol.
 	//
 	// --canvas-soft dan --canvas-softer DITURUNKAN dari warna kartu, bukan
 	// dibiarkan abu platform: keduanya adalah blok di DALAM kartu (baris petunjuk
