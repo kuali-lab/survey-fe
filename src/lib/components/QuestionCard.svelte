@@ -1,6 +1,10 @@
 <script lang="ts">
   import type { Question, AnswerValue, Answers } from '$lib/types.js'
-  import QuestionInput from './QuestionInput.svelte'
+  // QuestionField, bukan QuestionInput langsung: ia yang memutuskan pertanyaan
+  // ini dirender sekali atau satu kali per pengulangan (Ihatec M5). Untuk
+  // pertanyaan yang tidak berulang ia meneruskan apa adanya.
+  import QuestionField from './QuestionField.svelte'
+  import { useI18n } from '$lib/i18n/context.js'
 
   let {
     question,
@@ -13,7 +17,8 @@
     answers = {},
     questions = [],
     // Diteruskan apa adanya ke QuestionInput — lihat alasannya di sana.
-    pratinjau = false
+    pratinjau = false,
+    paged = false
   }: {
     question: Question
     questionNumber: string
@@ -27,7 +32,15 @@
     answers?: Answers
     questions?: Question[]
     pratinjau?: boolean
+    paged?: boolean
   } = $props()
+
+  // DISPLAY text only. `question` is passed through to QuestionField untouched —
+  // its option labels are the data identity and must not be translated with it.
+  const i18n = useI18n()
+  const title = $derived(i18n.text(question, 'title'))
+  const description = $derived(i18n.text(question, 'description'))
+  const titlePlain = $derived(i18n.plain(question, 'title'))
 </script>
 
 <div class="card">
@@ -41,24 +54,24 @@
   {/if}
 
   <h2 class="question-title" data-question-heading tabindex="-1">
-    <div class="title-text">{@html question.title}</div>
+    <div class="title-text">{@html title}</div>
     {#if question.required}
-      <span class="required" aria-label="wajib diisi">*</span>
+      <span class="required" aria-label={i18n.t('requiredMark')}>*</span>
     {/if}
   </h2>
 
-  {#if question.description && question.type !== 'statement'}
-    <div class="description">{@html question.description}</div>
+  {#if description && question.type !== 'statement'}
+    <div class="description">{@html description}</div>
   {/if}
 
   {#if question.imageUrl}
     {#if question.imageLayout === 'left' || question.imageLayout === 'right'}
       <div class="card-inline-wrap card-inline-{question.imageLayout}">
         <div class="inline-img-wrap">
-          <img src={question.imageUrl} alt={question.titlePlain ?? ''} class="inline-img" />
+          <img src={question.imageUrl} alt={titlePlain} class="inline-img" />
         </div>
         <div class="inline-input-wrap">
-          <QuestionInput
+          <QuestionField
             {question}
             value={answer}
             onChange={onAnswer}
@@ -67,15 +80,16 @@
             {answers}
             {questions}
             {pratinjau}
+            {paged}
           />
         </div>
       </div>
     {:else}
       <div class="image-wrap">
-        <img src={question.imageUrl} alt={question.titlePlain ?? ''} />
+        <img src={question.imageUrl} alt={titlePlain} />
       </div>
       <div class="input-wrap">
-        <QuestionInput
+        <QuestionField
           {question}
           value={answer}
           onChange={onAnswer}
@@ -83,12 +97,13 @@
           {answers}
           {questions}
           {pratinjau}
+          {paged}
         />
       </div>
     {/if}
   {:else}
     <div class="input-wrap">
-      <QuestionInput
+      <QuestionField
         {question}
         value={answer}
         onChange={onAnswer}
@@ -96,6 +111,7 @@
         {answers}
         {questions}
         {pratinjau}
+        {paged}
       />
     </div>
   {/if}

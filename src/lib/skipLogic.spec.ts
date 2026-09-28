@@ -132,3 +132,18 @@ describe('contains — substring over the literal text', () => {
     expect(fires('contains', '00', '0076359761')).toBe(true)
   })
 })
+
+describe('Top of Mind answers — rules see the full selection', () => {
+  const tom = { first: 'Aqua', selected: ['Aqua', 'Cleo'] }
+  it('contains / equals match any selected option, including the first pick', () => {
+    expect(fires('contains', 'Aqua', tom)).toBe(true)
+    expect(fires('contains', 'Cleo', tom)).toBe(true)
+    expect(fires('contains', 'Prima', tom)).toBe(false)
+    expect(fires('equals', 'Cleo', tom)).toBe(true)
+    expect(fires('not_contains', 'Prima', tom)).toBe(true)
+  })
+  it('empty / not_empty follow the first pick', () => {
+    expect(fires('not_empty', '', tom)).toBe(true)
+    expect(fires('empty', '', { first: '', selected: [] })).toBe(true)
+  })
+})

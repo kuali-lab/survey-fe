@@ -241,6 +241,7 @@
                   slug={data.slug}
                   answers={runner.answers}
                   questions={runner.questions}
+                  paged
                 />
               {/each}
             </div>
@@ -256,7 +257,22 @@
       {/if}
 
       <div class="nav">
-        {#if runner.currentIndex > 0 && settings.showNavArrows}
+        <!-- Penegakan M1 di sini selalu mati — runner surveyor memasang
+             `enforceAllowBack: false`. Kondisinya ditulis tetap supaya aturan
+             kosmetiknya seragam dengan `SurveyStage`: kalau kelak surveyor ikut
+             ditegakkan, tombolnya ikut hilang tanpa perlu diingat.
+
+             🔴 Tanpa penjaga `currentIndex > 0`, sama seperti `SurveyStage`:
+             `canGoBack` sudah memuat "ada tempat untuk mundur", dan jawabannya
+             bisa YA di indeks 0 (Top of Mind tahap 2 di halaman pertama).
+
+             🔴 Penjaga `settings.showNavArrows` ikut DIHAPUS 17 Sep 2026 (H-64),
+             dan justru demi keseragaman yang dijanjikan paragraf pertama di atas:
+             `SurveyStage` sudah melepasnya, jadi mempertahankannya di sini akan
+             membuat PETUGAS WAWANCARA kehilangan tombol mundur pada survei lama
+             yang kebetulan menyimpan `showNavArrows: false`, sementara responden
+             di survei yang sama tetap punya. Persis kebalikan dari niat aslinya. -->
+        {#if runner.canGoBack}
           <NavButton label="Sebelumnya" onClick={runner.handleBack} variant="secondary" />
         {/if}
         <div class="nav-right">

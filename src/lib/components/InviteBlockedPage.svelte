@@ -4,9 +4,20 @@
   let {
     state,
     title = '',
+    logoUrl = null,
+    linkReason = 'invalid',
   }: {
-    state: 'done' | 'expired' | 'device'
+    state: 'done' | 'expired' | 'device' | 'link'
     title?: string
+    /** Logo per survei (M2/K29). `null`/absen = logo platform, seperti sebelumnya. */
+    logoUrl?: string | null
+    /**
+     * Hanya dibaca saat `state === 'link'` (Ihatec F1). `'invalid'` (bawaan) =
+     * teks LAMA persis (kode cabang M6a tidak aktif/tak dikenal). `'required'` =
+     * teks BARU: survei ini memang hanya menerima jawaban lewat tautan cabang,
+     * bukan tautan yang tidak aktif. Bukan state baru — dua alasan, satu gerbang.
+     */
+    linkReason?: 'invalid' | 'required'
   } = $props()
 
   const cfg = $derived(
@@ -28,20 +39,46 @@
             message:
               'Setiap perangkat hanya dapat mengisi survei ini satu kali. Gunakan perangkat lain bila Anda ingin mengisi sebagai responden berbeda.',
           }
-        : {
-            tone: 'warning' as const,
-            icon: 'clock' as const,
-            eyebrow: 'Tautan tidak berlaku',
-            heading: 'Tautan undangan telah kedaluwarsa',
-            message:
-              'Tautan undangan ini sudah tidak dapat digunakan. Silakan minta undangan terbaru dari penyelenggara survei.',
-          },
+        : state === 'link'
+          ? linkReason === 'required'
+            ? {
+                // Ihatec F1: bukan tautan yang rusak/kedaluwarsa — survei ini memang
+                // hanya menerima jawaban lewat tautan/QR bercabang. Eyebrow beda
+                // sengaja (bukan "tidak berlaku") supaya tidak menyiratkan tautan
+                // umum yang dipakai itu cacat; tone/icon dipertahankan sama
+                // (warning/clock) karena efeknya bagi responden sama: form tak
+                // bisa diisi sampai mereka pakai tautan yang benar.
+                tone: 'warning' as const,
+                icon: 'clock' as const,
+                eyebrow: 'Tautan khusus diperlukan',
+                heading: 'Survei ini hanya bisa diisi lewat tautan petugas',
+                message:
+                  'Pakai tautan atau QR yang dibagikan petugas. Tautan umum tidak menerima jawaban.',
+              }
+            : {
+                // Kode cabang tautan (M6a) tidak aktif/tak dikenal — jawaban tidak
+                // hilang; responden cukup minta tautan/QR terbaru ke petugas.
+                tone: 'warning' as const,
+                icon: 'clock' as const,
+                eyebrow: 'Tautan tidak berlaku',
+                heading: 'Tautan ini tidak berlaku',
+                message:
+                  'Tautan atau QR yang Anda pakai sudah tidak aktif. Minta tautan terbaru ke petugas yang membagikannya.',
+              }
+          : {
+              tone: 'warning' as const,
+              icon: 'clock' as const,
+              eyebrow: 'Tautan tidak berlaku',
+              heading: 'Tautan undangan telah kedaluwarsa',
+              message:
+                'Tautan undangan ini sudah tidak dapat digunakan. Silakan minta undangan terbaru dari penyelenggara survei.',
+            },
   )
 </script>
 
 <div class="blocked">
   <div class="logo-bar">
-    <Logo height={24} />
+    <Logo height={24} {logoUrl} />
   </div>
 
   <div class="icon-circle" data-tone={cfg.tone} aria-hidden="true">

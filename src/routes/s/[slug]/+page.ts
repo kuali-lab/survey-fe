@@ -4,10 +4,25 @@ import { env as publicEnv } from '$env/dynamic/public'
 import { fetchSurvey } from '$lib/api.js'
 import type { Survey } from '$lib/types.js'
 
-// During SSR, reach logika-be directly on the same host instead of looping back
-// out through Cloudflare via the public API URL — removes an external round-trip
-// per render. Server-side only (!browser); the browser always uses the public URL.
-const SSR_API_BASE = publicEnv.PUBLIC_SSR_API_BASE_URL || 'http://localhost:8080/api/v1'
+// Saat SSR, jangkau logika-be lewat jalur internal kalau ada — menghemat satu
+// perjalanan keluar-masuk Cloudflare per render. Hanya di server (`!browser`);
+// peramban selalu memakai URL publik.
+//
+// 🔴 Nilai jatuhnya adalah `PUBLIC_API_BASE_URL`, BUKAN localhost, dan itu yang
+// memperbaiki kedip merek.
+//
+// Sebelumnya ia jatuh ke `http://localhost:8080/api/v1` — alamat yang hampir
+// tidak pernah terjangkau dari proses SSR di server mana pun. Pengambilan itu
+// gagal, `survey` jadi null, dan `+layout.svelte` memancarkan cabang bawaan:
+// empat ikon platform Logika Statistik plus judul bawaan ke cat PERTAMA. Baru
+// kemudian `load` berjalan ulang di peramban, berhasil, dan menukarnya. Survei
+// ber-white-label karena itu memamerkan merek platform lebih dulu, setiap kali.
+//
+// Jatuh ke URL publik membuat SSR berhasil di konfigurasi normal tanpa satu pun
+// variabel tambahan. `PUBLIC_SSR_API_BASE_URL` tetap dihormati sebagai PENIMPA
+// untuk lingkungan yang punya alamat internal lebih pendek — opsional, bukan
+// syarat.
+const SSR_API_BASE = publicEnv.PUBLIC_SSR_API_BASE_URL || publicEnv.PUBLIC_API_BASE_URL
 
 export const load: PageLoad = async ({ params, fetch }) => {
   const { slug } = params

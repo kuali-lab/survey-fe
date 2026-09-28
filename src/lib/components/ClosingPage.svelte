@@ -1,25 +1,38 @@
 <script lang="ts">
+  import { isCustomLogo, resolveLogoUrl } from '$lib/branding.js'
+  import { resolveMediaUrl } from '$lib/mediaUrl.js'
+  import { useI18n } from '$lib/i18n/context.js'
+
   let {
     title,
     titlePlain = '',
     description,
     imageUrl,
-    imageLayout = 'center'
+    imageLayout = 'center',
+    logoUrl = null
   }: {
     title: string
     titlePlain?: string
     description: string | null
     imageUrl: string | null
     imageLayout?: string | null
+    /** Logo per survei (M2). `null`/absen = logo platform, seperti sebelumnya. */
+    logoUrl?: string | null
   } = $props()
 
+  const i18n = useI18n()
+
+  // Sama seperti WelcomePage: jadikan absolut sekali, pakai untuk `src` dan `alt`.
+  const logoMedia = $derived(resolveMediaUrl(logoUrl))
+  const logoSrc = $derived(resolveLogoUrl(logoMedia))
+  const logoAlt = $derived(isCustomLogo(logoMedia) ? 'Logo survei' : 'Logika Statistik')
   const layout = $derived(imageLayout ?? 'center')
   const isInline = $derived(layout === 'left' || layout === 'right')
 </script>
 
 <div class="closing" class:layout-inline={isInline} class:layout-right={layout === 'right'}>
   <div class="logo-bar">
-    <img src="/logo-logika-teta.svg" alt="Logika Statistik" class="logo-img" />
+    <img src={logoSrc} alt={logoAlt} class="logo-img" />
   </div>
 
   {#if layout === 'center'}
@@ -50,7 +63,7 @@
     {#if description}
       <p class="description">{@html description}</p>
     {:else}
-      <p class="description">Terima kasih telah mengisi survei ini. Jawaban Anda telah berhasil disimpan.</p>
+      <p class="description">{i18n.t('closingBody')}</p>
     {/if}
   </div>
 </div>
@@ -85,9 +98,14 @@
     z-index: 10;
   }
 
+  /* Kotak yang SAMA PERSIS dengan WelcomePage — lihat alasannya di sana.
+     Logo yang berubah ukuran antara layar pembuka dan layar penutup terbaca
+     seperti dua merek, bukan satu. */
   .logo-img {
+    width: 140px;
     height: 36px;
-    width: auto;
+    object-fit: contain;
+    object-position: left center;
     display: block;
   }
 
@@ -173,6 +191,14 @@
     .body {
       align-items: center;
       text-align: center;
+    }
+    /* Paritas dengan WelcomePage, yang sudah menyusutkan logonya di lebar ini.
+       Sebelumnya hanya halaman pembuka yang menyusut, jadi logo yang sama
+       tampil 36px di layar penutup dan 26px di layar pembuka pada ponsel yang
+       sama — selisih yang tidak disengaja siapa pun. */
+    .logo-img {
+      width: 104px;
+      height: 26px;
     }
   }
 

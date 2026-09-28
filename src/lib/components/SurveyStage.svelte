@@ -22,6 +22,8 @@
   import SectionHeader from './SectionHeader.svelte'
   import QuestionCard from './QuestionCard.svelte'
   import NavButton from './NavButton.svelte'
+  import { useI18n } from '$lib/i18n/context.js'
+  import type { SurveyPage } from '$lib/runner/sections.js'
 
   let {
     runner,
@@ -37,7 +39,11 @@
     pratinjau = false,
   }: {
     runner: SurveyRunner
-    settings: { showProgress?: boolean; showNumbers?: boolean; showNavArrows?: boolean }
+    // `showNavArrows` tidak lagi dibaca komponen ini (H-64). Ia tetap ada di
+    // objek pengaturan yang dikirim backend — kolomnya sengaja dipertahankan —
+    // tapi tidak lagi dideklarasikan di sini supaya tidak terbaca seperti tombol
+    // yang masih hidup oleh pembaca berikutnya.
+    settings: { showProgress?: boolean; showNumbers?: boolean }
     questionErrors?: Record<string, string>
     slug?: string
     submitError?: string | null
@@ -45,6 +51,17 @@
     prefersReducedMotion?: boolean
     pratinjau?: boolean
   } = $props()
+
+  const i18n = useI18n()
+
+  // A section title comes from a `question_group` question; the page only carries a
+  // copy of its primary-language text. For any other language the text is re-read
+  // from the group it came from, so it picks up the translation.
+  function sectionText(section: SurveyPage, field: 'title' | 'description'): string | null {
+    const group = section.groupId ? runner.questions.find((q) => q.id === section.groupId) : undefined
+    if (group) return i18n.text(group, field) || null
+    return section[field] ?? null
+  }
 </script>
 
 <div class="survey-wrap">
@@ -63,7 +80,7 @@
         {#each runner.scrollSections as section (section.id)}
           <div class="stage-slide">
             {#if section.title}
-              <SectionHeader title={section.title} description={section.description ?? null} />
+              <SectionHeader title={sectionText(section, 'title') ?? section.title} description={sectionText(section, 'description')} />
             {/if}
             {#each section.questions as q (q.id)}
               <QuestionCard
@@ -89,8 +106,8 @@
           >
             {#if runner.currentPage.title}
               <SectionHeader
-                title={runner.currentPage.title}
-                description={runner.currentPage.description ?? null}
+                title={sectionText(runner.currentPage, 'title') ?? runner.currentPage.title}
+                description={sectionText(runner.currentPage, 'description')}
               />
             {/if}
             {#each runner.currentPage.questions as q (q.id)}
@@ -105,6 +122,7 @@
                 answers={runner.answers}
                 questions={runner.questions}
                 {pratinjau}
+                paged
               />
             {/each}
           </div>
@@ -119,14 +137,35 @@
     {#if runner.autoAdvancing}
       <div class="auto-advance-hint" aria-live="polite">
         <span class="auto-advance-spinner" aria-hidden="true"></span>
-        Lanjut otomatis…
+        {i18n.t('autoAdvance')}
       </div>
     {/if}
 
     <div class="nav">
-      {#if runner.currentIndex > 0 && settings.showNavArrows}
+      <!--
+        `runner.canGoBack` di sini KOSMETIK, bukan penegakan: tombol mati yang
+        terlihat adalah UX buruk. Penegakan No-Back hidup di `handleBack` dalam
+        runner, yang juga menutup roda tetikus, gestur sentuh, dan papan ketik —
+        jangan pernah membalik peran keduanya.
+
+        🔴 Penjaga `settings.showNavArrows` DIHAPUS 17 Sep 2026 (keputusan user,
+        H-64). Ia menyembunyikan tombol ini saja — tombol maju di bawah tidak
+        pernah ikut digerbang, walau label sakelarnya menjanjikan "prev/next" —
+        sehingga satu-satunya keadaan yang ia hasilkan adalah jalur mundur yang
+        HIDUP lewat roda/usap/papan ketik tapi tanpa kontrol yang terlihat. Di
+        mode gulir ia bahkan tak berefek sama sekali, karena `canGoBack` di sana
+        permanen `false`. Visibilitas panah kini mengikuti "Izinkan Kembali",
+        yang menjawab pertanyaan yang sama dengan jangkauan lebih luas.
+
+        🔴 `currentIndex > 0` sengaja TIDAK lagi diuji di sini. Sejak Top of Mind,
+        `canGoBack` sudah memuat pertanyaan "ada tempat untuk mundur?" — dan
+        jawabannya bisa YA di indeks 0, yaitu saat soal Top of Mind berada di
+        halaman pertama dan respondennya ada di tahap 2. Menambahkan kembali
+        penjaga indeks di sini akan menghilangkan tombol mundur tahap-2 itu.
+      -->
+      {#if runner.canGoBack}
         <NavButton
-          label="Sebelumnya"
+          label={i18n.t('back')}
           onClick={runner.handleBack}
           variant="secondary"
           disabled={submitting}

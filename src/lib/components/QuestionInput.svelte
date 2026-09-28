@@ -7,12 +7,25 @@
   import 'flatpickr/dist/flatpickr.css'
   import RegionInput from './RegionInput.svelte'
   import SearchableDropdown from './SearchableDropdown.svelte'
+  import MatrixInput from './MatrixInput.svelte'
   import { sanitizePhoneInput } from '$lib/phone.js'
   import {
     buildOptionFilter, hasOptionFilter, filterDisabledHint, filterEmptyMessage,
   } from '$lib/optionFilter.js'
+  import {
+    visibleOptions, dependencyDisabledHint, dependencyEmptyMessage, dependencyParentLabel,
+  } from '$lib/optionDependency.js'
   import { getRegionName, resolveRegionName } from '$lib/regionNames.js'
+  import { SEARCH_DEBOUNCE_MS, filterBySearch, effectiveMinChars, debounce } from '$lib/optionSearch.js'
   import { applyNumberInput, numberInputText, numberInputCompare } from '$lib/numberInput.js'
+  import { fade, fly } from 'svelte/transition'
+  import { flip } from 'svelte/animate'
+  import { useI18n } from '$lib/i18n/context.js'
+  import { cubicOut } from 'svelte/easing'
+  import {
+    isTopOfMindQuestion, topOfMindFirst, topOfMindRest, remainingOptions, restLimit, restAtLimit,
+    setTopOfMindFirst, toggleTopOfMindRest, clearTopOfMind, normalizeTopOfMind, topOfMindOtherText, firstIsOther,
+  } from '$lib/topOfMind.js'
 
   let {
     question,
@@ -26,7 +39,11 @@
     // `/s//upload`. Itu permintaan keluar dari halaman yang seharusnya nol
     // pengiriman — dimatikan di sini, dengan kalimat yang menjelaskan, bukan
     // dibiarkan gagal sendiri sebagai "Tidak dapat mengunggah berkas".
-    pratinjau = false
+    pratinjau = false,
+    // Top of Mind: one-per-page mode renders stage 2 as an "extended question"
+    // (first pick excluded, intro line) instead of pinning the first pick.
+    paged = false,
+    grow = false,
   }: {
     question: Question
     value: AnswerValue
@@ -38,7 +55,18 @@
     answers?: Answers
     questions?: Question[]
     pratinjau?: boolean
+    paged?: boolean
+    /** Isian teks pendek yang tumbuh ke bawah mengikuti isinya (isian kartu Grup Jawaban). */
+    grow?: boolean
   } = $props()
+
+  // ── Two-language surveys ──────────────────────────────────────────────────────
+  // 🔴 `i18n.label(...)` / `i18n.text(...)` are ONLY for displayed text. Every
+  // `onChange(...)`, `includes(...)` and comparison in this file keeps using
+  // `opt.label` (the primary language): that is the answer value that gets stored,
+  // compared by skip logic / Pilihan Bertingkat, and sent to the backend.
+  const i18n = useI18n()
+  const placeholderText = $derived(i18n.text(question, 'placeholder'))
 
   // ── Filtered dropdown (contract §8) ─────────────────────────────────────────
   const filterActive = $derived(question.type === 'dropdown' && hasOptionFilter(question))
@@ -148,14 +176,61 @@
   // Checkbox / single_choice helpers
   const arrValue = $derived(Array.isArray(value) ? (value as string[]) : [])
 
+  // Dropdown "Pilih Lebih dari Satu" (§A, inline-only — mirrors the
+  // isPlainChoice/hasAsyncOptions guard already gating filterActive above).
+  // Its answer is the same string[] shape checkbox uses, so it reuses
+  // `arrValue`/`selectLimit`/`atSelectLimit` below instead of a second set.
+  const isMultiDropdown = $derived(question.type === 'dropdown' && question.multiSelect === true)
+
   // Checkbox multi-select limit (0/undefined = unlimited). When the limit is
   // reached, unselected options are disabled; deselecting one frees a slot.
   // Answer shape (array) is unchanged → skip-logic / dataset / export unaffected.
+  // Also used by multi-select dropdown (same convention, see isMultiDropdown above).
   const selectLimit = $derived(question.maxSelections && question.maxSelections > 0 ? question.maxSelections : 0)
   const atSelectLimit = $derived(selectLimit > 0 && arrValue.length >= selectLimit)
 
-  // Options for choice types — already a typed array from the normalized schema
-  const options = $derived(question.options ?? [])
+  // Options for choice types — already a typed array from the normalized schema.
+  // Pilihan Bertingkat (single_choice / manual dropdown with `dependsOn`): the
+  // list is narrowed to the options allowed under the parent answer. While the
+  // parent is unanswered the full list is shown greyed out and disabled.
+  const allOptions = $derived(question.options ?? [])
+  const dependency = $derived(visibleOptions(question, answers, questions))
+  const dependencyWaiting = $derived(dependency.status === 'waiting')
+  const dependencyHint = $derived(dependencyWaiting ? dependencyDisabledHint(question, questions) : '')
+  const dependencyEmptyText = $derived(
+    dependency.status === 'empty'
+      ? dependencyEmptyMessage(question, dependencyParentLabel(question, answers), questions)
+      : '',
+  )
+  const options = $derived(
+    dependency.status === 'inactive' || dependencyWaiting ? allOptions : dependency.options,
+  )
+
+  // ── Checkbox search + "Sembunyikan Opsi" (§C) ──────────────────────────────
+  // Search only ever narrows what's RENDERED — `options`/`arrValue` (the
+  // answer) stay untouched, same principle as multi-select dropdown's search
+  // (§A). Filters the FULL `options` list (incl. "Lainnya") so an unmatched
+  // "Lainnya" row hides like any other row — the two loops below both read
+  // `checkboxDisplayOptions`, never `options` directly.
+  let checkboxSearchQuery = $state('')
+  let checkboxDebouncedSearch = $state('')
+  const setCheckboxDebouncedSearch = debounce((q: string) => { checkboxDebouncedSearch = q }, SEARCH_DEBOUNCE_MS)
+  $effect(() => {
+    setCheckboxDebouncedSearch(checkboxSearchQuery.toLowerCase())
+  })
+  const checkboxSearchText = (o: { label: string, isOther?: boolean }) => [o.label, i18n.label(o)]
+  // Same per-question minimum as the dropdown search (see effectiveMinChars) —
+  // no separate bypass for "Sembunyikan Opsi".
+  const checkboxMinChars = $derived(effectiveMinChars(options, checkboxSearchText))
+  const checkboxDisplayOptions = $derived.by(() => {
+    if (question.hideOptionsUntilSearch && checkboxDebouncedSearch === '') return []
+    // Below the minimum (but non-empty): show the full list rather than a
+    // half-typed, misleading narrow — the list stays visible on the page
+    // either way, unlike a dropdown's popover, so hiding it here would just
+    // make it flicker while the respondent is still typing.
+    if (checkboxDebouncedSearch.length > 0 && checkboxDebouncedSearch.length < checkboxMinChars) return options
+    return filterBySearch(options, checkboxDebouncedSearch, checkboxSearchText)
+  })
 
   // Rating
   const ratingScale = $derived(question.maxStars ?? 5)
@@ -172,9 +247,9 @@
   const opMax = $derived(question.maxValue ?? 10)
   const opButtons = $derived(Array.from({ length: opMax - opMin + 1 }, (_, i) => opMin + i))
   const opValue = $derived(typeof value === 'number' ? value : null)
-  const opMinLabel = $derived(question.minLabel || 'Sangat Tidak Setuju')
-  const opMaxLabel = $derived(question.maxLabel || 'Sangat Setuju')
-  const opMidLabel = $derived(question.midLabel || '')
+  const opMinLabel = $derived(i18n.text(question, 'minLabel') || i18n.t('scaleDisagree'))
+  const opMaxLabel = $derived(i18n.text(question, 'maxLabel') || i18n.t('scaleAgree'))
+  const opMidLabel = $derived(i18n.text(question, 'midLabel') || '')
 
   // Matrix — value is Record<rowLabel, colLabel>
   const matrixRows = $derived(question.matrixRows ?? [])
@@ -216,12 +291,16 @@
   // ── is_other ("Lainnya") state ──
   const otherOption = $derived(options.find(o => o.isOther))
 
-  // For single_choice: selected = strValue matches the isOther label OR user typed its own text
+  // For single_choice / single-value dropdown: selected = strValue matches the
+  // isOther label OR user typed its own text. Compared against the FULL option
+  // list so a narrowed (Pilihan Bertingkat) list never mistakes a standard
+  // label for "Lainnya" free text. Checkbox and multi-select dropdown (§A)
+  // share the array-shaped branch — value is a string[] either way.
   const isOtherSelected = $derived(
     otherOption ? (
-      question.type === 'single_choice' || question.type === 'dropdown'
-        ? strValue !== '' && !options.filter(o => !o.isOther).some(o => o.label === strValue)
-        : arrValue.some(v => !options.filter(o => !o.isOther).some(o => o.label === v) && v !== '')
+      (question.type === 'single_choice' || question.type === 'dropdown') && !isMultiDropdown
+        ? strValue !== '' && !allOptions.filter(o => !o.isOther).some(o => o.label === strValue)
+        : arrValue.some(v => !allOptions.filter(o => !o.isOther).some(o => o.label === v) && v !== '')
     ) : false
   )
 
@@ -230,11 +309,15 @@
     const otherOpt = opts.find(o => o.isOther)
     if (!otherOpt) return ''
     const standardLabels = opts.filter(o => !o.isOther).map(o => o.label)
-    if (question.type === 'single_choice' || question.type === 'dropdown') {
+    // Read `question.multiSelect` directly (not the $derived `isMultiDropdown`)
+    // — this runs once at $state init, before rune declarations further down
+    // the script are guaranteed ordered.
+    const isMulti = question.type === 'dropdown' && question.multiSelect === true
+    if ((question.type === 'single_choice' || question.type === 'dropdown') && !isMulti) {
       const sv = typeof value === 'string' ? value : ''
       return sv && !standardLabels.includes(sv) && sv !== otherOpt.label ? sv : ''
     }
-    if (question.type === 'checkbox') {
+    if (question.type === 'checkbox' || isMulti) {
       const av = Array.isArray(value) ? (value as string[]) : []
       return av.find(v => !standardLabels.includes(v) && v !== otherOpt.label) ?? ''
     }
@@ -369,6 +452,139 @@
       destroy() { node.removeEventListener('input', adjust) }
     }
   }
+
+  // ── Top of Mind: one list, two stages (see $lib/topOfMind.ts) ─────────────
+  // Looks like a plain checkbox question. The FIRST tap is recorded as the
+  // top-of-mind pick: that row flips to the top (animate:flip), stays checked,
+  // and a hint invites more picks. Tapping the pinned row again clears the
+  // whole answer (stage 2 picks were relative to it). Stage is derived from
+  // the answer, so back-navigation and draft resume need nothing extra.
+  const tom = $derived(isTopOfMindQuestion(question))
+  const tomFirst = $derived(topOfMindFirst(value))
+  const tomRest = $derived(topOfMindRest(value))
+  const tomRemaining = $derived(remainingOptions(options, tomFirst))
+  const tomOtherOption = $derived(tomRemaining.find(o => o.isOther))
+  const tomRestLimit = $derived(restLimit(question.maxSelections))
+  const tomRestAtLimit = $derived(restAtLimit(value, question.maxSelections))
+  const tomFirstIsOther = $derived(firstIsOther(value, allOptions))
+  const tomStandardLabels = $derived(new Set(allOptions.filter(o => !o.isOther).map(o => o.label)))
+  const tomOtherInRest = $derived(!tomFirstIsOther && tomRest.some(r => !tomStandardLabels.has(r)))
+  // Paged mode: after the first tap the list stays put for a beat (the tap
+  // lands visibly), then stage 2 slides in like a new question.
+  let tomSettling = $state(false)
+  const tomStage = $derived<1 | 2>(tomFirst === '' || tomSettling ? 1 : 2)
+  // Re-mount the stage block on stage change only in paged mode (slide-in);
+  // scroll mode keeps one list and flips the first pick to the top instead.
+  const tomKey = $derived(paged ? tomStage : 0)
+
+  // "Lainnya" as first pick: chosen but not yet confirmed with text.
+  let tomOtherPending = $state(false)
+  let tomOtherDraft = $state('')
+  // "Lainnya" in stage 2 — same convention as the plain checkbox.
+  let tomOtherText = $state(untrack(() => topOfMindOtherText(value, question.options ?? [])))
+
+  const TOM_OTHER_KEY = '__other__'
+  // The stored first pick (a primary-language label, or free "Lainnya" text)
+  // → its display text.
+  const tomFirstText = $derived.by(() => {
+    const match = allOptions.find((o) => !o.isOther && o.label === tomFirst)
+    return match ? i18n.label(match) : tomFirst
+  })
+  type TomRow = { key: string; label: string; display: string; isOther: boolean; isFirst: boolean; checked: boolean; disabled: boolean }
+  // Keyed rows: the first pick keeps the key of the option it came from, so
+  // animate:flip slides it to the top instead of re-rendering it.
+  const tomRows = $derived.by<TomRow[]>(() => {
+    const ordered = [...options.filter(o => !o.isOther), ...options.filter(o => o.isOther)]
+    if (tomStage === 1) {
+      return ordered.map(o => ({
+        key: o.isOther ? TOM_OTHER_KEY : o.label, label: o.label, display: i18n.label(o), isOther: !!o.isOther,
+        isFirst: false, checked: !!o.isOther && tomOtherPending, disabled: false,
+      }))
+    }
+    const first: TomRow = {
+      key: tomFirstIsOther ? TOM_OTHER_KEY : tomFirst, label: tomFirst, display: tomFirstText, isOther: tomFirstIsOther,
+      isFirst: true, checked: true, disabled: false,
+    }
+    const rest = [...tomRemaining.filter(o => !o.isOther), ...tomRemaining.filter(o => o.isOther)].map(o => {
+      const checked = o.isOther ? tomOtherInRest : tomRest.includes(o.label)
+      return {
+        key: o.isOther ? TOM_OTHER_KEY : o.label, label: o.label, display: i18n.label(o), isOther: !!o.isOther,
+        isFirst: false, checked, disabled: !checked && tomRestAtLimit,
+      }
+    })
+    // Paged mode: stage 2 shows only the remaining options — the first pick is
+    // named in the intro line, not pinned in the list.
+    return paged ? rest : [first, ...rest]
+  })
+  const tomShowOtherInput = $derived(tomStage === 1 ? tomOtherPending : tomOtherInRest)
+  const tomHintText = $derived(
+    tomRemaining.length === 0
+      ? i18n.t('tomNoMore')
+      : tomRestLimit > 0
+        ? i18n.t('tomRestLimit', { limit: tomRestLimit, n: tomRest.length })
+        : i18n.t('tomStage2Hint'),
+  )
+
+  const tomReduceMotion =
+    typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  const tomFlip = { duration: tomReduceMotion ? 0 : 260, easing: cubicOut }
+  const tomFade = { duration: tomReduceMotion ? 0 : 180 }
+  const tomFly = { y: tomReduceMotion ? 0 : 16, duration: tomReduceMotion ? 0 : 220, easing: cubicOut }
+
+  function tomSettleThenAdvance() {
+    if (!paged || tomReduceMotion) return
+    tomSettling = true
+    setTimeout(() => {
+      tomSettling = false
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+    }, 260)
+  }
+
+  function tomTapRow(row: TomRow) {
+    if (row.isFirst) {
+      tomOtherPending = false
+      onChange(clearTopOfMind())
+      return
+    }
+    if (tomStage === 1) {
+      if (row.isOther) {
+        tomOtherPending = true
+        return
+      }
+      tomOtherPending = false
+      onChange(setTopOfMindFirst(value, row.label))
+      tomSettleThenAdvance()
+      return
+    }
+    if (row.isOther) tomToggleOtherRest()
+    else onChange(toggleTopOfMindRest(value, row.label, question.maxSelections))
+  }
+  function tomConfirmOtherFirst() {
+    const text = tomOtherDraft.trim()
+    if (!text) return
+    tomOtherPending = false
+    onChange(setTopOfMindFirst(value, text))
+    tomSettleThenAdvance()
+  }
+  function tomToggleOtherRest() {
+    if (!tomOtherOption) return
+    if (tomOtherInRest) {
+      onChange(normalizeTopOfMind(tomFirst, tomRest.filter(r => tomStandardLabels.has(r))))
+    } else {
+      if (tomRestAtLimit) return
+      onChange(normalizeTopOfMind(tomFirst, [...tomRest, tomOtherText || tomOtherOption.label]))
+    }
+  }
+  function tomUpdateOtherRest(text: string) {
+    if (!tomOtherOption) return
+    tomOtherText = text
+    const cleaned = tomRest.filter(r => tomStandardLabels.has(r))
+    cleaned.push(text || tomOtherOption.label)
+    onChange(normalizeTopOfMind(tomFirst, cleaned))
+  }
+  function tomFocus(node: HTMLInputElement) {
+    node.focus()
+  }
 </script>
 
 {#if question.type === 'image_choice'}
@@ -381,7 +597,7 @@
       >
         <div class="image-option-img-wrap">
           {#if question.optionImages && question.optionImages[idx]}
-            <img src={question.optionImages[idx]} alt={opt.label} class="image-option-img" />
+            <img src={question.optionImages[idx]} alt={i18n.label(opt)} class="image-option-img" />
           {:else}
             <div class="image-option-placeholder">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
@@ -395,18 +611,39 @@
         {#if question.showLabel !== false}
           <div class="image-option-footer">
             <span class="radio-indicator {strValue === opt.label ? 'selected' : ''}"></span>
-            <span class="image-option-label">{opt.label}</span>
+            <span class="image-option-label">{i18n.label(opt)}</span>
           </div>
         {/if}
       </button>
     {/each}
   </div>
 
+{:else if question.type === 'short_text' && grow}
+  <!-- Satu baris saat pendek, membungkus dan tumbuh saat panjang. Enter tidak
+       menyisipkan baris baru: jawabannya tetap satu baris logis. -->
+  <textarea
+    class="text-input grow-input"
+    rows="1"
+    placeholder={placeholderText}
+    value={strValue}
+    maxlength={question.maxLength ?? undefined}
+    minlength={question.minLength ?? undefined}
+    oninput={(e) => onChange((e.currentTarget as HTMLTextAreaElement).value)}
+    onkeydown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
+    onblur={() => onBlur?.()}
+    use:autoExpand
+  ></textarea>
+  {#if question.maxLength || question.minLength}
+    <div class="char-count" style="text-align: right; margin-top: 6px; font-size: 0.85rem; color: var(--text-body);">
+      {strValue.length}{question.maxLength ? '/' + question.maxLength : ''}
+    </div>
+  {/if}
+
 {:else if question.type === 'short_text'}
   <input
     class="text-input"
     type="text"
-    placeholder={question.placeholder ?? ''}
+    placeholder={placeholderText}
     value={strValue}
     maxlength={question.maxLength ?? undefined}
     minlength={question.minLength ?? undefined}
@@ -423,7 +660,7 @@
   <textarea
     class="textarea-input"
     rows="4"
-    placeholder={question.placeholder ?? ''}
+    placeholder={placeholderText}
     value={strValue}
     maxlength={question.maxLength ?? undefined}
     minlength={question.minLength ?? undefined}
@@ -464,7 +701,7 @@
     <input
       class="url-input"
       type="text"
-      placeholder={question.placeholder ?? 'contoh.com'}
+      placeholder={placeholderText || 'contoh.com'}
       value={websiteDisplay}
       oninput={(e) => onChange('https://' + (e.currentTarget as HTMLInputElement).value)}
       onblur={() => onBlur?.()}
@@ -517,11 +754,11 @@
   <div style="display: flex; justify-content: space-between; align-items: flex-start;">
     <div>
       {#if question.minValue !== undefined && question.minValue !== null && question.maxValue !== undefined && question.maxValue !== null}
-        <p class="number-hint" style="margin-top: 6px;">Antara {question.minValue} dan {question.maxValue}.</p>
+        <p class="number-hint" style="margin-top: 6px;">{i18n.t('numBetween', { min: question.minValue, max: question.maxValue })}</p>
       {:else if question.minValue !== undefined && question.minValue !== null}
-        <p class="number-hint" style="margin-top: 6px;">Minimal {question.minValue}.</p>
+        <p class="number-hint" style="margin-top: 6px;">{i18n.t('numMin', { min: question.minValue })}</p>
       {:else if question.maxValue !== undefined && question.maxValue !== null}
-        <p class="number-hint" style="margin-top: 6px;">Maksimal {question.maxValue}.</p>
+        <p class="number-hint" style="margin-top: 6px;">{i18n.t('numMax', { max: question.maxValue })}</p>
       {/if}
     </div>
     {#if question.maxLength || question.minLength}
@@ -563,15 +800,16 @@
   {/if}
 
 {:else if question.type === 'single_choice'}
-  <div class="options-list">
+  <div class="options-list" class:dependency-waiting={dependencyWaiting} aria-disabled={dependencyWaiting}>
     {#each options.filter(o => !o.isOther) as opt, i}
       <button
         class="option-card {strValue === opt.label ? 'selected' : ''}"
         type="button"
+        disabled={dependencyWaiting}
         onclick={() => onChange(opt.label)}
       >
         <span class="radio-indicator {strValue === opt.label ? 'selected' : ''}"></span>
-        <span class="option-label">{opt.label}</span>
+        <span class="option-label">{i18n.label(opt)}</span>
       </button>
     {/each}
     {#if otherOption}
@@ -579,31 +817,126 @@
       <button
         class="option-card {isOtherSelected ? 'selected' : ''}"
         type="button"
+        disabled={dependencyWaiting}
         onclick={selectOtherSingle}
       >
         <span class="radio-indicator {isOtherSelected ? 'selected' : ''}"></span>
-        <span class="option-label">{otherOption.label}</span>
+        <span class="option-label">{i18n.label(otherOption)}</span>
       </button>
       {#if isOtherSelected}
         <input
           class="text-input other-text-input"
           type="text"
-          placeholder="Tuliskan jawaban Anda..."
+          placeholder={i18n.t('otherPlaceholder')}
           value={otherText}
           oninput={(e) => updateOtherSingle((e.currentTarget as HTMLInputElement).value)}
         />
       {/if}
     {/if}
   </div>
+  {#if dependencyHint}
+    <p class="dependency-note">{dependencyHint}</p>
+  {:else if dependencyEmptyText}
+    <p class="dependency-note dependency-empty">{dependencyEmptyText}</p>
+  {/if}
+
+{:else if question.type === 'checkbox' && tom}
+  <div class="tom" data-tom-stage={tomStage}>
+    {#key tomKey}
+    <div class="tom-stage" in:fly={tomFly}>
+    {#if paged && tomStage === 2}
+      <p class="tom-intro" data-test="tom-intro">
+        {i18n.t('tomFirst')} <strong>{tomFirstText}</strong>.
+        <span class="tom-intro-more">{i18n.t('tomMore')} {tomHintText}</span>
+      </p>
+    {/if}
+    <div class="options-list" role="group">
+      {#each tomRows as row (row.key)}
+        <div class="tom-row" animate:flip={tomFlip}>
+          <button
+            class="option-card {row.checked ? 'selected' : ''} {row.isFirst ? 'tom-first' : ''}"
+            type="button"
+            role="checkbox"
+            aria-checked={row.checked}
+            disabled={row.disabled}
+            style={row.disabled ? 'opacity:0.55;cursor:not-allowed;' : ''}
+            onclick={() => tomTapRow(row)}
+          >
+            <span class="checkbox-indicator {row.checked ? 'selected' : ''}">
+              {#if row.checked}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                  <path d="M5 12.5l5 5 9-10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              {/if}
+            </span>
+            <span class="option-label">{row.display}</span>
+          </button>
+          {#if row.isOther && !row.isFirst && tomShowOtherInput}
+            {#if tomStage === 1}
+              <div class="tom-other-row">
+                <input
+                  class="text-input other-text-input tom-other-input"
+                  type="text"
+                  placeholder={i18n.t('otherPlaceholder')}
+                  value={tomOtherDraft}
+                  use:tomFocus
+                  oninput={(e) => { tomOtherDraft = (e.currentTarget as HTMLInputElement).value }}
+                  onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); tomConfirmOtherFirst() } }}
+                />
+                <button
+                  class="tom-mini-btn"
+                  type="button"
+                  disabled={!tomOtherDraft.trim()}
+                  onclick={tomConfirmOtherFirst}
+                >{i18n.t('tomContinue')}</button>
+              </div>
+            {:else}
+              <input
+                class="text-input other-text-input"
+                type="text"
+                placeholder={i18n.t('otherPlaceholder')}
+                value={tomOtherText}
+                oninput={(e) => tomUpdateOtherRest((e.currentTarget as HTMLInputElement).value)}
+              />
+            {/if}
+          {/if}
+        </div>
+      {/each}
+    </div>
+    {#if tomStage === 2 && !paged}
+      <p class="tom-hint" in:fade={tomFade}>{tomHintText}</p>
+    {/if}
+    </div>
+    {/key}
+  </div>
 
 {:else if question.type === 'checkbox'}
-  <div class="options-list">
-    {#each options.filter(o => !o.isOther) as opt, i}
+  <div class="search-box checkbox-search-box">
+    <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+    <input
+      type="text"
+      placeholder={i18n.t('ddSearch')}
+      value={checkboxSearchQuery}
+      oninput={(e) => { checkboxSearchQuery = (e.currentTarget as HTMLInputElement).value }}
+    />
+  </div>
+  {#if question.hideOptionsUntilSearch && checkboxDebouncedSearch === ''}
+    <p class="checkbox-search-hint">{i18n.t('ddTypeToSearch')}</p>
+  {:else if checkboxDisplayOptions.length === 0}
+    <p class="checkbox-search-hint">{i18n.t('ddEmpty')}</p>
+  {:else}
+  {#if checkboxDebouncedSearch.length > 0 && checkboxDebouncedSearch.length < checkboxMinChars}
+    <!-- Full list still shows below (no flicker) — this just tells the
+         respondent why it isn't narrowed yet. -->
+    <p class="checkbox-search-hint">{i18n.t('ddMinChars', { n: checkboxMinChars })}</p>
+  {/if}
+  <div class="options-list" class:dependency-waiting={dependencyWaiting} aria-disabled={dependencyWaiting}>
+    {#each checkboxDisplayOptions.filter(o => !o.isOther) as opt, i}
       {@const checked = arrValue.includes(opt.label)}
       <button
         class="option-card {checked ? 'selected' : ''}"
         type="button"
-        disabled={!checked && atSelectLimit}
+        disabled={dependencyWaiting || (!checked && atSelectLimit)}
         style={!checked && atSelectLimit ? 'opacity:0.55;cursor:not-allowed;' : ''}
         onclick={() => toggleCheckbox(opt.label)}
       >
@@ -614,15 +947,14 @@
             </svg>
           {/if}
         </span>
-        <span class="option-label">{opt.label}</span>
+        <span class="option-label">{i18n.label(opt)}</span>
       </button>
     {/each}
-    {#if otherOption}
-      {@const otherIdx = options.filter(o => !o.isOther).length}
+    {#if otherOption && checkboxDisplayOptions.some(o => o.isOther)}
       <button
         class="option-card {isOtherSelected ? 'selected' : ''}"
         type="button"
-        disabled={!isOtherSelected && atSelectLimit}
+        disabled={dependencyWaiting || (!isOtherSelected && atSelectLimit)}
         style={!isOtherSelected && atSelectLimit ? 'opacity:0.55;cursor:not-allowed;' : ''}
         onclick={toggleOtherCheckbox}
       >
@@ -633,21 +965,27 @@
             </svg>
           {/if}
         </span>
-        <span class="option-label">{otherOption.label}</span>
+        <span class="option-label">{i18n.label(otherOption)}</span>
       </button>
       {#if isOtherSelected}
         <input
           class="text-input other-text-input"
           type="text"
-          placeholder="Tuliskan jawaban Anda..."
+          placeholder={i18n.t('otherPlaceholder')}
           value={otherText}
           oninput={(e) => updateOtherCheckbox((e.currentTarget as HTMLInputElement).value)}
         />
       {/if}
     {/if}
   </div>
+  {/if}
+  {#if dependencyHint}
+    <p class="dependency-note">{dependencyHint}</p>
+  {:else if dependencyEmptyText}
+    <p class="dependency-note dependency-empty">{dependencyEmptyText}</p>
+  {/if}
   {#if selectLimit > 0}
-    <p style="margin-top:8px;font-size:0.85rem;color:var(--text-body);">Pilih maksimal {selectLimit} jawaban ({arrValue.length}/{selectLimit}).</p>
+    <p style="margin-top:8px;font-size:0.85rem;color:var(--text-body);">{i18n.t('selectLimit', { limit: selectLimit, n: arrValue.length })}</p>
   {/if}
 
 {:else if question.type === 'dropdown'}
@@ -656,8 +994,18 @@
            identical to large/async ones — no more native/unstyled <select>. -->
       <SearchableDropdown
         options={options}
-        value={isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue}
+        multiple={isMultiDropdown}
+        atLimit={isMultiDropdown && atSelectLimit}
+        value={
+          isMultiDropdown
+            ? arrValue
+            : (isOtherSelected && otherOption && strValue !== otherOption.label ? otherOption.label : strValue)
+        }
         onChange={(val) => {
+          if (isMultiDropdown) {
+            onChange(val as string[]);
+            return;
+          }
           if (otherOption && val === otherOption.label) {
             onChange(otherText || otherOption.label);
           } else {
@@ -669,17 +1017,23 @@
         slug={slug}
         {filterActive}
         filter={optionFilter}
-        {filterHint}
-        filterEmptyMessage={filterEmptyText}
+        filterHint={dependencyHint || filterHint}
+        filterEmptyMessage={dependencyEmptyText || filterEmptyText}
+        disabled={dependencyWaiting}
+        notice={dependencyEmptyText}
+        hideUntilSearch={question.hideOptionsUntilSearch === true}
       />
     {#if isOtherSelected}
       <input
         class="text-input other-text-input"
         type="text"
-        placeholder="Tuliskan jawaban Anda..."
+        placeholder={i18n.t('otherPlaceholder')}
         value={otherText}
-        oninput={(e) => updateOtherSingle((e.currentTarget as HTMLInputElement).value)}
+        oninput={(e) => (isMultiDropdown ? updateOtherCheckbox : updateOtherSingle)((e.currentTarget as HTMLInputElement).value)}
       />
+    {/if}
+    {#if isMultiDropdown && selectLimit > 0}
+      <p style="margin-top:8px;font-size:0.85rem;color:var(--text-body);">{i18n.t('selectLimit', { limit: selectLimit, n: arrValue.length })}</p>
     {/if}
   </div>
 
@@ -694,7 +1048,7 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path d="M5 12.5l5 5 9-10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        Ya
+        {i18n.t('yes')}
       </span>
     </button>
     <button
@@ -706,7 +1060,7 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
         </svg>
-        Tidak
+        {i18n.t('no')}
       </span>
     </button>
   </div>
@@ -718,7 +1072,7 @@
         <button
           class="star-btn"
           type="button"
-          aria-label="Beri nilai {star}"
+          aria-label={i18n.t('ratingStar', { n: star })}
           onmouseenter={() => hoverRating = star}
           onmouseleave={() => hoverRating = 0}
           onclick={() => { onChange(star); hoverRating = 0 }}
@@ -736,7 +1090,7 @@
       {/each}
     </div>
     {#if ratingValue > 0}
-      <p class="rating-label" aria-live="polite">{ratingValue} dari {ratingScale}</p>
+      <p class="rating-label" aria-live="polite">{i18n.t('ratingOf', { n: ratingValue, max: ratingScale })}</p>
     {/if}
   </div>
 
@@ -752,8 +1106,8 @@
       {/each}
     </div>
     <div class="nps-labels">
-      <span>{question.minLabel || 'Sangat Tidak Mungkin'}</span>
-      <span>{question.maxLabel || 'Sangat Mungkin'}</span>
+      <span>{i18n.text(question, 'minLabel') || i18n.t('npsUnlikely')}</span>
+      <span>{i18n.text(question, 'maxLabel') || i18n.t('npsLikely')}</span>
     </div>
   </div>
 
@@ -779,77 +1133,23 @@
   </div>
 
 {:else if question.type === 'matrix'}
-  <div class="matrix-wrap">
-    <!-- Tablet+ table layout (>= 640px). Hidden on small screens via CSS. -->
-    <table class="matrix-table">
-      <thead>
-        <tr>
-          <th class="matrix-row-header"></th>
-          {#each matrixCols as col}
-            <th class="matrix-col-header">{col.label}</th>
-          {/each}
-        </tr>
-      </thead>
-      <tbody>
-        {#each matrixRows as row}
-          <tr class="matrix-row">
-            <td class="matrix-row-label">{row.label}</td>
-            {#each matrixCols as col}
-              {@const selected = matrixValue[row.label] === col.label}
-              <td class="matrix-cell">
-                <button
-                  class="matrix-radio {selected ? 'selected' : ''}"
-                  type="button"
-                  aria-label="{row.label}: {col.label}"
-                  onclick={() => setMatrixCell(row.label, col.label)}
-                >
-                  <span class="radio-dot"></span>
-                </button>
-              </td>
-            {/each}
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-
-    <!-- Mobile fallback (< 640px). Each row becomes a card with a label
-         heading and a vertical button list — no horizontal scrolling. -->
-    <div class="matrix-mobile">
-      {#each matrixRows as row}
-        <div class="matrix-mobile-row">
-          <div class="matrix-mobile-label">{row.label}</div>
-          <div class="matrix-mobile-options">
-            {#each matrixCols as col}
-              {@const selected = matrixValue[row.label] === col.label}
-              <button
-                class="option-card {selected ? 'selected' : ''}"
-                type="button"
-                aria-label="{row.label}: {col.label}"
-                onclick={() => setMatrixCell(row.label, col.label)}
-              >
-                <span class="radio-indicator {selected ? 'selected' : ''}"></span>
-                <span class="option-label">{col.label}</span>
-              </button>
-            {/each}
-          </div>
-        </div>
-      {/each}
-    </div>
-  </div>
+  {#key question.id}
+    <MatrixInput rows={matrixRows} cols={matrixCols} value={matrixValue} onSelect={setMatrixCell} />
+  {/key}
 
 {:else if question.type === 'contact_info'}
   <div class="contact-grid">
     <input
       class="text-input"
       type="text"
-      placeholder="Nama Depan"
+      placeholder={i18n.t('firstName')}
       value={contactValue.firstName}
       oninput={(e) => updateContact('firstName', (e.currentTarget as HTMLInputElement).value)}
     />
     <input
       class="text-input"
       type="text"
-      placeholder="Nama Belakang"
+      placeholder={i18n.t('lastName')}
       value={contactValue.lastName}
       oninput={(e) => updateContact('lastName', (e.currentTarget as HTMLInputElement).value)}
     />
@@ -857,14 +1157,14 @@
       class="text-input"
       type="tel"
       inputmode="numeric"
-      placeholder="Nomor Telepon"
+      placeholder={i18n.t('phone')}
       value={contactValue.phone}
       oninput={(e) => updateContact('phone', sanitizePhoneInput((e.currentTarget as HTMLInputElement).value))}
     />
     <input
       class="text-input"
       type="email"
-      placeholder="Email"
+      placeholder={i18n.t('email')}
       value={contactValue.email}
       oninput={(e) => updateContact('email', (e.currentTarget as HTMLInputElement).value)}
     />
@@ -938,7 +1238,7 @@
 {:else if question.type === 'statement'}
   {#if question.description}
     <div class="statement-body">
-      <p>{@html question.description}</p>
+      <p>{@html i18n.text(question, 'description')}</p>
     </div>
   {/if}
 
@@ -970,6 +1270,17 @@
   }
 
   .text-input::placeholder { color: var(--text-muted); }
+
+  /* Varian tumbuh: tinggi minimal sama dengan kotak biasa, sisanya mengikuti isi. */
+  .grow-input {
+    height: auto;
+    min-height: 52px;
+    padding: 14px 16px;
+    line-height: 1.4;
+    resize: none;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
 
   .text-input:focus {
     outline: none;
@@ -1108,6 +1419,41 @@
   }
 
   /* ── Option cards ── */
+  /* Checkbox search box (§C) — same look as SearchableDropdown's own
+     .search-box (that one is scoped to a different component, so it can't be
+     reused directly; kept visually identical). */
+  .checkbox-search-box {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--canvas-soft);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-input);
+    margin-bottom: 8px;
+  }
+  .checkbox-search-box .search-icon {
+    color: var(--text-body);
+    flex-shrink: 0;
+  }
+  .checkbox-search-box input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    caret-color: var(--primary);
+    font-family: var(--font);
+    font-size: 0.9375rem;
+    outline: none;
+  }
+  .checkbox-search-box input::placeholder { color: var(--text-muted); }
+  .checkbox-search-hint {
+    padding: 1rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+  }
+
   .options-list {
     display: flex;
     flex-direction: column;
@@ -1365,120 +1711,6 @@
     padding: 0 2px;
   }
 
-  /* ── Matrix ── */
-  .matrix-wrap {
-    overflow-x: auto;
-  }
-
-  .matrix-table {
-    display: none;
-  }
-
-  .matrix-mobile {
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-  }
-
-  .matrix-mobile-row {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .matrix-mobile-label {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--text-primary);
-    line-height: 1.4;
-  }
-
-  .matrix-mobile-options {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  @media (min-width: 640px) {
-    .matrix-table {
-      display: table;
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 14px;
-    }
-    .matrix-mobile {
-      display: none;
-    }
-  }
-
-  .matrix-col-header {
-    text-align: center;
-    padding: 8px 12px;
-    font-weight: 500;
-    font-size: 13px;
-    color: var(--text-body);
-    white-space: nowrap;
-    border-bottom: 1px solid var(--canvas-soft);
-  }
-
-  .matrix-row-header {
-    padding: 8px;
-    border-bottom: 1px solid var(--canvas-soft);
-  }
-
-  .matrix-row:nth-child(even) {
-    background: var(--canvas-soft);
-  }
-
-  .matrix-row-label {
-    padding: 12px 16px 12px 4px;
-    font-size: 14px;
-    color: var(--text-primary);
-    line-height: 1.4;
-    min-width: 120px;
-  }
-
-  .matrix-cell {
-    text-align: center;
-    padding: 8px 12px;
-    vertical-align: middle;
-  }
-
-  .matrix-radio {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    border: 2px solid var(--surface-pressed);
-    background: var(--canvas);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto;
-    transition: border-color 0.15s, background 0.15s;
-  }
-
-  .matrix-radio:hover {
-    border-color: var(--ink);
-  }
-
-  .matrix-radio.selected {
-    border-color: var(--ink);
-    background: var(--ink);
-  }
-
-  .matrix-radio .radio-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: transparent;
-    transition: background 0.15s;
-  }
-
-  .matrix-radio.selected .radio-dot {
-    background: var(--on-ink);
-  }
-
   /* ── Statement ── */
   .statement-body {
     background: var(--canvas-soft);
@@ -1591,6 +1823,75 @@
     height: 44px;
   }
 
+  /* ── Pilihan Bertingkat: waiting on the parent / nothing allowed ── */
+  .options-list.dependency-waiting .option-card,
+  .options-list.dependency-waiting .option-card:hover {
+    opacity: 0.55;
+    cursor: not-allowed;
+    border-color: var(--canvas-soft);
+  }
+  .dependency-note {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .dependency-note.dependency-empty {
+    color: var(--text-body);
+    line-height: 1.5;
+  }
+
+  /* ── Top of Mind: one list, first pick flips to the top ── */
+  .tom-row {
+    display: flex;
+    flex-direction: column;
+  }
+  .tom-intro {
+    margin: 0 0 12px;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--text-body);
+  }
+  .tom-intro strong {
+    color: var(--text-primary);
+  }
+  .tom-intro-more {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+  .tom-hint {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .tom-other-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .tom-other-row .tom-other-input {
+    flex: 1;
+    width: auto;
+  }
+  .tom-mini-btn {
+    height: 44px;
+    padding: 0 16px;
+    border: none;
+    border-radius: var(--radius-input);
+    background: var(--ink);
+    color: var(--on-ink);
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .tom-mini-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
   /* ── File Upload ── */
   .file-upload-area {
     display: flex;
@@ -1660,7 +1961,7 @@
     border: 1px solid var(--success-border);
     border-radius: var(--radius-option);
     padding: 12px 16px;
-    color: #166534;
+    color: var(--success-strong);
   }
 
   .file-icon {
@@ -1690,7 +1991,7 @@
     background: none;
     border: none;
     cursor: pointer;
-    color: #166534;
+    color: var(--success-strong);
     padding: 4px;
     border-radius: 6px;
     display: flex;
@@ -1700,7 +2001,7 @@
   }
 
   .file-remove:hover {
-    background: #dcfce7;
+    background: var(--success-tint);
   }
 
   .upload-error {

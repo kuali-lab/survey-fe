@@ -1,4 +1,5 @@
 import type { Question, SkipRule, Answers } from './types.js'
+import { isTopOfMindAnswer } from './topOfMind.js'
 
 function matchesOperator(
   answer: unknown,
@@ -72,6 +73,8 @@ export function evaluateNext(
     const srcType = questions.find(q => q.id === r.sourceQuestionId)?.type
     let answer: unknown = answers[r.sourceQuestionId]
     let value = r.value ?? ''
+    // Top of Mind: rules see the FULL selection, exactly like a plain checkbox.
+    if (isTopOfMindAnswer(answer)) answer = answer.selected
     if (srcType === 'yes_no') {
       answer = canonYesNo(answer)
       value = String(canonYesNo(value))

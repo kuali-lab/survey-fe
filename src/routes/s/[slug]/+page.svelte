@@ -1,11 +1,16 @@
 <script lang="ts">
   import type { PageData } from './$types.js'
   import type { ViewState, Answers } from '$lib/types.js'
-  import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress, getInvitationStatus, getDeviceStatus, OptionOutOfFilterError } from '$lib/api.js'
+  import { parseSavedState, serializeSavedState, type SavedState } from '$lib/savedState.js'
+  import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress, getInvitationStatus, getDeviceStatus, getLinkStatus, OptionOutOfFilterError } from '$lib/api.js'
+  import { readLinkCodeFromUrl, stripLinkCodeFromUrl, resolveResumeLinkCode, requiresLinkGate } from '$lib/linkCode.js'
   import { computeFingerprint } from '$lib/fingerprint.js'
   import { serverMessageOf } from '$lib/submitError.js'
   import { page } from '$app/stores'
   import { goto } from '$app/navigation'
+  import { env } from '$env/dynamic/public'
+  import { resolveOgImageUrl } from '$lib/branding.js'
+  import { surveyStyleAttr } from '$lib/surveyStyle.js'
   import { onMount, tick, untrack } from 'svelte'
 
   import WelcomePage from '$lib/components/WelcomePage.svelte'
@@ -20,6 +25,10 @@
   import SurveyStage from '$lib/components/SurveyStage.svelte'
   import { loadSurveyorSession } from '$lib/surveyorAuth.js'
   import { SurveyRunner } from '$lib/runner/SurveyRunner.svelte.js'
+  import LanguagePicker from '$lib/components/LanguagePicker.svelte'
+  import LanguageSelectPage from '$lib/components/LanguageSelectPage.svelte'
+  import { provideI18n } from '$lib/i18n/context.js'
+  import { languageChoices, needsLanguageStep, pickInitialLocale, questionPlainText, surveyLanguages } from '$lib/i18n/content.js'
 
   let { data }: { data: PageData } = $props()
 
@@ -33,6 +42,10 @@
     // and resolves to the real survey or a real error — no 500 flash.
     if (data.deferred) return 'loading'
     if (!survey || data.error) return 'error'
+    // Two-language surveys: the respondent picks a language FIRST. Decided here
+    // rather than in onMount so the server already renders the language screen and
+    // the primary-language welcome page never flashes.
+    if (needsLanguageStep(survey)) return 'language'
     return 'welcome'
   }
 
@@ -45,15 +58,67 @@
   let selfie = $state<{ imageBase64: string } | null>(null)
   let fingerprintHash = $state<string | null>(null)
   let prefersReducedMotion = $state(false)
-  let resumePrompt = $state<{ answers: Answers; currentIndex: number; accumulatedTimeMs?: number } | null>(null)
+  let resumePrompt = $state<{ answers: Answers; currentIndex: number; accumulatedTimeMs?: number; linkCode?: string } | null>(null)
   // Invitation token captured from ?t= on first mount; null for anonymous fill.
   let invitationToken = $state<string | null>(null)
   let invitationStartedFired = false
   // Item 4 — one-time link gate: 'done' (already completed) | 'expired' | null.
-  let inviteBlocked = $state<'done' | 'expired' | 'device' | null>(null)
+  // 'link' = kode cabang tautan (?c=, M6a) tidak aktif ATAU survei mewajibkan
+  // tautan cabang dan tidak ada kode yang diketahui (Ihatec F1) — dibedakan
+  // lewat `linkBlockReason` di bawah, bukan state baru.
+  let inviteBlocked = $state<'done' | 'expired' | 'device' | 'link' | null>(null)
+  // Alasan gerbang 'link' (Ihatec F1). Dibaca InviteBlockedPage HANYA saat
+  // inviteBlocked === 'link'. Bawaan 'invalid' = teks lama tak berubah.
+  let linkBlockReason = $state<'invalid' | 'required'>('invalid')
   // Final-step confirm modal: pressing "Kirim Jawaban" opens it instead of
   // submitting straight away, so the respondent can review before committing.
   let showSubmitConfirm = $state(false)
+
+  // ── Two-language surveys ──────────────────────────────────────────────────────
+  // The respondent's active language. It affects ONLY displayed text: answers are
+  // still stored as primary-language labels (see `$lib/i18n/content.ts`), so
+  // switching at any point is safe and the resulting dataset stays single-language.
+  //
+  // Start from the primary language — that is what the server renders (SEO/OG stay
+  // primary too). A saved choice or the browser language is applied in onMount,
+  // because both exist only in the browser.
+  const surveyLangs = $derived(surveyLanguages(survey))
+  const languages = $derived(languageChoices(survey))
+  function initialLocale(): string {
+    return surveyLanguages(data.survey).primary
+  }
+  let locale = $state(initialLocale())
+  const i18n = provideI18n(() => locale, () => surveyLangs.primary)
+  const localeKey = (s: string) => `survey-fe:lang:${s}`
+
+  // Bahasa yang cocok dengan peramban: hanya DITONJOLKAN di layar pilih bahasa,
+  // tidak dipilihkan — responden tetap yang memutuskan.
+  let suggestedLocale = $state<string | null>(null)
+  // Judul survei per bahasa, ditampilkan di tiap tombol layar pilih bahasa.
+  const languageTitles = $derived(
+    Object.fromEntries(languages.map((l) => [
+      l.code,
+      (welcomeQuestion && questionPlainText(welcomeQuestion, 'title', l.code, surveyLangs.primary)) || survey?.title || '',
+    ])),
+  )
+
+  /** Langkah pertama: satu ketukan = pilih bahasa + lanjut ke halaman pembuka. */
+  function chooseLanguage(code: string) {
+    setLocale(code)
+    viewState = 'welcome'
+  }
+
+  function setLocale(code: string) {
+    locale = code
+    // Disimpan terpisah dari draf jawaban: draf baru ada setelah jawaban
+    // pertama, sedangkan bahasa dipilih sebelum survei dimulai.
+    try { if (data.slug) localStorage.setItem(localeKey(data.slug), code) } catch {}
+  }
+
+  $effect(() => {
+    // Pembaca layar melafalkan halaman menurut `<html lang>`; app.html menetapkannya statis "id".
+    if (typeof document !== 'undefined') document.documentElement.lang = locale
+  })
 
   const runner = new SurveyRunner({
     getSurvey: () => survey ?? null,
@@ -63,26 +128,23 @@
     // Never auto-submit — the respondent must press "Kirim Jawaban" so they can
     // review their answers first (covers the last page and skip-to-END rules).
     autoSubmit: false,
+    getLocale: () => locale,
     // A filtered dropdown was wiped because its source answer changed: push the
     // trimmed answer map to the server draft now (it is otherwise only written
     // on page change), so a resume never brings the stale pick back. The local
     // draft follows runner.answers reactively (see saveCurrentState effect).
     onDependentsCleared: () => {
       if (fingerprintHash && slug && viewState === 'question') {
-        saveDraft(slug, draftSessionKey(fingerprintHash), runner.answers, runner.currentIndex).catch(() => {})
+        saveDraft(slug, draftSessionKey(fingerprintHash), runner.answers, runner.currentIndex, linkCode).catch(() => {})
       }
     },
   })
 
-  // Persisted respondent state, keyed per survey slug. Selfie/location are
+  // Persisted respondent state, keyed per survey slug. Bentuk + parsing/serialisasi
+  // ada di $lib/savedState.ts (modul murni yang teruji). Selfie/location are
   // intentionally NOT persisted (privacy + size).
-  type SavedState = {
-    answers: Answers
-    currentIndex: number
-    accumulatedTimeMs: number
-    savedAt: number
-  }
-  const STORAGE_TTL_MS = 30 * 24 * 3600 * 1000
+  // Kode cabang tautan (?c=, M6a); ikut tersimpan di draf lokal + server (K60).
+  let linkCode = $state<string | null>(null)
   // Draft state is scoped per invitation token (not just per survey slug). This is
   // the fix for the reopen bug: a respondent who completed the survey and is then
   // re-invited arrives with a NEW token, so there is no saved state under the new
@@ -99,20 +161,13 @@
     try {
       const raw = localStorage.getItem(storageKey(s))
       if (!raw) return null
-      const parsed = JSON.parse(raw) as Partial<SavedState>
-      if (typeof parsed?.currentIndex !== 'number') return null
-      if (!parsed.answers || typeof parsed.answers !== 'object') return null
-      if (parsed.savedAt && Date.now() - parsed.savedAt > STORAGE_TTL_MS) {
+      const r = parseSavedState(raw, Date.now())
+      if (!r) return null
+      if (r.expired) {
         localStorage.removeItem(storageKey(s))
         return null
       }
-      
-      // Fallback for old localStorage format that used startTime
-      if (typeof parsed.accumulatedTimeMs !== 'number') {
-        const anyParsed = parsed as any
-        parsed.accumulatedTimeMs = anyParsed.startTime || 0
-      }
-      return parsed as SavedState
+      return r.state
     } catch {
       return null
     }
@@ -128,8 +183,9 @@
         currentIndex: runner.currentIndex,
         accumulatedTimeMs: runner.accumulatedTimeMs + (runner.lastActiveTime > 0 ? Date.now() - runner.lastActiveTime : 0),
         savedAt: Date.now(),
+        linkCode: linkCode ?? undefined,
       }
-      localStorage.setItem(storageKey(data.slug), JSON.stringify(state))
+      localStorage.setItem(storageKey(data.slug), serializeSavedState(state))
     } catch {
       // localStorage may be disabled (private mode) or full — fail silently.
     }
@@ -143,9 +199,15 @@
 
   function resumeSurvey() {
     if (!resumePrompt) return
-    runner.loadFrom(resumePrompt)
+    const saved = resumePrompt
     resumePrompt = null
+    // Enter the question stage BEFORE loadFrom: a draft whose dependent answers
+    // are no longer valid gets pruned there, and onDependentsCleared only
+    // pushes the trimmed map to the server draft while on the question stage.
     viewState = 'question'
+    runner.loadFrom(saved)
+    // URL menang atas draf; kalau URL kosong, kode yang ikut draf yang pulih.
+    linkCode = resolveResumeLinkCode(linkCode, saved.linkCode)
   }
 
   function discardSavedState() {
@@ -154,6 +216,20 @@
   }
 
   onMount(() => {
+    if (languages.length > 1 && data.slug) {
+      let saved: string | null = null
+      try { saved = localStorage.getItem(localeKey(data.slug)) } catch {}
+      const browser = navigator.languages ?? [navigator.language]
+      if (saved && languages.some((l) => l.code === saved)) {
+        // Responden yang kembali sudah pernah memilih: jangan ditanya lagi. Pil
+        // di pojok tetap ada kalau ia ingin berganti.
+        locale = saved
+        if (viewState === 'language') viewState = 'welcome'
+      } else {
+        suggestedLocale = pickInitialLocale(surveyLangs, null, browser)
+      }
+    }
+
     // Capture ?t= invitation token before we strip it from the URL. Persisted
     // to sessionStorage so a mid-survey reload retains the link to the invite.
     if (typeof window !== 'undefined' && data.slug) {
@@ -186,6 +262,40 @@
           }
         })
       }
+
+      // Kode tautan cabang (M6a). URL menang atas draf: QR yang baru dipindai adalah
+      // kebenaran terbaru. Persistensinya menumpang draf lokal + server (K60), bukan
+      // kunci sendiri — supaya membuka tautan utama kelak tidak membawa cabang hantu.
+      const codeFromUrl = readLinkCodeFromUrl($page.url)
+      if (codeFromUrl) {
+        linkCode = codeFromUrl
+        try { history.replaceState({}, '', stripLinkCodeFromUrl(new URL(window.location.href))) } catch {}
+        // Gerbang dini, fail-open; gerbang undangan/perangkat yang sudah terpasang menang.
+        getLinkStatus(data.slug, codeFromUrl).then((st) => {
+          if (st === 'invalid' && !inviteBlocked) {
+            linkBlockReason = 'invalid'
+            inviteBlocked = 'link'
+          }
+        })
+      }
+
+      // Ihatec F1 — gerbang "hanya lewat tautan cabang": kalau sakelar hidup,
+      // blokir SEBELUM form kalau linkCode tidak diketahui dari sumber manapun
+      // yang bisa dibaca SINKRON di sini — bukan cuma `?c=` mentah (`linkCode`
+      // di atas), tapi juga draf LOKAL (localStorage, dibaca langsung, tanpa
+      // jaringan) supaya responden yang linkCode-nya sudah tersimpan dari sesi
+      // sebelumnya tidak salah diblokir saat reload tanpa `?c=`.
+      // 🔴 Draf SERVER (fingerprint + `getDraft`, di bawah) baru diketahui
+      // belakangan lewat jaringan — kalau linkCode ternyata cuma ada di sana,
+      // gerbang ini sudah kadung tampil. Diterima sebagai batas yang sama
+      // dengan gerbang LINK_INVALID di atas (fail dulu, baca-ulang manual bila
+      // petugas memberi tautan baru); draf lokal TIDAK dihapus oleh gerbang ini.
+      const savedForGate = loadSavedState(data.slug)
+      const knownLinkCode = linkCode ?? savedForGate?.linkCode ?? null
+      if (requiresLinkGate(settings.requireLinkCode, knownLinkCode) && !inviteBlocked) {
+        linkBlockReason = 'required'
+        inviteBlocked = 'link'
+      }
     }
 
     computeFingerprint().then(async (fp) => {
@@ -204,7 +314,7 @@
         try {
           const serverDraft = await getDraft(data.slug, draftSessionKey(fp))
           if (serverDraft && serverDraft.currentPageIndex > 0 && Object.keys(serverDraft.answers).length > 0) {
-            resumePrompt = { answers: serverDraft.answers, currentIndex: serverDraft.currentPageIndex, accumulatedTimeMs: 0 }
+            resumePrompt = { answers: serverDraft.answers, currentIndex: serverDraft.currentPageIndex, accumulatedTimeMs: 0, linkCode: serverDraft.linkCode }
           }
         } catch { /* server unavailable — continue without draft */ }
       }
@@ -279,7 +389,8 @@
     const s   = untrack(() => slug)
     if (vs !== 'question') return
     if (_draftInitialSkip) { _draftInitialSkip = false; return }
-    if (fp && s) saveDraft(s, draftSessionKey(fp), ans, idx).catch(() => {})
+    const lc  = untrack(() => linkCode)
+    if (fp && s) saveDraft(s, draftSessionKey(fp), ans, idx, lc).catch(() => {})
   })
 
   let questionErrors = $derived(runner.questionErrors)
@@ -291,6 +402,19 @@
     survey?.questions.find((q) => q.type === 'closing_page') ?? null,
   )
   const settings = $derived(survey?.settings ?? { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' as const })
+  // Logo per survei (M2/K29), dioper ke tujuh permukaan yang dimiliki survei.
+  // Dibaca dari `survey` langsung, bukan dari `settings` di atas: literal
+  // cadangan `settings` tidak punya `logoUrl`, jadi `settings.logoUrl` tidak
+  // lolos typecheck.
+  const logoUrl = $derived(survey?.settings?.logoUrl ?? null)
+  // Gaya kustom per survei (Kustom Styling Survei), dipasang SATU KALI di elemen
+  // akar sebagai custom property CSS. Semua komponen di bawahnya sudah membaca
+  // token app.css, jadi tidak ada satu pun prop warna yang perlu dioper — dan
+  // permukaan baru nanti ikut terwarnai tanpa perubahan apa pun di sini.
+  //
+  // Dibaca dari `survey` langsung, bukan dari `settings`, dengan alasan yang
+  // sama seperti logoUrl di atas: literal cadangan tidak punya field ini.
+  const styleAttr = $derived(surveyStyleAttr(survey?.settings?.style ?? null))
 
   async function handleStart() {
     validationError = null
@@ -426,7 +550,7 @@
       const respondentEmail = emailQuestion ? (runner.answers[emailQuestion.id] as string | undefined) : undefined
       const durationSeconds = runner.getDurationSeconds()
 
-      await submitSurveyAnswers(slug, runner.answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie, undefined, undefined, invitationToken)
+      await submitSurveyAnswers(slug, runner.answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie, undefined, undefined, invitationToken, linkCode, locale)
 
       clearSavedState()
       if (fingerprintHash && slug) deleteDraft(slug, draftSessionKey(fingerprintHash)).catch(() => {})
@@ -452,9 +576,20 @@
           }, 300)
         }
       } else if (msg === 'already_submitted') {
-        submitError = 'Survei ini sudah pernah Anda isi sebelumnya.'
+        submitError = i18n.t('alreadySubmitted')
         viewState = 'question'
         clearSavedState()
+      } else if (msg === 'link_invalid') {
+        // Gerbang, bukan toast — dan draf TIDAK dihapus: kalau petugas memberi
+        // tautan baru, jawabannya masih ada.
+        linkBlockReason = 'invalid'
+        inviteBlocked = 'link'
+      } else if (msg === 'link_required') {
+        // Ihatec F1 — 410 LINK_REQUIRED: sakelar hidup dan payload dikirim tanpa
+        // linkCode. Gerbang yang sama dengan link_invalid, teks beda; draf TIDAK
+        // dihapus (pola v1 dipertahankan persis).
+        linkBlockReason = 'required'
+        inviteBlocked = 'link'
       } else if (msg === 'survey_closed') {
         viewState = 'closed'
         clearSavedState()
@@ -466,7 +601,7 @@
         submitError = serverMessage
         viewState = 'question'
       } else {
-        submitError = 'Terjadi kesalahan saat mengirim jawaban. Silakan coba lagi.'
+        submitError = i18n.t('submitFailed')
         viewState = 'question'
       }
     } finally {
@@ -525,8 +660,17 @@
   const metaDescription = $derived(
     (welcomeQuestion?.descriptionPlain ?? survey?.title ?? 'Isi survei dari Logika Statistik — platform riset dan analisis statistik.').slice(0, 160),
   )
+  // Urutan gambar pratinjau tautan: gambar OG survei → gambar sampul halaman
+  // pembuka (perilaku yang sudah ada) → aset bawaan platform 1200×630.
+  //
+  // Basisnya PUBLIC_SITE_URL, dengan origin permintaan sebagai cadangan:
+  // crawler tidak mengurai path relatif, jadi hasilnya wajib absolut.
   const ogImage = $derived(
-    welcomeQuestion?.imageUrl ?? `${$page.url.origin}/logo-logika-teta.png`,
+    resolveOgImageUrl({
+      settings: survey?.settings,
+      welcomeImageUrl: welcomeQuestion?.imageUrl ?? null,
+      base: env.PUBLIC_SITE_URL || $page.url.origin,
+    }),
   )
   const canonicalUrl = $derived(
     `${$page.url.origin}/s/${data.slug}`,
@@ -579,7 +723,11 @@
   <meta name="twitter:title" content={pageTitle} />
   <meta name="twitter:description" content={metaDescription} />
   <meta name="twitter:image" content={ogImage} />
-  <meta name="twitter:card" content={welcomeQuestion?.imageUrl ? 'summary_large_image' : 'summary'} />
+  <!-- Selalu `summary_large_image`: tiap cabang `ogImage` kini menghasilkan
+       gambar yang memang diperuntukkan sebagai pratinjau, dan bawaannya
+       1200×630. Dulu ia bergantung pada ada-tidaknya gambar sampul, sementara
+       app.html menetapkan `summary` tanpa syarat — dua sumber, pemenang tak pasti. -->
+  <meta name="twitter:card" content="summary_large_image" />
 </svelte:head>
 
 <svelte:window
@@ -590,17 +738,25 @@
   ontouchend={onTouchEnd}
 />
 
-<div class="page" class:page-question={viewState === 'question'}>
+<div class="page" class:page-question={viewState === 'question'} style={styleAttr}>
+  {#if !inviteBlocked && (viewState === 'welcome' || viewState === 'question')}
+    <LanguagePicker choices={languages} {locale} onChange={setLocale} />
+  {/if}
   {#if inviteBlocked}
     <div class="centered-wrap">
-      <InviteBlockedPage state={inviteBlocked} title={survey?.title ?? ''} />
+      <InviteBlockedPage
+        state={inviteBlocked}
+        linkReason={linkBlockReason}
+        title={survey?.title ?? ''}
+        {logoUrl}
+      />
     </div>
 
   {:else if viewState === 'loading'}
     <div class="centered-wrap">
       <div class="submitting-card">
         <span class="big-spinner" aria-hidden="true"></span>
-        <p>Memuat survei…</p>
+        <p>{i18n.t('loading')}</p>
       </div>
     </div>
 
@@ -618,29 +774,41 @@
       />
     </div>
 
+  {:else if viewState === 'language'}
+    <div class="centered-wrap">
+      <LanguageSelectPage
+        choices={languages}
+        titles={languageTitles}
+        suggested={suggestedLocale}
+        onSelect={chooseLanguage}
+        {logoUrl}
+      />
+    </div>
+
   {:else if viewState === 'welcome'}
     <div class="centered-wrap">
       {#if resumePrompt}
-        <div class="resume-card" role="region" aria-label="Lanjutkan survei">
-          <h2 class="resume-title">Lanjutkan survei Anda</h2>
+        <div class="resume-card" role="region" aria-label={i18n.t('resumeRegion')}>
+          <h2 class="resume-title">{i18n.t('resumeTitle')}</h2>
           <p class="resume-description">
-            Jawaban sebelumnya tersimpan di perangkat ini. Anda dapat melanjutkan dari pertanyaan terakhir, atau memulai ulang dari awal.
+            {i18n.t('resumeBody')}
           </p>
           <div class="resume-actions">
-            <button class="resume-btn primary" type="button" onclick={resumeSurvey}>Lanjutkan</button>
-            <button class="resume-btn secondary" type="button" onclick={discardSavedState}>Mulai dari awal</button>
+            <button class="resume-btn primary" type="button" onclick={resumeSurvey}>{i18n.t('resumeContinue')}</button>
+            <button class="resume-btn secondary" type="button" onclick={discardSavedState}>{i18n.t('resumeRestart')}</button>
           </div>
         </div>
       {:else}
         <WelcomePage
-          title={welcomeQuestion?.title || survey?.title || ''}
-          titlePlain={welcomeQuestion?.titlePlain || survey?.title || ''}
-          description={welcomeQuestion?.description ?? null}
+          title={(welcomeQuestion && i18n.text(welcomeQuestion, 'title')) || survey?.title || ''}
+          titlePlain={(welcomeQuestion && i18n.plain(welcomeQuestion, 'title')) || survey?.title || ''}
+          description={(welcomeQuestion && i18n.text(welcomeQuestion, 'description')) || null}
           imageUrl={welcomeQuestion?.imageUrl ?? null}
           imageLayout={welcomeQuestion?.imageLayout ?? 'center'}
-          ctaText={'Mulai Survei'}
+          ctaText={i18n.t('start')}
           onStart={handleStart}
           error={validationError}
+          {logoUrl}
         />
       {/if}
     </div>
@@ -654,6 +822,7 @@
         onComplete={onSelfieComplete}
         onDenied={onSelfieDenied}
         loading={submitting}
+        {logoUrl}
       />
     </div>
 
@@ -665,6 +834,7 @@
       <SelfieDeniedPage
         onRetry={() => { viewState = 'selfie_capture' }}
         loading={false}
+        {logoUrl}
       />
     </div>
 
@@ -677,6 +847,7 @@
         onStart={fetchLocationThenSubmit}
         loading={locationRequesting}
         error={validationError}
+        {logoUrl}
       />
     </div>
 
@@ -688,6 +859,7 @@
       <LocationDeniedPage
         onRetry={fetchLocationThenSubmit}
         loading={locationRequesting}
+        {logoUrl}
       />
     </div>
 
@@ -695,7 +867,7 @@
     <div class="centered-wrap">
       <div class="submitting-card">
         <span class="big-spinner" aria-hidden="true"></span>
-        <p>Mengirim jawaban…</p>
+        <p>{i18n.t('submitting')}</p>
       </div>
     </div>
 
@@ -724,9 +896,9 @@
           aria-labelledby="confirm-title"
           aria-describedby="confirm-desc"
         >
-          <h2 id="confirm-title" class="confirm-title">Kirim jawaban Anda?</h2>
+          <h2 id="confirm-title" class="confirm-title">{i18n.t('confirmTitle')}</h2>
           <p id="confirm-desc" class="confirm-desc">
-            Jawaban yang sudah dikirim tidak bisa diubah lagi. Pastikan jawaban sudah benar.
+            {i18n.t('confirmBody')}
           </p>
           <div class="confirm-actions">
             <button
@@ -734,13 +906,13 @@
               type="button"
               onclick={cancelSubmit}
               use:focusOnMount
-            >Periksa lagi</button>
+            >{i18n.t('confirmReview')}</button>
             <button
               class="confirm-btn primary"
               type="button"
               onclick={confirmSubmit}
               disabled={submitting}
-            >Ya, kirim</button>
+            >{i18n.t('confirmSend')}</button>
           </div>
         </div>
       </div>
@@ -749,25 +921,41 @@
   {:else if viewState === 'closing'}
     <div class="centered-wrap">
       <ClosingPage
-        title={closingQuestion?.title ?? 'Terima Kasih!'}
-        titlePlain={closingQuestion?.titlePlain ?? 'Terima Kasih!'}
-        description={closingQuestion?.description ?? null}
+        title={(closingQuestion && i18n.text(closingQuestion, 'title')) || i18n.t('closingTitle')}
+        titlePlain={(closingQuestion && i18n.plain(closingQuestion, 'title')) || i18n.t('closingTitle')}
+        description={(closingQuestion && i18n.text(closingQuestion, 'description')) || null}
         imageUrl={closingQuestion?.imageUrl ?? null}
         imageLayout={closingQuestion?.imageLayout ?? 'center'}
+        {logoUrl}
       />
     </div>
   {/if}
 </div>
 
 <style>
+  /* Latar halaman responden. Ketiga lapisannya dibaca dari custom property yang
+     dipasang $lib/surveyStyle.ts di elemen ini; tanpa gaya kustom seluruhnya
+     jatuh ke cadangan dan hasilnya sama persis dengan sebelum fitur ini ada.
+
+     Urutan lapisan: overlay kecerahan PALING ATAS (supaya ia menggelapkan atau
+     mencerahkan gambar, bukan tertimpa olehnya), lalu gambar latar, lalu warna
+     latar sebagai dasar yang selalu ada — itulah yang membuat gambar gagal muat
+     tidak pernah menyisakan halaman tanpa latar. */
   .page {
     min-height: 100vh;
-    background: var(--canvas);
+    /* Cadangan LITERAL, bukan var(--canvas): sejak slot `card` ada, --canvas bisa
+       ikut diwarnai pemilik survei, dan halaman akan diam-diam ikut berubah warna
+       hanya karena kartunya diatur. #ffffff adalah nilai --canvas platform. */
+    background-color: var(--page-bg, #ffffff);
+    background-image: linear-gradient(var(--page-bg-overlay, transparent), var(--page-bg-overlay, transparent)), var(--page-bg-image, none);
+    background-size: auto, var(--page-bg-size, cover);
+    background-repeat: repeat, var(--page-bg-repeat, no-repeat);
+    background-position: center, center;
+    /* Gambar latar ikut bergulir bersama isi. `fixed` menghasilkan latar yang
+       melompat dan terpotong di Safari iOS, dan itu peranti yang paling sering
+       dipakai responden. */
+    background-attachment: scroll, scroll;
     transition: background-color 0.2s ease;
-  }
-
-  .page.page-question {
-    background: var(--canvas);
   }
 
   .centered-wrap {

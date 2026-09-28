@@ -1,3 +1,5 @@
+import type { SurveyStyle } from './surveyStyle'
+
 export type QuestionType =
   | 'welcome_page' | 'closing_page' | 'question_group' | 'statement'
   | 'short_text' | 'long_text'
@@ -5,20 +7,51 @@ export type QuestionType =
   | 'single_choice' | 'checkbox' | 'dropdown' | 'yes_no' | 'image_choice'
   | 'nps' | 'opinion_scale' | 'rating' | 'matrix'
   | 'contact_info' | 'file_upload' | 'region'
+  // Repeat group (Ihatec M5): pertanyaan yang memuat beberapa field, dan yang
+  // berulang adalah KARTU-nya. Induk tidak menyimpan jawaban sendiri — field-nya
+  // yang menyimpan, masing-masing dengan `repeat_index` = nomor kartu.
+  | 'repeat_group'
+
+// ── Two-language surveys ─────────────────────────────────────────────────────
+// The same shape the builder writes (dashboard-fe). ALL optional: older surveys,
+// copies in `survey-fe:surveyCache:*` and saved drafts do not carry these fields
+// and must keep working exactly as before.
+export interface SurveyLanguages {
+  primary: string
+  /** Absent = a single-language survey. */
+  secondary?: string
+}
+
+/** Translated text per language code, e.g. `{ en: 'Yes' }`. */
+export type TranslatedText = Record<string, string>
+
+export interface QuestionTextTranslation {
+  title?: string
+  description?: string
+  placeholder?: string
+  minLabel?: string
+  midLabel?: string
+  maxLabel?: string
+}
 
 export interface QuestionOption {
   id: string
+  // 🔴 `label` is the DATA IDENTITY, not just display text: answers, skip logic,
+  // Pilihan Bertingkat, drafts and the submit body all store and compare this
+  // string. A translation may only be used when RENDERING (`/i18n`).
   label: string
   value?: string
   imageUrl?: string
   sortOrder: number
   isOther?: boolean
+  translations?: TranslatedText
 }
 
 export interface MatrixRow {
   id: string
   label: string
   sortOrder: number
+  translations?: TranslatedText
 }
 
 export interface MatrixCol {
@@ -26,6 +59,7 @@ export interface MatrixCol {
   label: string
   value?: string
   sortOrder: number
+  translations?: TranslatedText
 }
 
 /**
@@ -48,6 +82,30 @@ export interface FilterAttr {
 export interface FilterConfig {
   region?: FilterSource
   attrs?: FilterAttr[]
+}
+
+/**
+ * "Pilihan Bertingkat" (plan §0) / "Hubungkan Jawaban/Pilihan Lain" (§B): a
+ * dependent question whose inline options are narrowed by an earlier
+ * question's answer. `mode` discriminates the two mechanisms — absent/omitted
+ * means `'mapped'`, every `dependsOn` written before §B shipped, and is read
+ * exactly as before (back-compat, byte-for-byte).
+ *
+ * - `mode: 'mapped'` (default): an authored, static, per-option map. `allowed`
+ *   maps a dependent option key to the parent option keys it is shown under
+ *   (key = trimmed `value`, else trimmed `label`). Source: single_choice /
+ *   dropdown only (one resolvable key).
+ * - `mode: 'carryOver'`: dynamic — whatever the source question's answer
+ *   currently resolves to (directly, no authored map) becomes the
+ *   include/exclude set for the target's own options. Source: dropdown /
+ *   checkbox only (natively multi-valued, unlike mapped mode). `carryOverMode`
+ *   only present in this mode; `allowed` is absent.
+ */
+export interface OptionDependency {
+  sourceQuestionId: string
+  mode?: 'mapped' | 'carryOver'
+  allowed?: Record<string, string[]>
+  carryOverMode?: 'include' | 'exclude'
 }
 
 export interface Question {
@@ -81,10 +139,47 @@ export interface Question {
   // Region ("Wilayah") question: how many administrative levels to ask for.
   // 1=Provinsi, 2=+Kabupaten/Kota, 3=+Kecamatan, 4=+Desa. Undefined → treat as 2.
   regionDepth?: number
+  // Berapa banyak jawaban yang boleh diberikan satu responden untuk pertanyaan ini
+  // (Ihatec M5). undefined = pertanyaannya TIDAK berulang; >= 2 = boleh menambah
+  // sampai sebanyak itu.
+  //
+  // 🔴 undefined di sini berarti kebalikan dari tetangganya di atas: pada
+  // maxLength/maxSelections undefined berarti "tak dibatasi", di sini ia berarti
+  // FITURNYA MATI. Pengulangan tanpa batas tidak boleh ada sama sekali — satu
+  // kiriman akan menulis baris sebanyak yang ditentukan pengirim.
+  maxRepeat?: number
+  // Grup Jawaban: jumlah kolom isian di dalam satu kartu (1 atau 2; tak terisi = 1).
+  fieldsPerRow?: number
+
+  // Field di dalam satu KARTU repeat group (Ihatec M5). Kosong/absen untuk
+  // setiap pertanyaan biasa.
+  //
+  // 🔴 Bersarang, dan itu yang menjaga sisa runner tidak perlu tahu apa-apa soal
+  // repeat group: `answerableQuestions` diturunkan dari daftar `questions`
+  // tingkat atas, jadi field TIDAK pernah ikut dihitung paginasi, progress bar,
+  // auto-advance, maupun skip-logic. Meratakan field jadi pertanyaan tingkat atas
+  // akan membuat kelimanya salah sekaligus — dan salahnya senyap.
+  fields?: Question[]
+
+  // Dropdown "Pilih Lebih dari Satu" (inline-only — see optionDependency.ts's
+  // isPlainChoice guard, which also excludes it as a mapped-mode dependency
+  // source since it has no single resolvable key). Reuses `maxSelections` for
+  // the "maksimal N dipilih" cap, same convention as checkbox.
+  multiSelect?: boolean
+  // "Sembunyikan Opsi": checkbox + inline dropdown start with an empty option
+  // list ("Ketik untuk mencari…") until the respondent types anything. Pure
+  // display flag — the submitted answer is still a label match either way, no
+  // storage/validation impact.
+  hideOptionsUntilSearch?: boolean
 
   // Relational config
   hasAsyncOptions?: boolean
   filterConfig?: FilterConfig
+  dependsOn?: OptionDependency
+  // Top of Mind (checkbox only): ask the respondent for the ONE option that
+  // comes to mind first, then for the rest with that option excluded. The
+  // answer becomes a TopOfMindAnswer instead of a plain string[].
+  topOfMind?: boolean
   options?: QuestionOption[]
   // Flat array of image URLs for image_choice options, parallel to options[].
   // Derived from options[].imageUrl when normalized from the API response.
@@ -94,6 +189,8 @@ export interface Question {
   showLabel?: boolean | null
   matrixRows?: MatrixRow[]
   matrixCols?: MatrixCol[]
+  /** Scalar text translations per language code. Option/row/column labels carry their own. */
+  translations?: Record<string, QuestionTextTranslation>
 }
 
 export interface SkipRule {
@@ -115,6 +212,45 @@ export interface SurveySettings {
   requireLocation?: boolean
   requireSelfie?: boolean
   oneResponsePerDevice?: boolean
+  /**
+   * Gerbang "hanya lewat tautan cabang" (Ihatec F1): survei ini hanya menerima
+   * jawaban lewat tautan/QR yang bawa kode cabang (`?c=`), bukan tautan umum.
+   *
+   * 🔴 Opsional dengan alasan yang sama seperti `allowBack`/branding di atas:
+   * muatan publik lama (sebelum field ini ada) tidak punya kunci ini. Ketiadaan
+   * field berarti TIDAK ada gerbang — bukan gerbang aktif.
+   */
+  requireLinkCode?: boolean
+  /**
+   * Responden boleh kembali ke pertanyaan sebelumnya (M1 No-Back).
+   *
+   * 🔴 Opsional dengan sengaja: `fetchSurvey` menyinggahkan objek survei ke
+   * localStorage, dan salinan lama tidak punya field ini. Ketiadaan field
+   * berarti BOLEH kembali — bukan dilarang.
+   */
+  allowBack?: boolean
+  /**
+   * Branding per survei yang dilihat responden (M2): logo di halaman
+   * pembuka/penutup, favicon tab, dan gambar pratinjau tautan.
+   *
+   * 🔴 Ketiganya opsional dengan alasan yang sama seperti `allowBack`:
+   * `fetchSurvey` menyinggahkan objek survei ke localStorage, dan salinan lama
+   * tidak punya kunci ini. Ketiadaan field berarti PAKAI ASET PLATFORM — bukan
+   * kosong. Aturannya dipusatkan di `$lib/branding.ts`.
+   */
+  logoUrl?: string | null
+  faviconUrl?: string | null
+  ogImageUrl?: string | null
+  /**
+   * Gaya visual per survei (Kustom Styling Survei): lima slot warna, latar, dan
+   * radius sudut yang dipilih pemilik survei.
+   *
+   * 🔴 Opsional dengan alasan yang sama seperti `logoUrl` di atas: salinan
+   * survei di localStorage bisa lebih tua daripada field ini. Ketiadaannya
+   * berarti PAKAI GAYA PLATFORM. Penerjemahannya ke CSS dipusatkan di
+   * `$lib/surveyStyle.ts` — jangan membaca isinya langsung di komponen.
+   */
+  style?: SurveyStyle | null
   displayMode: 'scroll' | 'one_per_page'
 }
 
@@ -125,6 +261,8 @@ export interface Survey {
   settings: SurveySettings
   questions: Question[]
   skipRules: SkipRule[]
+  /** Absen = survei satu bahasa (perilaku lama). */
+  languages?: SurveyLanguages
   closeMessage: string | null
   closeImageUrl: string | null
 }
@@ -137,8 +275,39 @@ export interface ContactInfo {
   email: string
 }
 
-export type AnswerValue = string | number | string[] | Record<string, string> | ContactInfo | null
+/**
+ * Answer for a checkbox question with `topOfMind` on. `first` is the option
+ * label picked in stage 1; `selected` is the FULL selection (stage 1 + stage
+ * 2), always with `first` at index 0. "Lainnya" free text follows the plain
+ * checkbox convention: the typed text is the label. `first === ''` means the
+ * respondent has not picked yet (the answer is treated as empty).
+ */
+export interface TopOfMindAnswer {
+  first: string
+  selected: string[]
+}
+
+/**
+ * Jawaban sebuah repeat group (Ihatec M5): SATU objek per kartu, berkunci id
+ * field.
+ *
+ * 🔴 Bentuk ini dipilih di atas alternatif "satu array per field"
+ * (`answers[fieldId] = [n1, n2, n3]`), dan alasannya soal kebenaran, bukan
+ * selera. Backend merapatkan array pengulangan — nilai kosong DIBUANG. Kalau
+ * responden mengosongkan satu field di kartu ke-2, array field itu menyusut
+ * sementara array field lain tidak, dan seluruh record sesudahnya bergeser satu
+ * posisi: warna kartu 3 menempel pada merek kartu 2. Tidak ada galat yang
+ * muncul; datanya hanya diam-diam salah.
+ *
+ * Dengan kartu sebagai objek, keselarasan antar-field dijamin BENTUKNYA, bukan
+ * oleh kebetulan urutan. Field yang dikosongkan tetap hadir sebagai nilai kosong
+ * di kartunya sendiri.
+ */
+export type RepeatGroupAnswer = Record<string, string>[]
+
+export type AnswerValue = string | number | string[] | Record<string, string> | RepeatGroupAnswer | ContactInfo | TopOfMindAnswer | null
 
 export type Answers = Record<string, AnswerValue>
 
-export type ViewState = 'loading' | 'welcome' | 'selfie_capture' | 'selfie_denied' | 'location_prompt' | 'location_denied' | 'question' | 'submitting' | 'closing' | 'closed' | 'error'
+// 'language' = the first step of a two-language survey (choose language), before 'welcome'.
+export type ViewState = 'loading' | 'language' | 'welcome' | 'selfie_capture' | 'selfie_denied' | 'location_prompt' | 'location_denied' | 'question' | 'submitting' | 'closing' | 'closed' | 'error'
