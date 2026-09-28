@@ -222,6 +222,19 @@ describe('surveyStyleAttr', () => {
 			.not.toContain('--page-bg-overlay')
 	})
 
+	// Tabel emas: nilai yang sama persis dipakai pratinjau dashboard-fe. Salah satu
+	// sisi berubah tanpa yang lain berarti pratinjau berbohong soal latar terbit.
+	it.each([
+		[-0.4, 'rgba(0,0,0,0.4)'],
+		[0.25, 'rgba(255,255,255,0.25)'],
+		[0, null],
+		[1.5, null]
+	])('brightness %s -> overlay %s', (brightness, overlay) => {
+		const attr = surveyStyleAttr({ background: { imageUrl: '/api/v1/media/a/file', brightness } })
+		if (overlay === null) expect(attr).not.toContain('--page-bg-overlay')
+		else expect(attr).toContain(`--page-bg-overlay:${overlay};`)
+	})
+
 	it('menerima URL absolut saat CDN media aktif', () => {
 		// Backend mengirim bentuk absolut begitu MEDIA_CDN_URL diset. Kalau modul ini
 		// hanya menerima bentuk relatif, latar DIAM-DIAM tidak tampil di seluruh
