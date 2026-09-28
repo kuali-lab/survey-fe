@@ -240,7 +240,17 @@ export function surveyStyleVars(style: SurveyStyle | null | undefined): Record<s
 	// Padding kartu dinyalakan hanya kalau ada permukaan kustom di belakangnya.
 	// Tanpa itu kartu halaman keadaan putih di atas halaman putih — jaraknya tidak
 	// membungkus apa pun, cuma menyempitkan tombol di survei yang sudah terbit.
-	if (hasCustomSurface(style)) vars['--card-padding'] = CARD_PADDING
+	//
+	// Syarat yang sama mematikan latar bilah kemajuan dan bilah navigasi: keduanya
+	// duduk di atas HALAMAN, tapi mengecat diri dengan --canvas yang dipetakan
+	// dari slot KARTU. Survei yang cuma mengunggah foto latar karena itu mendapat
+	// dua balok putih melintang di atas fotonya. Komponennya memakai cadangan
+	// `var(--chrome-surface, var(--canvas))`, jadi survei tanpa gaya kustom tetap
+	// punya latar lengket seperti sebelumnya.
+	if (hasCustomSurface(style)) {
+		vars['--card-padding'] = CARD_PADDING
+		vars['--chrome-surface'] = 'transparent'
+	}
 
 	const radius = style.borderRadius
 	if (radius && radius in RADIUS_PRESETS) Object.assign(vars, RADIUS_PRESETS[radius])

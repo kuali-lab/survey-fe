@@ -334,3 +334,55 @@ describe('cakupan slot card di halaman keadaan (T1, T5)', () => {
 		expect(componentSource(name)).toContain(`max(0px, calc(${angka} - var(--card-padding, 0px)))`)
 	})
 })
+
+// Kerangka survei (bilah kemajuan di atas, bilah navigasi di bawah pada ponsel)
+// duduk di atas HALAMAN, bukan di dalam kartu — tapi keduanya mengecat diri
+// dengan `--canvas`, yang dipetakan dari slot KARTU. Akibatnya survei yang cuma
+// mengunggah foto latar mendapat dua balok putih melintang di atas fotonya:
+// `--canvas` tetap putih platform karena slot kartunya tidak diisi.
+//
+// `--chrome-surface` mematikan kedua balok itu, dan HANYA saat ada permukaan
+// kustom di belakangnya — syarat yang sama persis dengan `--card-padding`.
+// Tanpa syarat itu, ribuan survei yang sudah terbit kehilangan latar bilah
+// lengketnya dan teks yang tergulir menembusnya.
+describe('permukaan kerangka survei (R3)', () => {
+	function componentSource(name: string): string {
+		return readFileSync(fileURLToPath(new URL(`./components/${name}.svelte`, import.meta.url)), 'utf8')
+	}
+
+	it('permukaan kerangka jadi transparan hanya saat salah satu permukaan kustom aktif', () => {
+		expect(surveyStyleVars(null)['--chrome-surface']).toBeUndefined()
+		expect(surveyStyleVars({ borderRadius: 'large' })['--chrome-surface']).toBeUndefined()
+		expect(surveyStyleVars({ colors: { button: '#2563eb' } })['--chrome-surface']).toBeUndefined()
+
+		expect(surveyStyleVars({ colors: { card: '#111827' } })['--chrome-surface']).toBe('transparent')
+		expect(surveyStyleVars({ colors: { background: '#0b1220' } })['--chrome-surface']).toBe('transparent')
+
+		// Kasus yang melahirkan butir ini: FOTO latar tanpa warna apa pun.
+		expect(
+			surveyStyleVars({ background: { imageUrl: '/api/v1/media/abc/file' } })['--chrome-surface'],
+		).toBe('transparent')
+
+		// URL yang bukan media platform tidak pernah dipasang sebagai latar, jadi
+		// ia juga tidak boleh mematikan latar bilahnya.
+		expect(
+			surveyStyleVars({ background: { imageUrl: 'javascript:alert(1)' } })['--chrome-surface'],
+		).toBeUndefined()
+	})
+
+	// Cadangan `var(--canvas)` adalah inti butir ini: ia yang menjamin survei
+	// tanpa gaya kustom tampil persis seperti sebelumnya. Uji ini menolak bentuk
+	// `var(--chrome-surface)` tanpa cadangan, yang akan membuat bilahnya
+	// transparan di SEMUA survei.
+	it.each([
+		['ProgressBar', 'bilah kemajuan'],
+		['SurveyStage', 'bilah navigasi lengket di ponsel']
+	])('%s mengecat permukaannya lewat --chrome-surface berikut cadangannya', (name) => {
+		const src = componentSource(name)
+		expect(src).toContain('background: var(--chrome-surface, var(--canvas));')
+		// Kontrol positif: tidak ada lagi permukaan `--canvas` gundul yang
+		// tertinggal di berkas ini, karena satu saja yang tertinggal sudah cukup
+		// untuk memunculkan kembali balok putihnya.
+		expect(src).not.toContain('background: var(--canvas);')
+	})
+})
