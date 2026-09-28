@@ -1,7 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { shadeHex, surveyStyleVars, surveyStyleAttr, type SurveyStyle } from './surveyStyle'
+import {
+	CARD_SURFACES,
+	LEGACY_CARD_DEFAULT,
+	cardBackground,
+	shadeHex,
+	surveyStyleVars,
+	surveyStyleAttr,
+	type SurveyStyle
+} from './surveyStyle'
 
 // Gaya kustom survei: dokumen `settings.style` dari BE diubah menjadi custom
 // property CSS yang dipasang di elemen akar permukaan responden.
@@ -270,81 +278,241 @@ describe('surveyStyleAttr', () => {
 	})
 })
 
-// Cakupan slot `card` (T1, keputusan user 27 Sep 2026). Halaman sambutan dan
-// penutup dibuat transparan supaya latar kustom terlihat utuh; lima halaman
-// keadaan lain mempertahankan permukaannya karena memuat daftar syarat, ikon
-// status, dan aksi yang butuh terbaca sebagai satu blok keputusan. Tujuh berkas
-// di bawah, bukan lima: gerbang lokasi dan selfie masing-masing punya varian
-// "ditolak" tersendiri.
-//
-// Diuji dari sumber karena yang dijaga adalah BATAS keputusannya, bukan nilai
-// warnanya: satu `background: var(--canvas)` yang kembali ke sambutan/penutup
-// mengembalikan kartu yang memotong latar, tanpa satu pun uji lain memerah.
-// Kontrol positifnya adalah berkas yang WAJIB masih memuatnya — tanpa itu, uji
-// ini juga lulus kalau penanda permukaannya sekadar berganti nama.
-describe('cakupan slot card di halaman keadaan (T1, T5)', () => {
-	const CARD_SURFACE = 'background: var(--canvas);'
+// Kartu per permukaan (S6). Dokumen tanpa `cards` HARUS menghasilkan keluaran
+// yang sama dengan sebelum S6: ribuan survei terbit bergantung pada itu, dan
+// tidak ada uji lain yang memerah kalau satu variabel baru bocor ke mereka.
+describe('keluaran gaya lama tanpa cards', () => {
+	const DOKUMEN_LAMA: [string, SurveyStyle, Record<string, string>][] = [
+		[
+			'slot card',
+			{ colors: { card: '#111827' } },
+			{
+				'--canvas': '#111827',
+				'--canvas-soft': '#181f2d',
+				'--canvas-softer': '#242a38',
+				'--card-padding': '24px',
+				'--chrome-surface': 'transparent'
+			}
+		],
+		[
+			'tombol dan radius',
+			{ colors: { button: '#2563eb' }, borderRadius: 'small' },
+			{
+				'--primary': '#2563eb',
+				'--ink': '#2563eb',
+				'--primary-60': '#1f54c8',
+				'--primary-70': '#1f54c8',
+				'--ink-elevated': '#1f54c8',
+				'--radius-card': '8px',
+				'--radius-input': '6px',
+				'--radius-option': '8px',
+				'--radius-md': '6px',
+				'--radius-lg': '8px',
+				'--radius-pill': '8px'
+			}
+		],
+		[
+			'gambar latar saja',
+			{ background: { imageUrl: '/api/v1/media/abc/file' } },
+			{ '--card-padding': '24px', '--chrome-surface': 'transparent' }
+		]
+	]
 
+	it.each(DOKUMEN_LAMA)('%s tidak berubah', (_nama, doc, expected) => {
+		expect(surveyStyleVars(doc)).toEqual(expected)
+	})
+
+	it.each([
+		['cards null', null],
+		['cards kosong', {}],
+		['cards tanpa field yang dikenal', { opacity: 'x', enabled: 'ya', surfaces: { question: true } }]
+	])('%s sama dengan tanpa cards', (_nama, cards) => {
+		for (const [, doc] of DOKUMEN_LAMA) {
+			const withCards = { ...doc, cards } as SurveyStyle
+			expect(surveyStyleVars(withCards)).toEqual(surveyStyleVars(doc))
+			expect(surveyStyleAttr(withCards)).toBe(surveyStyleAttr(doc))
+		}
+	})
+})
+
+describe('cardBackground', () => {
+	it('menyusun rgba dari heks dan opasitas', () => {
+		expect(cardBackground('#123456', 0.5)).toBe('rgba(18,52,86,0.5)')
+		expect(cardBackground('#abc', 1)).toBe('rgba(170,187,204,1)')
+	})
+
+	it('menjepit opasitas ke 0..1 dan menganggap yang bukan bilangan sebagai 1', () => {
+		expect(cardBackground('#fff', 0)).toBe('rgba(255,255,255,0)')
+		expect(cardBackground('#fff', 2)).toBe('rgba(255,255,255,1)')
+		expect(cardBackground('#fff', -1)).toBe('rgba(255,255,255,0)')
+		expect(cardBackground('#fff', Number.NaN)).toBe('rgba(255,255,255,1)')
+		expect(cardBackground('#fff', '1);}' as unknown as number)).toBe('rgba(255,255,255,1)')
+	})
+
+	it('mengembalikan null untuk warna yang bukan heks', () => {
+		expect(cardBackground('red', 0.5)).toBeNull()
+		expect(cardBackground('#fff;}', 0.5)).toBeNull()
+	})
+})
+
+describe('kartu per permukaan (S6)', () => {
+	const bg = (surface: string) => `--state-card-bg-${surface}`
+	const pad = (surface: string) => `--state-card-padding-${surface}`
+
+	it('daftar permukaan dan bawaan lamanya', () => {
+		expect([...CARD_SURFACES]).toEqual(['welcome', 'closing', 'location', 'selfie', 'invite', 'error', 'closed'])
+		expect(LEGACY_CARD_DEFAULT).toEqual({
+			welcome: false,
+			closing: false,
+			location: true,
+			selfie: true,
+			invite: true,
+			error: true,
+			closed: true
+		})
+	})
+
+	it('enabled=false dengan satu permukaan menyala hanya menyalakan permukaan itu', () => {
+		const vars = surveyStyleVars({
+			colors: { card: '#123456' },
+			cards: { enabled: false, surfaces: { selfie: true } }
+		})
+		expect(vars[bg('selfie')]).toBe('rgba(18,52,86,1)')
+		expect(vars[pad('selfie')]).toBe('24px')
+		for (const surface of CARD_SURFACES.filter((name) => name !== 'selfie')) {
+			expect(vars[bg(surface)]).toBe('transparent')
+			expect(vars[pad(surface)]).toBe('0px')
+		}
+	})
+
+	it('opasitas 0.5 pada slot card #123456 menghasilkan rgba dengan alfa 0.5', () => {
+		const vars = surveyStyleVars({ colors: { card: '#123456' }, cards: { opacity: 0.5 } })
+		expect(vars[bg('location')]).toBe('rgba(18,52,86,0.5)')
+		expect(vars[bg('closed')]).toBe('rgba(18,52,86,0.5)')
+		// Tanpa enabled/surfaces, sambutan dan penutup tetap tanpa kartu seperti dulu.
+		expect(vars[bg('welcome')]).toBe('transparent')
+		expect(vars[pad('closing')]).toBe('0px')
+	})
+
+	it('enabled=true menyalakan semua, surfaces mengalahkan enabled', () => {
+		const vars = surveyStyleVars({
+			colors: { card: '#123456' },
+			cards: { enabled: true, surfaces: { closed: false } }
+		})
+		expect(vars[bg('welcome')]).toBe('rgba(18,52,86,1)')
+		expect(vars[pad('closing')]).toBe('24px')
+		expect(vars[bg('closed')]).toBe('transparent')
+		expect(vars[pad('closed')]).toBe('0px')
+	})
+
+	it('matchPageBackground mengambil colors.background, cadangannya putih', () => {
+		const cards = { matchPageBackground: true }
+		const withBackground = surveyStyleVars({ colors: { card: '#123456', background: '#abcdef' }, cards })
+		expect(withBackground[bg('error')]).toBe('rgba(171,205,239,1)')
+
+		const withoutBackground = surveyStyleVars({ colors: { card: '#123456' }, cards })
+		expect(withoutBackground[bg('error')]).toBe('rgba(255,255,255,1)')
+	})
+
+	it('tanpa warna apa pun kartu jatuh ke putih platform', () => {
+		const vars = surveyStyleVars({ cards: { enabled: true } })
+		expect(vars[bg('welcome')]).toBe('rgba(255,255,255,1)')
+	})
+
+	it('kunci permukaan asing diabaikan', () => {
+		const vars = surveyStyleVars({ cards: { surfaces: { question: true } } } as SurveyStyle)
+		expect(Object.keys(vars).filter((name) => name.includes('question'))).toEqual([])
+	})
+
+	it('nilai berbahaya tidak pernah sampai ke CSS', () => {
+		const hostile = {
+			colors: { card: 'red', background: '#fff;} body{display:none' },
+			cards: { enabled: true, opacity: '1);}', matchPageBackground: 'ya' }
+		} as unknown as SurveyStyle
+		const vars = surveyStyleVars(hostile)
+		const safe = /^(transparent|\d+px|rgba\(\d{1,3},\d{1,3},\d{1,3},(0|1|0?\.\d+)\))$/
+		const stateVars = Object.entries(vars).filter(([name]) => name.startsWith('--state-card-'))
+		expect(stateVars.length).toBe(CARD_SURFACES.length * 2)
+		for (const [, value] of stateVars) expect(value).toMatch(safe)
+		expect(surveyStyleAttr(hostile)).not.toContain('display:none')
+	})
+
+	it('surveyStyleAttr memuat variabel kartu', () => {
+		const attr = surveyStyleAttr({ colors: { card: '#123456' }, cards: { opacity: 0.5 } })
+		expect(attr).toContain('--state-card-bg-selfie:rgba(18,52,86,0.5);')
+	})
+})
+
+// Sembilan komponen permukaan membaca variabel di atas lewat satu aturan akar.
+// Diuji dari SUMBER karena yang dijaga adalah pemasangannya: satu `background`
+// mati yang kembali ke komponen membuat kontrol pemilik survei tak berefek di
+// permukaan itu, tanpa satu pun uji lain memerah.
+describe('pemasangan kartu per permukaan di komponen', () => {
 	function componentSource(name: string): string {
 		return readFileSync(fileURLToPath(new URL(`./components/${name}.svelte`, import.meta.url)), 'utf8')
 	}
 
-	const BERKARTU = [
-		'LocationPromptPage',
-		'LocationDeniedPage',
-		'SelfieCapturePage',
-		'SelfieDeniedPage',
-		'InviteBlockedPage',
-		'ErrorPage',
-		'ClosedPage'
-	]
-
-	// Isi aturan kartu saja, bukan seluruh berkas: padding/radius yang nyasar ke
-	// elemen lain tidak boleh ikut meluluskan uji T5 di bawah.
-	function cardRuleBody(name: string): string {
+	// Isi aturan akar saja, bukan seluruh berkas: deklarasi yang nyasar ke elemen
+	// lain tidak boleh ikut meluluskan uji.
+	function rootRuleBody(name: string, selector: string): string {
 		const src = componentSource(name)
-		const at = src.indexOf(CARD_SURFACE)
+		const at = src.indexOf(`\n  ${selector} {`)
 		expect(at).toBeGreaterThan(-1)
-		return src.slice(at, src.indexOf('}', at))
+		return src.slice(at, src.indexOf('\n  }', at))
 	}
 
-	it.each(BERKARTU)('%s mempertahankan permukaan kartunya', (name) => {
-		expect(componentSource(name)).toContain(CARD_SURFACE)
+	const LEGACY_CARDS: [string, string, string][] = [
+		['LocationPromptPage', 'location', '.gate'],
+		['LocationDeniedPage', 'location', '.gate'],
+		['SelfieCapturePage', 'selfie', '.intro'],
+		['SelfieDeniedPage', 'selfie', '.gate'],
+		['InviteBlockedPage', 'invite', '.blocked'],
+		['ErrorPage', 'error', '.error-page'],
+		['ClosedPage', 'closed', '.closed']
+	]
+	const LEGACY_FLAT: [string, string, string][] = [
+		['WelcomePage', 'welcome', '.welcome'],
+		['ClosingPage', 'closing', '.closing']
+	]
+
+	it.each(LEGACY_CARDS)('%s: kartu bawaan lama, cadangan ke --canvas dan --card-padding', (name, surface, selector) => {
+		const rule = rootRuleBody(name, selector)
+		expect(rule).toContain(`--pad: var(--state-card-padding-${surface}, var(--card-padding, 0px));`)
+		expect(rule).toContain(`background: var(--state-card-bg-${surface}, var(--canvas));`)
+		expect(rule).toContain('padding: var(--pad);')
+		expect(rule).toContain('border-radius: var(--radius-card);')
 	})
 
-	it.each(['WelcomePage', 'ClosingPage'])('%s tidak memakai permukaan kartu', (name) => {
-		expect(componentSource(name)).not.toContain(CARD_SURFACE)
+	it.each(LEGACY_FLAT)('%s: tanpa kartu bawaan, cadangan transparan tanpa padding', (name, surface, selector) => {
+		const rule = rootRuleBody(name, selector)
+		expect(rule).toContain(`--pad: var(--state-card-padding-${surface}, 0px);`)
+		expect(rule).toContain(`background: var(--state-card-bg-${surface}, transparent);`)
+		expect(rule).toContain('padding: var(--pad);')
+		expect(rule).toContain('border-radius: var(--radius-card);')
 	})
 
-	// T5: permukaan tanpa padding dan radius menggugurkan alasan T1 mempertahankan
-	// kartunya — begitu slot `card` diwarnai ia jadi blok warna bertepi keras.
-	//
-	// 🔴 Paddingnya lewat var, bukan angka mati (keputusan user 28 Sep): tanpa gaya
-	// kustom kartu ini putih di atas halaman putih, jadi padding di sana cuma
-	// menyempitkan tombol di survei yang sudah terbit tanpa kotak yang terlihat.
-	it.each(BERKARTU)('%s memberi kartunya padding bersyarat dan radius (T5)', (name) => {
-		const rule = cardRuleBody(name)
-		expect(rule).toContain('padding: var(--card-padding, 0px)')
-		expect(rule).toContain('border-radius: var(--radius-card)')
+	// Kontrol positif: `--card-padding` hanya boleh dibaca di baris `--pad`, dan
+	// sambutan/penutup tidak boleh membacanya sama sekali (padding-nya tidak
+	// pernah ikut gaya kustom global).
+	it.each([...LEGACY_CARDS, ...LEGACY_FLAT].map(([name]) => [name]))('%s membaca --card-padding tepat di baris --pad', (name) => {
+		const reads = componentSource(name).match(/var\(--card-padding/g) ?? []
+		expect(reads.length).toBe(LEGACY_FLAT.some(([flat]) => flat === name) ? 0 : 1)
+		expect(componentSource(name)).not.toContain('background: var(--canvas);')
 	})
 
 	// Gambar penutup melebar menembus padding kartu supaya lebarnya persis seperti
-	// sebelum T5. Kompensasinya WAJIB ikut var yang sama — kalau ia tetap 48px mati
-	// sementara paddingnya 0, gambarnya meluber keluar kartu di survei bawaan.
+	// sebelum kartu bisa diatur. Kompensasinya WAJIB ikut variabel yang sama.
 	it('ClosedPage menjaga gambar penutup selebar kartu di kedua keadaan', () => {
 		const src = componentSource('ClosedPage')
-		expect(src).toContain('width: calc(100% + var(--card-padding, 0px) * 2)')
-		expect(src).toContain('margin: calc(var(--card-padding, 0px) * -1)')
+		expect(src).toContain('width: calc(100% + var(--pad) * 2)')
+		expect(src).toContain('margin: calc(var(--pad) * -1)')
 	})
 
-	// Jarak atas ilustrasi menyusut seiring padding kartu: tanpa gaya kustom ia
-	// kembali ke angka sebelum T5, dengan gaya kustom padding kartunya yang
-	// menyediakan jaraknya. Tanpa ini salah satu dari dua keadaan jadi dobel.
 	it.each([
 		['ErrorPage', '16px'],
 		['ClosedPage', '24px']
 	])('%s menjaga jarak atas ilustrasi di kedua keadaan', (name, angka) => {
-		expect(componentSource(name)).toContain(`max(0px, calc(${angka} - var(--card-padding, 0px)))`)
+		expect(componentSource(name)).toContain(`max(0px, calc(${angka} - var(--pad)))`)
 	})
 })
 

@@ -29,6 +29,21 @@
 
 import { resolveMediaUrl } from './mediaUrl'
 
+/** Tujuh permukaan kartu; gerbang lokasi dan selfie berbagi kuncinya dengan varian "ditolak". */
+export const CARD_SURFACES = ['welcome', 'closing', 'location', 'selfie', 'invite', 'error', 'closed'] as const
+export type CardSurface = (typeof CARD_SURFACES)[number]
+
+/** Keadaan sebelum `cards` ada: dipakai selama pemilik survei belum memilih apa pun untuk permukaan itu. */
+export const LEGACY_CARD_DEFAULT: Record<CardSurface, boolean> = {
+	welcome: false,
+	closing: false,
+	location: true,
+	selfie: true,
+	invite: true,
+	error: true,
+	closed: true
+}
+
 /** Dokumen gaya, cermin surveyStyleDoc di internal/service/survey_style.go. */
 export type SurveyStyle = {
 	colors?: {
@@ -45,6 +60,12 @@ export type SurveyStyle = {
 		brightness?: number
 	}
 	borderRadius?: 'none' | 'small' | 'large'
+	cards?: {
+		enabled?: boolean
+		opacity?: number
+		matchPageBackground?: boolean
+		surfaces?: Partial<Record<CardSurface, boolean>>
+	} | null
 }
 
 /** #rgb atau #rrggbb, sama persis dengan surveyStyleColorPattern di BE. */
@@ -79,9 +100,9 @@ function isPlatformMediaUrl(url: string): boolean {
 }
 
 /**
- * Jarak tepi kartu halaman keadaan saat gaya kustom aktif. Komponen memakainya
- * lewat `var(--card-padding, 0px)`, jadi nilai ini satu-satunya tempat angkanya
- * hidup di sisi responden.
+ * Jarak tepi kartu saat gaya kustom aktif. Komponen memakainya lewat
+ * `--card-padding` dan `--state-card-padding-<permukaan>`, jadi nilai ini satu-satunya
+ * tempat angkanya hidup di sisi responden.
  */
 const CARD_PADDING = '24px'
 
@@ -127,14 +148,31 @@ const RADIUS_PRESETS: Record<NonNullable<SurveyStyle['borderRadius']>, Record<st
  * sub-bloknya melebur jadi satu bidang hitam tanpa batas yang terlihat.
  */
 function cardTintDirection(card: string): number {
-	const full = card.length === 4 ? `#${card[1]}${card[1]}${card[2]}${card[2]}${card[3]}${card[3]}` : card
-	const channels = [1, 3, 5].map((index) => parseInt(full.slice(index, index + 2), 16))
+	const channels = hexChannels(card)
 	const perceived = (channels[0] * 299 + channels[1] * 587 + channels[2] * 114) / 1000
 	return perceived < 128 ? 1 : -1
 }
 
 function isHex(value: unknown): value is string {
 	return typeof value === 'string' && HEX_PATTERN.test(value)
+}
+
+/** Kanal [r, g, b] dari heks yang sudah lolos isHex, bentuk pendek dimuaikan. */
+function hexChannels(hex: string): number[] {
+	const full = hex.length === 4 ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}` : hex
+	return [1, 3, 5].map((index) => parseInt(full.slice(index, index + 2), 16))
+}
+
+/**
+ * Warna kartu dengan opasitas, disusun dari bilangan hasil parse heks dan alfa
+ * yang dijepit 0..1 — tidak ada string dari dokumen yang masuk ke CSS. Opasitas
+ * yang bukan bilangan dianggap 1.
+ */
+export function cardBackground(hex: string, opacity: number): string | null {
+	if (!isHex(hex)) return null
+	const alpha = typeof opacity === 'number' && Number.isFinite(opacity) ? Math.min(1, Math.max(0, opacity)) : 1
+	const [red, green, blue] = hexChannels(hex)
+	return `rgba(${red},${green},${blue},${alpha})`
 }
 
 /**
@@ -144,13 +182,7 @@ function isHex(value: unknown): value is string {
  */
 export function shadeHex(hex: string, amount: number): string | null {
 	if (!isHex(hex)) return null
-	const full =
-		hex.length === 4
-			? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
-			: hex.toLowerCase()
-
-	const channels = [1, 3, 5].map((index) => parseInt(full.slice(index, index + 2), 16))
-	const shaded = channels.map((channel) => {
+	const shaded = hexChannels(hex).map((channel) => {
 		const target = amount < 0 ? 0 : 255
 		const moved = Math.round(channel + (target - channel) * Math.abs(amount))
 		return Math.min(255, Math.max(0, moved))
@@ -178,6 +210,39 @@ function hasCustomSurface(style: SurveyStyle): boolean {
 	if (isHex(colors.card) || isHex(colors.background)) return true
 	const image = style.background?.imageUrl
 	return Boolean(image && isPlatformMediaUrl(image))
+}
+
+/**
+ * Variabel kartu per permukaan dari `style.cards`. Dokumen tanpa satu pun field
+ * `cards` yang sah menghasilkan objek kosong, jadi survei lama tidak menerima
+ * variabel baru dan komponen jatuh ke cadangan lamanya.
+ *
+ * Warna kartu putih (#ffffff = --canvas platform) bila slot yang dipilih kosong,
+ * karena rgba butuh saluran warna pasti untuk menerapkan opasitas.
+ */
+function cardSurfaceVars(style: SurveyStyle): Record<string, string> {
+	const cards = style.cards
+	if (!cards || typeof cards !== 'object') return {}
+
+	const enabled = typeof cards.enabled === 'boolean' ? cards.enabled : undefined
+	const matchPage = typeof cards.matchPageBackground === 'boolean' ? cards.matchPageBackground : undefined
+	const opacity = typeof cards.opacity === 'number' && Number.isFinite(cards.opacity) ? cards.opacity : undefined
+	const surfaces = cards.surfaces && typeof cards.surfaces === 'object' ? cards.surfaces : {}
+	const anySurface = CARD_SURFACES.some((surface) => typeof surfaces[surface] === 'boolean')
+	if (enabled === undefined && matchPage === undefined && opacity === undefined && !anySurface) return {}
+
+	const colors = style.colors ?? {}
+	const source = matchPage ? colors.background : colors.card
+	const fill = cardBackground(isHex(source) ? source : '#ffffff', opacity ?? 1) ?? 'transparent'
+
+	const vars: Record<string, string> = {}
+	for (const surface of CARD_SURFACES) {
+		const own = surfaces[surface]
+		const visible = (typeof own === 'boolean' ? own : enabled) ?? LEGACY_CARD_DEFAULT[surface]
+		vars[`--state-card-bg-${surface}`] = visible ? fill : 'transparent'
+		vars[`--state-card-padding-${surface}`] = visible ? CARD_PADDING : '0px'
+	}
+	return vars
 }
 
 export function surveyStyleVars(style: SurveyStyle | null | undefined): Record<string, string> {
@@ -219,9 +284,8 @@ export function surveyStyleVars(style: SurveyStyle | null | undefined): Record<s
 	if (isHex(colors.background)) vars['--page-bg'] = colors.background
 
 	// Permukaan KARTU. Lima halaman keadaan memakainya: gerbang lokasi, gerbang
-	// selfie, gerbang undangan, galat, dan tutup. Sambutan dan penutup TIDAK lagi
-	// ikut — kartunya dibuat transparan (T1) karena isinya cuma judul, keterangan
-	// pendek, dan satu tombol.
+	// selfie, gerbang undangan, galat, dan tutup. Sambutan dan penutup tanpa kartu
+	// (T1) kecuali `style.cards` menyalakannya per permukaan.
 	//
 	// --canvas-soft dan --canvas-softer DITURUNKAN dari warna kartu, bukan
 	// dibiarkan abu platform: keduanya adalah blok di DALAM kartu (baris petunjuk
@@ -251,6 +315,8 @@ export function surveyStyleVars(style: SurveyStyle | null | undefined): Record<s
 		vars['--card-padding'] = CARD_PADDING
 		vars['--chrome-surface'] = 'transparent'
 	}
+
+	Object.assign(vars, cardSurfaceVars(style))
 
 	const radius = style.borderRadius
 	if (radius && radius in RADIUS_PRESETS) Object.assign(vars, RADIUS_PRESETS[radius])

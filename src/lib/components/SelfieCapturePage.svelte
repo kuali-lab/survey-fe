@@ -330,15 +330,11 @@
 
 <style>
   /* ─── Intro card ───────────────────────────────────────────────────────── */
-  /* Padding + radius (T5): tanpa keduanya kartu ini jadi bidang warna bertepi
-     keras dengan teks menempel ke tepi begitu pemiliknya mewarnai slot `card`. */
+  /* Tanpa gaya kustom kartu ini tak terlihat, jadi padding cadangannya 0. */
   .intro {
-    background: var(--canvas);
-    /* Padding kartu HANYA saat pemilik survei memasang gaya kustom: tanpa gaya,
-       kartu ini putih di atas halaman putih alias tak terlihat, jadi jaraknya
-       hanya akan menyempitkan tombol tanpa ada kotak yang terlihat membungkus.
-       surveyStyle.ts menyetel --card-padding begitu slot card/background diisi. */
-    padding: var(--card-padding, 0px);
+    --pad: var(--state-card-padding-selfie, var(--card-padding, 0px));
+    background: var(--state-card-bg-selfie, var(--canvas));
+    padding: var(--pad);
     border-radius: var(--radius-card);
     max-width: 480px;
     width: 100%;
