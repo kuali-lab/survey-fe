@@ -1961,7 +1961,7 @@
     border: 1px solid var(--success-border);
     border-radius: var(--radius-option);
     padding: 12px 16px;
-    color: var(--success-strong);
+    color: #166534;
   }
 
   .file-icon {
@@ -1991,7 +1991,7 @@
     background: none;
     border: none;
     cursor: pointer;
-    color: var(--success-strong);
+    color: #166534;
     padding: 4px;
     border-radius: 6px;
     display: flex;
@@ -2001,7 +2001,7 @@
   }
 
   .file-remove:hover {
-    background: var(--success-tint);
+    background: #dcfce7;
   }
 
   .upload-error {
