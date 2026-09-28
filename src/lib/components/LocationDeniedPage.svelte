@@ -84,7 +84,11 @@
      keras dengan teks menempel ke tepi begitu pemiliknya mewarnai slot `card`. */
   .gate {
     background: var(--canvas);
-    padding: 24px;
+    /* Padding kartu HANYA saat pemilik survei memasang gaya kustom: tanpa gaya,
+       kartu ini putih di atas halaman putih alias tak terlihat, jadi jaraknya
+       hanya akan menyempitkan tombol tanpa ada kotak yang terlihat membungkus.
+       surveyStyle.ts menyetel --card-padding begitu slot card/background diisi. */
+    padding: var(--card-padding, 0px);
     border-radius: var(--radius-card);
     max-width: 480px;
     width: 100%;

@@ -93,6 +93,18 @@ describe('surveyStyleVars', () => {
 		expect(gelap['--canvas-softer']).toBe(shadeHex('#111827', 0.08))
 	})
 
+	it('padding kartu menyala hanya saat salah satu permukaan diwarnai', () => {
+		// 🔴 Tanpa gaya kustom, kartu tujuh halaman keadaan putih di atas halaman
+		// putih. Padding di sana tidak membungkus apa pun — ia cuma menyempitkan
+		// tombol di ribuan survei yang sudah terbit.
+		expect(surveyStyleVars(null)['--card-padding']).toBeUndefined()
+		expect(surveyStyleVars({ borderRadius: 'large' })['--card-padding']).toBeUndefined()
+		expect(surveyStyleVars({ colors: { button: '#2563eb' } })['--card-padding']).toBeUndefined()
+
+		expect(surveyStyleVars({ colors: { card: '#111827' } })['--card-padding']).toBe('24px')
+		expect(surveyStyleVars({ colors: { background: '#0b1220' } })['--card-padding']).toBe('24px')
+	})
+
 	it('slot card TIDAK menyentuh latar halaman, dan sebaliknya', () => {
 		// Keduanya permukaan berbeda: latar halaman ada di belakang kartu.
 		const kartuSaja = surveyStyleVars({ colors: { card: '#111827' } })
@@ -282,18 +294,32 @@ describe('cakupan slot card di halaman keadaan (T1, T5)', () => {
 
 	// T5: permukaan tanpa padding dan radius menggugurkan alasan T1 mempertahankan
 	// kartunya — begitu slot `card` diwarnai ia jadi blok warna bertepi keras.
-	it.each(BERKARTU)('%s memberi kartunya padding dan radius (T5)', (name) => {
+	//
+	// 🔴 Paddingnya lewat var, bukan angka mati (keputusan user 28 Sep): tanpa gaya
+	// kustom kartu ini putih di atas halaman putih, jadi padding di sana cuma
+	// menyempitkan tombol di survei yang sudah terbit tanpa kotak yang terlihat.
+	it.each(BERKARTU)('%s memberi kartunya padding bersyarat dan radius (T5)', (name) => {
 		const rule = cardRuleBody(name)
-		expect(rule).toMatch(/padding: \d+px/)
+		expect(rule).toContain('padding: var(--card-padding, 0px)')
 		expect(rule).toContain('border-radius: var(--radius-card)')
 	})
 
 	// Gambar penutup melebar menembus padding kartu supaya lebarnya persis seperti
-	// sebelum T5. Angkanya terikat padding 24px: kalau paddingnya diubah tanpa
-	// kompensasi ini disesuaikan, survei TANPA gaya kustom ikut berubah tampilannya.
-	it('ClosedPage menjaga gambar penutup selebar kartu', () => {
+	// sebelum T5. Kompensasinya WAJIB ikut var yang sama — kalau ia tetap 48px mati
+	// sementara paddingnya 0, gambarnya meluber keluar kartu di survei bawaan.
+	it('ClosedPage menjaga gambar penutup selebar kartu di kedua keadaan', () => {
 		const src = componentSource('ClosedPage')
-		expect(src).toContain('width: calc(100% + 48px)')
-		expect(src).toContain('margin: -24px -24px 0')
+		expect(src).toContain('width: calc(100% + var(--card-padding, 0px) * 2)')
+		expect(src).toContain('margin: calc(var(--card-padding, 0px) * -1)')
+	})
+
+	// Jarak atas ilustrasi menyusut seiring padding kartu: tanpa gaya kustom ia
+	// kembali ke angka sebelum T5, dengan gaya kustom padding kartunya yang
+	// menyediakan jaraknya. Tanpa ini salah satu dari dua keadaan jadi dobel.
+	it.each([
+		['ErrorPage', '16px'],
+		['ClosedPage', '24px']
+	])('%s menjaga jarak atas ilustrasi di kedua keadaan', (name, angka) => {
+		expect(componentSource(name)).toContain(`max(0px, calc(${angka} - var(--card-padding, 0px)))`)
 	})
 })

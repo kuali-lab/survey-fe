@@ -78,6 +78,13 @@ function isPlatformMediaUrl(url: string): boolean {
 	return MEDIA_PATH_PATTERN.test(url) || MEDIA_ABSOLUTE_PATTERN.test(url)
 }
 
+/**
+ * Jarak tepi kartu halaman keadaan saat gaya kustom aktif. Komponen memakainya
+ * lewat `var(--card-padding, 0px)`, jadi nilai ini satu-satunya tempat angkanya
+ * hidup di sisi responden.
+ */
+const CARD_PADDING = '24px'
+
 /** Jumlah gelap yang dipakai untuk keadaan hover/tekan tombol. */
 const PRESSED_SHADE = -0.15
 
@@ -212,6 +219,11 @@ export function surveyStyleVars(style: SurveyStyle | null | undefined): Record<s
 		if (soft) vars['--canvas-soft'] = soft
 		if (softer) vars['--canvas-softer'] = softer
 	}
+
+	// Padding kartu dinyalakan hanya kalau salah satu permukaan diwarnai. Tanpa
+	// itu kartu tujuh halaman keadaan putih di atas halaman putih — jaraknya tidak
+	// membungkus apa pun, cuma menyempitkan tombol di survei yang sudah terbit.
+	if (isHex(colors.card) || isHex(colors.background)) vars['--card-padding'] = CARD_PADDING
 
 	const radius = style.borderRadius
 	if (radius && radius in RADIUS_PRESETS) Object.assign(vars, RADIUS_PRESETS[radius])
