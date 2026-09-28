@@ -48,22 +48,17 @@
 </div>
 
 <style>
-  /* Padding + radius (T5): tanpa keduanya kartu ini jadi bidang warna bertepi
-     keras dengan teks menempel ke tepi begitu pemiliknya mewarnai slot `card`. */
-  /* Jarak atas ilustrasi menyusut seiring padding kartu: tanpa gaya kustom ia
-     kembali 16px seperti sebelum T5, dengan gaya kustom padding kartunya yang
-     menyediakan jaraknya. */
+  /* Jarak atas ilustrasi menyusut seiring padding kartu: tanpa kartu ia tetap
+     16px, dengan kartu padding-nya yang menyediakan jarak itu. */
   .illustration {
-    padding-top: max(0px, calc(16px - var(--card-padding, 0px)));
+    padding-top: max(0px, calc(16px - var(--pad)));
   }
 
+  /* Tanpa gaya kustom kartu ini tak terlihat, jadi padding cadangannya 0. */
   .error-page {
-    background: var(--canvas);
-    /* Padding kartu HANYA saat pemilik survei memasang gaya kustom: tanpa gaya,
-       kartu ini putih di atas halaman putih alias tak terlihat, jadi jaraknya
-       hanya akan menyempitkan tombol tanpa ada kotak yang terlihat membungkus.
-       surveyStyle.ts menyetel --card-padding begitu slot card/background diisi. */
-    padding: var(--card-padding, 0px);
+    --pad: var(--state-card-padding-error, var(--card-padding, 0px));
+    background: var(--state-card-bg-error, var(--canvas));
+    padding: var(--pad);
     border-radius: var(--radius-card);
     max-width: 480px;
     width: 100%;
