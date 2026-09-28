@@ -163,6 +163,23 @@ export function shadeHex(hex: string, amount: number): string | null {
  * TIDAK menghasilkan entri, sehingga token platform tetap berlaku — itulah cara
  * "reset per-slot" bekerja tanpa mekanisme tersendiri.
  */
+/**
+ * Apakah ada permukaan kustom di belakang kartu halaman keadaan?
+ *
+ * 🔴 GAMBAR latar ikut dihitung, bukan hanya warna. Versi pertama hanya
+ * memeriksa `colors.card`/`colors.background`, jadi survei yang memasang FOTO
+ * latar tanpa warna apa pun mendapat radius tanpa padding — teks menempel ke
+ * tepi kartu, di atas latar yang justru paling terlihat. Itu persis mode gagal
+ * yang T5 lahir untuk menutup, dan kemungkinan besar bentuk kustomisasi yang
+ * paling umum.
+ */
+function hasCustomSurface(style: SurveyStyle): boolean {
+	const colors = style.colors ?? {}
+	if (isHex(colors.card) || isHex(colors.background)) return true
+	const image = style.background?.imageUrl
+	return Boolean(image && isPlatformMediaUrl(image))
+}
+
 export function surveyStyleVars(style: SurveyStyle | null | undefined): Record<string, string> {
 	const vars: Record<string, string> = {}
 	if (!style) return vars
@@ -220,10 +237,10 @@ export function surveyStyleVars(style: SurveyStyle | null | undefined): Record<s
 		if (softer) vars['--canvas-softer'] = softer
 	}
 
-	// Padding kartu dinyalakan hanya kalau salah satu permukaan diwarnai. Tanpa
-	// itu kartu tujuh halaman keadaan putih di atas halaman putih — jaraknya tidak
+	// Padding kartu dinyalakan hanya kalau ada permukaan kustom di belakangnya.
+	// Tanpa itu kartu halaman keadaan putih di atas halaman putih — jaraknya tidak
 	// membungkus apa pun, cuma menyempitkan tombol di survei yang sudah terbit.
-	if (isHex(colors.card) || isHex(colors.background)) vars['--card-padding'] = CARD_PADDING
+	if (hasCustomSurface(style)) vars['--card-padding'] = CARD_PADDING
 
 	const radius = style.borderRadius
 	if (radius && radius in RADIUS_PRESETS) Object.assign(vars, RADIUS_PRESETS[radius])

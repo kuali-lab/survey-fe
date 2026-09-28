@@ -103,6 +103,17 @@ describe('surveyStyleVars', () => {
 
 		expect(surveyStyleVars({ colors: { card: '#111827' } })['--card-padding']).toBe('24px')
 		expect(surveyStyleVars({ colors: { background: '#0b1220' } })['--card-padding']).toBe('24px')
+
+		// 🔴 GAMBAR latar tanpa warna apa pun juga permukaan kustom, dan justru
+		// yang paling terlihat: kartu tanpa padding di atas foto membuat teks
+		// menempel ke tepinya.
+		expect(
+			surveyStyleVars({ background: { imageUrl: '/api/v1/media/abc/file' } })['--card-padding'],
+		).toBe('24px')
+
+		// URL yang bukan media platform tidak pernah dipasang sebagai latar, jadi
+		// ia juga tidak boleh menyalakan paddingnya.
+		expect(surveyStyleVars({ background: { imageUrl: 'javascript:alert(1)' } })['--card-padding']).toBeUndefined()
 	})
 
 	it('slot card TIDAK menyentuh latar halaman, dan sebaliknya', () => {
