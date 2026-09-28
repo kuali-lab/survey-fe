@@ -264,7 +264,9 @@
     .nav {
       position: sticky;
       bottom: 0;
-      background: var(--canvas);
+      /* Permukaan halaman, bukan permukaan kartu — alasan yang sama dengan
+         bilah kemajuan di ProgressBar.svelte. */
+      background: var(--chrome-surface, var(--canvas));
       margin: 12px -20px 0;
       padding: 12px 20px;
       padding-bottom: max(12px, env(safe-area-inset-bottom));

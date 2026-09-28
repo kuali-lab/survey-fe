@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { shadeHex, surveyStyleVars, surveyStyleAttr, type SurveyStyle } from './surveyStyle'
 
 // Gaya kustom survei: dokumen `settings.style` dari BE diubah menjadi custom
@@ -75,9 +77,10 @@ describe('surveyStyleVars', () => {
 	})
 
 	it('memetakan slot card ke --canvas dan menurunkan sub-permukaannya', () => {
-		// Tujuh halaman keadaan memakai --canvas sebagai permukaan kartunya, jadi
-		// satu penimpaan mewarnai ketujuhnya. --canvas-soft/-softer diturunkan
-		// supaya blok DI DALAM kartu tidak tertinggal abu platform.
+		// Lima halaman keadaan memakai --canvas sebagai permukaan kartunya — T1
+		// mengeluarkan sambutan dan penutup dari cakupan ini — jadi satu
+		// penimpaan mewarnai kelimanya. --canvas-soft/-softer diturunkan supaya
+		// blok DI DALAM kartu tidak tertinggal abu platform.
 		const terang = surveyStyleVars({ colors: { card: '#ffffff' } })
 		expect(terang['--canvas']).toBe('#ffffff')
 		expect(terang['--canvas-soft']).toBe(shadeHex('#ffffff', -0.03))
@@ -88,6 +91,29 @@ describe('surveyStyleVars', () => {
 		const gelap = surveyStyleVars({ colors: { card: '#111827' } })
 		expect(gelap['--canvas-soft']).toBe(shadeHex('#111827', 0.03))
 		expect(gelap['--canvas-softer']).toBe(shadeHex('#111827', 0.08))
+	})
+
+	it('padding kartu menyala hanya saat salah satu permukaan diwarnai', () => {
+		// 🔴 Tanpa gaya kustom, kartu tujuh halaman keadaan putih di atas halaman
+		// putih. Padding di sana tidak membungkus apa pun — ia cuma menyempitkan
+		// tombol di ribuan survei yang sudah terbit.
+		expect(surveyStyleVars(null)['--card-padding']).toBeUndefined()
+		expect(surveyStyleVars({ borderRadius: 'large' })['--card-padding']).toBeUndefined()
+		expect(surveyStyleVars({ colors: { button: '#2563eb' } })['--card-padding']).toBeUndefined()
+
+		expect(surveyStyleVars({ colors: { card: '#111827' } })['--card-padding']).toBe('24px')
+		expect(surveyStyleVars({ colors: { background: '#0b1220' } })['--card-padding']).toBe('24px')
+
+		// 🔴 GAMBAR latar tanpa warna apa pun juga permukaan kustom, dan justru
+		// yang paling terlihat: kartu tanpa padding di atas foto membuat teks
+		// menempel ke tepinya.
+		expect(
+			surveyStyleVars({ background: { imageUrl: '/api/v1/media/abc/file' } })['--card-padding'],
+		).toBe('24px')
+
+		// URL yang bukan media platform tidak pernah dipasang sebagai latar, jadi
+		// ia juga tidak boleh menyalakan paddingnya.
+		expect(surveyStyleVars({ background: { imageUrl: 'javascript:alert(1)' } })['--card-padding']).toBeUndefined()
 	})
 
 	it('slot card TIDAK menyentuh latar halaman, dan sebaliknya', () => {
@@ -228,5 +254,135 @@ describe('surveyStyleAttr', () => {
 		const attr = surveyStyleAttr({ background: { layout: 'cover', brightness: -0.5 } })
 		expect(attr).not.toContain('--page-bg-image')
 		expect(attr).not.toContain('--page-bg-overlay')
+	})
+})
+
+// Cakupan slot `card` (T1, keputusan user 27 Sep 2026). Halaman sambutan dan
+// penutup dibuat transparan supaya latar kustom terlihat utuh; lima halaman
+// keadaan lain mempertahankan permukaannya karena memuat daftar syarat, ikon
+// status, dan aksi yang butuh terbaca sebagai satu blok keputusan. Tujuh berkas
+// di bawah, bukan lima: gerbang lokasi dan selfie masing-masing punya varian
+// "ditolak" tersendiri.
+//
+// Diuji dari sumber karena yang dijaga adalah BATAS keputusannya, bukan nilai
+// warnanya: satu `background: var(--canvas)` yang kembali ke sambutan/penutup
+// mengembalikan kartu yang memotong latar, tanpa satu pun uji lain memerah.
+// Kontrol positifnya adalah berkas yang WAJIB masih memuatnya — tanpa itu, uji
+// ini juga lulus kalau penanda permukaannya sekadar berganti nama.
+describe('cakupan slot card di halaman keadaan (T1, T5)', () => {
+	const CARD_SURFACE = 'background: var(--canvas);'
+
+	function componentSource(name: string): string {
+		return readFileSync(fileURLToPath(new URL(`./components/${name}.svelte`, import.meta.url)), 'utf8')
+	}
+
+	const BERKARTU = [
+		'LocationPromptPage',
+		'LocationDeniedPage',
+		'SelfieCapturePage',
+		'SelfieDeniedPage',
+		'InviteBlockedPage',
+		'ErrorPage',
+		'ClosedPage'
+	]
+
+	// Isi aturan kartu saja, bukan seluruh berkas: padding/radius yang nyasar ke
+	// elemen lain tidak boleh ikut meluluskan uji T5 di bawah.
+	function cardRuleBody(name: string): string {
+		const src = componentSource(name)
+		const at = src.indexOf(CARD_SURFACE)
+		expect(at).toBeGreaterThan(-1)
+		return src.slice(at, src.indexOf('}', at))
+	}
+
+	it.each(BERKARTU)('%s mempertahankan permukaan kartunya', (name) => {
+		expect(componentSource(name)).toContain(CARD_SURFACE)
+	})
+
+	it.each(['WelcomePage', 'ClosingPage'])('%s tidak memakai permukaan kartu', (name) => {
+		expect(componentSource(name)).not.toContain(CARD_SURFACE)
+	})
+
+	// T5: permukaan tanpa padding dan radius menggugurkan alasan T1 mempertahankan
+	// kartunya — begitu slot `card` diwarnai ia jadi blok warna bertepi keras.
+	//
+	// 🔴 Paddingnya lewat var, bukan angka mati (keputusan user 28 Sep): tanpa gaya
+	// kustom kartu ini putih di atas halaman putih, jadi padding di sana cuma
+	// menyempitkan tombol di survei yang sudah terbit tanpa kotak yang terlihat.
+	it.each(BERKARTU)('%s memberi kartunya padding bersyarat dan radius (T5)', (name) => {
+		const rule = cardRuleBody(name)
+		expect(rule).toContain('padding: var(--card-padding, 0px)')
+		expect(rule).toContain('border-radius: var(--radius-card)')
+	})
+
+	// Gambar penutup melebar menembus padding kartu supaya lebarnya persis seperti
+	// sebelum T5. Kompensasinya WAJIB ikut var yang sama — kalau ia tetap 48px mati
+	// sementara paddingnya 0, gambarnya meluber keluar kartu di survei bawaan.
+	it('ClosedPage menjaga gambar penutup selebar kartu di kedua keadaan', () => {
+		const src = componentSource('ClosedPage')
+		expect(src).toContain('width: calc(100% + var(--card-padding, 0px) * 2)')
+		expect(src).toContain('margin: calc(var(--card-padding, 0px) * -1)')
+	})
+
+	// Jarak atas ilustrasi menyusut seiring padding kartu: tanpa gaya kustom ia
+	// kembali ke angka sebelum T5, dengan gaya kustom padding kartunya yang
+	// menyediakan jaraknya. Tanpa ini salah satu dari dua keadaan jadi dobel.
+	it.each([
+		['ErrorPage', '16px'],
+		['ClosedPage', '24px']
+	])('%s menjaga jarak atas ilustrasi di kedua keadaan', (name, angka) => {
+		expect(componentSource(name)).toContain(`max(0px, calc(${angka} - var(--card-padding, 0px)))`)
+	})
+})
+
+// Kerangka survei (bilah kemajuan di atas, bilah navigasi di bawah pada ponsel)
+// duduk di atas HALAMAN, bukan di dalam kartu — tapi keduanya mengecat diri
+// dengan `--canvas`, yang dipetakan dari slot KARTU. Akibatnya survei yang cuma
+// mengunggah foto latar mendapat dua balok putih melintang di atas fotonya:
+// `--canvas` tetap putih platform karena slot kartunya tidak diisi.
+//
+// `--chrome-surface` mematikan kedua balok itu, dan HANYA saat ada permukaan
+// kustom di belakangnya — syarat yang sama persis dengan `--card-padding`.
+// Tanpa syarat itu, ribuan survei yang sudah terbit kehilangan latar bilah
+// lengketnya dan teks yang tergulir menembusnya.
+describe('permukaan kerangka survei (R3)', () => {
+	function componentSource(name: string): string {
+		return readFileSync(fileURLToPath(new URL(`./components/${name}.svelte`, import.meta.url)), 'utf8')
+	}
+
+	it('permukaan kerangka jadi transparan hanya saat salah satu permukaan kustom aktif', () => {
+		expect(surveyStyleVars(null)['--chrome-surface']).toBeUndefined()
+		expect(surveyStyleVars({ borderRadius: 'large' })['--chrome-surface']).toBeUndefined()
+		expect(surveyStyleVars({ colors: { button: '#2563eb' } })['--chrome-surface']).toBeUndefined()
+
+		expect(surveyStyleVars({ colors: { card: '#111827' } })['--chrome-surface']).toBe('transparent')
+		expect(surveyStyleVars({ colors: { background: '#0b1220' } })['--chrome-surface']).toBe('transparent')
+
+		// Kasus yang melahirkan butir ini: FOTO latar tanpa warna apa pun.
+		expect(
+			surveyStyleVars({ background: { imageUrl: '/api/v1/media/abc/file' } })['--chrome-surface'],
+		).toBe('transparent')
+
+		// URL yang bukan media platform tidak pernah dipasang sebagai latar, jadi
+		// ia juga tidak boleh mematikan latar bilahnya.
+		expect(
+			surveyStyleVars({ background: { imageUrl: 'javascript:alert(1)' } })['--chrome-surface'],
+		).toBeUndefined()
+	})
+
+	// Cadangan `var(--canvas)` adalah inti butir ini: ia yang menjamin survei
+	// tanpa gaya kustom tampil persis seperti sebelumnya. Uji ini menolak bentuk
+	// `var(--chrome-surface)` tanpa cadangan, yang akan membuat bilahnya
+	// transparan di SEMUA survei.
+	it.each([
+		['ProgressBar', 'bilah kemajuan'],
+		['SurveyStage', 'bilah navigasi lengket di ponsel']
+	])('%s mengecat permukaannya lewat --chrome-surface berikut cadangannya', (name) => {
+		const src = componentSource(name)
+		expect(src).toContain('background: var(--chrome-surface, var(--canvas));')
+		// Kontrol positif: tidak ada lagi permukaan `--canvas` gundul yang
+		// tertinggal di berkas ini, karena satu saja yang tertinggal sudah cukup
+		// untuk memunculkan kembali balok putihnya.
+		expect(src).not.toContain('background: var(--canvas);')
 	})
 })

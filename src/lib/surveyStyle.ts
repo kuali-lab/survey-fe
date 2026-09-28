@@ -16,10 +16,15 @@
  *    nilainya benar-benar dipasang, karena itulah satu-satunya titik yang tahu
  *    nilai itu akan jadi CSS.
  *
- * 2. **Latar kustom tidak boleh membuat isian tak terbaca.** Slot `background`
- *    dipetakan ke `--page-bg` (khusus latar halaman), BUKAN ke `--canvas` yang
- *    dipakai kartu dan kotak isian. Dengan begitu latar gelap atau foto ramai
- *    tetap menyisakan kartu berpermukaan platform yang teksnya pasti terbaca.
+ * 2. **Slot `background` dan `card` adalah dua permukaan berbeda.** `background`
+ *    dipetakan ke `--page-bg` (latar halaman), `card` ke `--canvas` (permukaan
+ *    kartu). Kotak isian ikut `--canvas`, jadi mewarnai kartu ikut mewarnai
+ *    isian — itu disengaja, keduanya permukaan yang sama bagi responden.
+ *
+ *    🔴 Latar gelap TIDAK lagi otomatis aman: sejak halaman sambutan dan penutup
+ *    kartunya dibuat transparan, teks di sana berdiri langsung di atas latar
+ *    halaman. Yang mencegah kombinasi tak terbaca adalah peringatan kontras di
+ *    dashboard, bukan kartu putih.
  */
 
 import { resolveMediaUrl } from './mediaUrl'
@@ -72,6 +77,13 @@ const MEDIA_ABSOLUTE_PATTERN = /^https?:\/\/[^\s"'();\\]+$/
 function isPlatformMediaUrl(url: string): boolean {
 	return MEDIA_PATH_PATTERN.test(url) || MEDIA_ABSOLUTE_PATTERN.test(url)
 }
+
+/**
+ * Jarak tepi kartu halaman keadaan saat gaya kustom aktif. Komponen memakainya
+ * lewat `var(--card-padding, 0px)`, jadi nilai ini satu-satunya tempat angkanya
+ * hidup di sisi responden.
+ */
+const CARD_PADDING = '24px'
 
 /** Jumlah gelap yang dipakai untuk keadaan hover/tekan tombol. */
 const PRESSED_SHADE = -0.15
@@ -151,6 +163,23 @@ export function shadeHex(hex: string, amount: number): string | null {
  * TIDAK menghasilkan entri, sehingga token platform tetap berlaku — itulah cara
  * "reset per-slot" bekerja tanpa mekanisme tersendiri.
  */
+/**
+ * Apakah ada permukaan kustom di belakang kartu halaman keadaan?
+ *
+ * 🔴 GAMBAR latar ikut dihitung, bukan hanya warna. Versi pertama hanya
+ * memeriksa `colors.card`/`colors.background`, jadi survei yang memasang FOTO
+ * latar tanpa warna apa pun mendapat radius tanpa padding — teks menempel ke
+ * tepi kartu, di atas latar yang justru paling terlihat. Itu persis mode gagal
+ * yang T5 lahir untuk menutup, dan kemungkinan besar bentuk kustomisasi yang
+ * paling umum.
+ */
+function hasCustomSurface(style: SurveyStyle): boolean {
+	const colors = style.colors ?? {}
+	if (isHex(colors.card) || isHex(colors.background)) return true
+	const image = style.background?.imageUrl
+	return Boolean(image && isPlatformMediaUrl(image))
+}
+
 export function surveyStyleVars(style: SurveyStyle | null | undefined): Record<string, string> {
 	const vars: Record<string, string> = {}
 	if (!style) return vars
@@ -189,9 +218,10 @@ export function surveyStyleVars(style: SurveyStyle | null | undefined): Record<s
 	// Latar HALAMAN saja — lihat catatan di kepala berkas soal --canvas.
 	if (isHex(colors.background)) vars['--page-bg'] = colors.background
 
-	// Permukaan KARTU. Tujuh halaman keadaan (sambutan, penutup, gerbang
-	// lokasi/selfie, gerbang undangan, galat, tutup) memakai --canvas sebagai
-	// permukaan kartunya, jadi satu penimpaan mewarnai ketujuhnya.
+	// Permukaan KARTU. Lima halaman keadaan memakainya: gerbang lokasi, gerbang
+	// selfie, gerbang undangan, galat, dan tutup. Sambutan dan penutup TIDAK lagi
+	// ikut — kartunya dibuat transparan (T1) karena isinya cuma judul, keterangan
+	// pendek, dan satu tombol.
 	//
 	// --canvas-soft dan --canvas-softer DITURUNKAN dari warna kartu, bukan
 	// dibiarkan abu platform: keduanya adalah blok di DALAM kartu (baris petunjuk
@@ -205,6 +235,21 @@ export function surveyStyleVars(style: SurveyStyle | null | undefined): Record<s
 		const softer = shadeHex(colors.card, cardTintDirection(colors.card) * 0.08)
 		if (soft) vars['--canvas-soft'] = soft
 		if (softer) vars['--canvas-softer'] = softer
+	}
+
+	// Padding kartu dinyalakan hanya kalau ada permukaan kustom di belakangnya.
+	// Tanpa itu kartu halaman keadaan putih di atas halaman putih — jaraknya tidak
+	// membungkus apa pun, cuma menyempitkan tombol di survei yang sudah terbit.
+	//
+	// Syarat yang sama mematikan latar bilah kemajuan dan bilah navigasi: keduanya
+	// duduk di atas HALAMAN, tapi mengecat diri dengan --canvas yang dipetakan
+	// dari slot KARTU. Survei yang cuma mengunggah foto latar karena itu mendapat
+	// dua balok putih melintang di atas fotonya. Komponennya memakai cadangan
+	// `var(--chrome-surface, var(--canvas))`, jadi survei tanpa gaya kustom tetap
+	// punya latar lengket seperti sebelumnya.
+	if (hasCustomSurface(style)) {
+		vars['--card-padding'] = CARD_PADDING
+		vars['--chrome-surface'] = 'transparent'
 	}
 
 	const radius = style.borderRadius
