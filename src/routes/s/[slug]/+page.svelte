@@ -958,6 +958,15 @@
     transition: background-color 0.2s ease;
   }
 
+  /* Gambar latar khusus ponsel (`--page-bg-image-mobile`): sama breakpoint
+     dengan seluruh survey-fe (lihat SurveyStage.svelte). Layout/brightness
+     tetap dari imageUrl karena hanya SUMBER gambarnya yang berbeda di sini. */
+  @media (max-width: 767px) {
+    .page {
+      background-image: linear-gradient(var(--page-bg-overlay, transparent), var(--page-bg-overlay, transparent)), var(--page-bg-image-mobile, var(--page-bg-image, none));
+    }
+  }
+
   .centered-wrap {
     min-height: 100dvh;
     display: flex;

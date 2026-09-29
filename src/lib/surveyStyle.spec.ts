@@ -278,6 +278,56 @@ describe('surveyStyleAttr', () => {
 	})
 })
 
+// Gambar latar khusus ponsel (mobileImageUrl). Berbagi layout dan brightness
+// dengan imageUrl — tidak ada breakpoint/kecerahan terpisah untuk mobile, jadi
+// field ini hanya menimpa SUMBER gambarnya, bukan cara gambarnya dipasang.
+describe('gambar latar khusus ponsel (mobileImageUrl)', () => {
+	it('menambahkan --page-bg-image-mobile saat mobileImageUrl ada', () => {
+		const attr = surveyStyleAttr({
+			background: { imageUrl: '/api/v1/media/desktop/file', mobileImageUrl: '/api/v1/media/mobile/file' }
+		})
+		expect(attr).toContain('--page-bg-image-mobile:url("')
+		expect(attr).toContain('/api/v1/media/mobile/file")')
+		// Gambar desktop tetap terpasang: --page-bg-image-mobile hanya dipakai lewat
+		// cadangan CSS di breakpoint ponsel, bukan menggantikan variabel desktop.
+		expect(attr).toContain('/api/v1/media/desktop/file")')
+	})
+
+	it('tidak menambahkan variabel apa pun saat mobileImageUrl tidak ada (dokumen lama identik)', () => {
+		const tanpaMobile = { background: { imageUrl: '/api/v1/media/desktop/file', layout: 'contain' as const } }
+		const denganMobileKosong = { background: { ...tanpaMobile.background, mobileImageUrl: undefined } }
+		expect(surveyStyleAttr(tanpaMobile)).not.toContain('--page-bg-image-mobile')
+		// Dokumen tanpa field ini harus keluar identik dengan sebelum fitur ada.
+		expect(surveyStyleAttr(denganMobileKosong)).toBe(surveyStyleAttr(tanpaMobile))
+	})
+
+	it('menerima URL absolut saat CDN media aktif', () => {
+		const attr = surveyStyleAttr({
+			background: { imageUrl: '/api/v1/media/a/file', mobileImageUrl: 'https://cdn.contoh.id/mobile.jpg' }
+		})
+		expect(attr).toContain('--page-bg-image-mobile:url("https://cdn.contoh.id/mobile.jpg")')
+	})
+
+	it('menolak mobileImageUrl yang bisa keluar dari deklarasi CSS', () => {
+		for (const mobileImageUrl of [
+			'/api/v1/media/a/file") ; background:red; x:url("',
+			'javascript:alert(1)',
+			'https://cdn.contoh.id/x.jpg") ; background:red; x:url("'
+		]) {
+			const attr = surveyStyleAttr({ background: { imageUrl: '/api/v1/media/a/file', mobileImageUrl } })
+			expect(attr).not.toContain('--page-bg-image-mobile')
+		}
+	})
+
+	it('mobileImageUrl tanpa imageUrl tidak menghasilkan variabel apa pun', () => {
+		// Dashboard menegakkan urutan pengisian (imageUrl dulu) di sisi editor;
+		// survey-fe tidak berasumsi field ponsel bisa berdiri sendiri.
+		const attr = surveyStyleAttr({ background: { mobileImageUrl: '/api/v1/media/mobile/file' } })
+		expect(attr).not.toContain('--page-bg-image-mobile')
+		expect(attr).not.toContain('--page-bg-image:')
+	})
+})
+
 // Kartu per permukaan (S6). Dokumen tanpa `cards` HARUS menghasilkan keluaran
 // yang sama dengan sebelum S6: ribuan survei terbit bergantung pada itu, dan
 // tidak ada uji lain yang memerah kalau satu variabel baru bocor ke mereka.
