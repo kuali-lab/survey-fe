@@ -56,6 +56,8 @@ export type SurveyStyle = {
 	}
 	background?: {
 		imageUrl?: string
+		/** Gambar latar khusus layar sempit; berbagi layout/brightness dengan imageUrl. */
+		mobileImageUrl?: string
 		layout?: 'cover' | 'contain' | 'repeat'
 		brightness?: number
 	}
@@ -340,6 +342,13 @@ export function surveyStyleAttr(style: SurveyStyle | null | undefined): string {
 		// tanpa ini `/api/v1/media/...` menunjuk ke host survey-fe yang tidak
 		// punya berkasnya. Alasan lengkapnya di $lib/mediaUrl.ts.
 		vars['--page-bg-image'] = `url("${resolveMediaUrl(background.imageUrl)}")`
+
+		// Ponsel (<768px, breakpoint yang sama dipakai seluruh survey-fe) memakai
+		// gambar ini kalau ada, lewat cadangan CSS di kedua route — bukan di sini,
+		// karena ini hanya menimpa SUMBER gambarnya, bukan tata letaknya.
+		if (background.mobileImageUrl && isPlatformMediaUrl(background.mobileImageUrl)) {
+			vars['--page-bg-image-mobile'] = `url("${resolveMediaUrl(background.mobileImageUrl)}")`
+		}
 
 		const layout = background.layout ?? 'cover'
 		if (layout === 'repeat') {
