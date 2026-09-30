@@ -267,7 +267,7 @@
         <ellipse
           cx="50%" cy="44%" rx="34%" ry="28%"
           fill="none"
-          stroke={faceAligned ? '#22c55e' : 'white'}
+          stroke={faceAligned ? 'var(--success)' : 'white'}
           stroke-width={faceAligned ? 3 : 2}
           stroke-opacity="0.95"
         />

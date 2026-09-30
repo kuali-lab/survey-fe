@@ -31,6 +31,7 @@
   import ClosingPage from '$lib/components/ClosingPage.svelte'
   import SurveyStage from '$lib/components/SurveyStage.svelte'
   import { SurveyRunner } from '$lib/runner/SurveyRunner.svelte.js'
+  import { surveyStyleAttr } from '$lib/surveyStyle.js'
 
   let { data }: { data: PageData } = $props()
 
@@ -70,6 +71,11 @@
       displayMode: 'one_per_page' as const,
     },
   )
+
+  // Gaya kustom survei (Kustom Styling Survei). Pratinjau WAJIB memakai gaya yang
+  // sama dengan responden: kalau tidak, pemilik survei memilih warna di sini,
+  // melihat tampilan platform, dan baru tahu gayanya salah setelah survei terbit.
+  const styleAttr = $derived(surveyStyleAttr(survey?.settings?.style ?? null))
 
   const pesanGalat = $derived(
     data.error === 'preview_invalid'
@@ -114,7 +120,7 @@
   Pratinjau draf — jawaban tidak disimpan
 </div>
 
-<div class="isi">
+<div class="isi" style={styleAttr}>
   {#if layar === 'error'}
     <!-- Kartu sendiri, bukan `ErrorPage`: komponen itu punya kalimat tetap
          untuk survei publik ("tautan survei tidak valid atau survei sudah
@@ -203,6 +209,18 @@
     /* Pil melayang, jadi ia tidak lagi memakan tinggi — panggung boleh
        setinggi layar penuh. */
     min-height: 100dvh;
+    /* Lapisan latar identik dengan `.page` di routes/s/[slug]: satu-satunya
+       cara pratinjau tetap jujur soal gaya kustom. Kalau salah satu berubah,
+       yang lain wajib ikut. */
+    /* Cadangan LITERAL, bukan var(--canvas): sejak slot `card` ada, --canvas bisa
+       ikut diwarnai pemilik survei, dan halaman akan diam-diam ikut berubah warna
+       hanya karena kartunya diatur. #ffffff adalah nilai --canvas platform. */
+    background-color: var(--page-bg, #ffffff);
+    background-image: linear-gradient(var(--page-bg-overlay, transparent), var(--page-bg-overlay, transparent)), var(--page-bg-image, none);
+    background-size: auto, var(--page-bg-size, cover);
+    background-repeat: repeat, var(--page-bg-repeat, no-repeat);
+    background-position: center, center;
+    background-attachment: scroll, scroll;
   }
 
   .tengah {

@@ -1,13 +1,16 @@
 <script lang="ts">
   import type { PageData } from './$types.js'
   import type { ViewState, Answers } from '$lib/types.js'
-  import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress, getInvitationStatus, getDeviceStatus, OptionOutOfFilterError } from '$lib/api.js'
+  import { parseSavedState, serializeSavedState, type SavedState } from '$lib/savedState.js'
+  import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress, getInvitationStatus, getDeviceStatus, getLinkStatus, OptionOutOfFilterError } from '$lib/api.js'
+  import { readLinkCodeFromUrl, stripLinkCodeFromUrl, resolveResumeLinkCode, requiresLinkGate } from '$lib/linkCode.js'
   import { computeFingerprint } from '$lib/fingerprint.js'
   import { serverMessageOf } from '$lib/submitError.js'
   import { page } from '$app/stores'
   import { goto } from '$app/navigation'
   import { env } from '$env/dynamic/public'
   import { resolveOgImageUrl } from '$lib/branding.js'
+  import { surveyStyleAttr } from '$lib/surveyStyle.js'
   import { onMount, tick, untrack } from 'svelte'
 
   import WelcomePage from '$lib/components/WelcomePage.svelte'
@@ -55,12 +58,18 @@
   let selfie = $state<{ imageBase64: string } | null>(null)
   let fingerprintHash = $state<string | null>(null)
   let prefersReducedMotion = $state(false)
-  let resumePrompt = $state<{ answers: Answers; currentIndex: number; accumulatedTimeMs?: number } | null>(null)
+  let resumePrompt = $state<{ answers: Answers; currentIndex: number; accumulatedTimeMs?: number; linkCode?: string } | null>(null)
   // Invitation token captured from ?t= on first mount; null for anonymous fill.
   let invitationToken = $state<string | null>(null)
   let invitationStartedFired = false
   // Item 4 — one-time link gate: 'done' (already completed) | 'expired' | null.
-  let inviteBlocked = $state<'done' | 'expired' | 'device' | null>(null)
+  // 'link' = kode cabang tautan (?c=, M6a) tidak aktif ATAU survei mewajibkan
+  // tautan cabang dan tidak ada kode yang diketahui (Ihatec F1) — dibedakan
+  // lewat `linkBlockReason` di bawah, bukan state baru.
+  let inviteBlocked = $state<'done' | 'expired' | 'device' | 'link' | null>(null)
+  // Alasan gerbang 'link' (Ihatec F1). Dibaca InviteBlockedPage HANYA saat
+  // inviteBlocked === 'link'. Bawaan 'invalid' = teks lama tak berubah.
+  let linkBlockReason = $state<'invalid' | 'required'>('invalid')
   // Final-step confirm modal: pressing "Kirim Jawaban" opens it instead of
   // submitting straight away, so the respondent can review before committing.
   let showSubmitConfirm = $state(false)
@@ -126,20 +135,16 @@
     // draft follows runner.answers reactively (see saveCurrentState effect).
     onDependentsCleared: () => {
       if (fingerprintHash && slug && viewState === 'question') {
-        saveDraft(slug, draftSessionKey(fingerprintHash), runner.answers, runner.currentIndex).catch(() => {})
+        saveDraft(slug, draftSessionKey(fingerprintHash), runner.answers, runner.currentIndex, linkCode).catch(() => {})
       }
     },
   })
 
-  // Persisted respondent state, keyed per survey slug. Selfie/location are
+  // Persisted respondent state, keyed per survey slug. Bentuk + parsing/serialisasi
+  // ada di $lib/savedState.ts (modul murni yang teruji). Selfie/location are
   // intentionally NOT persisted (privacy + size).
-  type SavedState = {
-    answers: Answers
-    currentIndex: number
-    accumulatedTimeMs: number
-    savedAt: number
-  }
-  const STORAGE_TTL_MS = 30 * 24 * 3600 * 1000
+  // Kode cabang tautan (?c=, M6a); ikut tersimpan di draf lokal + server (K60).
+  let linkCode = $state<string | null>(null)
   // Draft state is scoped per invitation token (not just per survey slug). This is
   // the fix for the reopen bug: a respondent who completed the survey and is then
   // re-invited arrives with a NEW token, so there is no saved state under the new
@@ -156,20 +161,13 @@
     try {
       const raw = localStorage.getItem(storageKey(s))
       if (!raw) return null
-      const parsed = JSON.parse(raw) as Partial<SavedState>
-      if (typeof parsed?.currentIndex !== 'number') return null
-      if (!parsed.answers || typeof parsed.answers !== 'object') return null
-      if (parsed.savedAt && Date.now() - parsed.savedAt > STORAGE_TTL_MS) {
+      const r = parseSavedState(raw, Date.now())
+      if (!r) return null
+      if (r.expired) {
         localStorage.removeItem(storageKey(s))
         return null
       }
-      
-      // Fallback for old localStorage format that used startTime
-      if (typeof parsed.accumulatedTimeMs !== 'number') {
-        const anyParsed = parsed as any
-        parsed.accumulatedTimeMs = anyParsed.startTime || 0
-      }
-      return parsed as SavedState
+      return r.state
     } catch {
       return null
     }
@@ -185,8 +183,9 @@
         currentIndex: runner.currentIndex,
         accumulatedTimeMs: runner.accumulatedTimeMs + (runner.lastActiveTime > 0 ? Date.now() - runner.lastActiveTime : 0),
         savedAt: Date.now(),
+        linkCode: linkCode ?? undefined,
       }
-      localStorage.setItem(storageKey(data.slug), JSON.stringify(state))
+      localStorage.setItem(storageKey(data.slug), serializeSavedState(state))
     } catch {
       // localStorage may be disabled (private mode) or full — fail silently.
     }
@@ -207,6 +206,8 @@
     // pushes the trimmed map to the server draft while on the question stage.
     viewState = 'question'
     runner.loadFrom(saved)
+    // URL menang atas draf; kalau URL kosong, kode yang ikut draf yang pulih.
+    linkCode = resolveResumeLinkCode(linkCode, saved.linkCode)
   }
 
   function discardSavedState() {
@@ -261,6 +262,40 @@
           }
         })
       }
+
+      // Kode tautan cabang (M6a). URL menang atas draf: QR yang baru dipindai adalah
+      // kebenaran terbaru. Persistensinya menumpang draf lokal + server (K60), bukan
+      // kunci sendiri — supaya membuka tautan utama kelak tidak membawa cabang hantu.
+      const codeFromUrl = readLinkCodeFromUrl($page.url)
+      if (codeFromUrl) {
+        linkCode = codeFromUrl
+        try { history.replaceState({}, '', stripLinkCodeFromUrl(new URL(window.location.href))) } catch {}
+        // Gerbang dini, fail-open; gerbang undangan/perangkat yang sudah terpasang menang.
+        getLinkStatus(data.slug, codeFromUrl).then((st) => {
+          if (st === 'invalid' && !inviteBlocked) {
+            linkBlockReason = 'invalid'
+            inviteBlocked = 'link'
+          }
+        })
+      }
+
+      // Ihatec F1 — gerbang "hanya lewat tautan cabang": kalau sakelar hidup,
+      // blokir SEBELUM form kalau linkCode tidak diketahui dari sumber manapun
+      // yang bisa dibaca SINKRON di sini — bukan cuma `?c=` mentah (`linkCode`
+      // di atas), tapi juga draf LOKAL (localStorage, dibaca langsung, tanpa
+      // jaringan) supaya responden yang linkCode-nya sudah tersimpan dari sesi
+      // sebelumnya tidak salah diblokir saat reload tanpa `?c=`.
+      // 🔴 Draf SERVER (fingerprint + `getDraft`, di bawah) baru diketahui
+      // belakangan lewat jaringan — kalau linkCode ternyata cuma ada di sana,
+      // gerbang ini sudah kadung tampil. Diterima sebagai batas yang sama
+      // dengan gerbang LINK_INVALID di atas (fail dulu, baca-ulang manual bila
+      // petugas memberi tautan baru); draf lokal TIDAK dihapus oleh gerbang ini.
+      const savedForGate = loadSavedState(data.slug)
+      const knownLinkCode = linkCode ?? savedForGate?.linkCode ?? null
+      if (requiresLinkGate(settings.requireLinkCode, knownLinkCode) && !inviteBlocked) {
+        linkBlockReason = 'required'
+        inviteBlocked = 'link'
+      }
     }
 
     computeFingerprint().then(async (fp) => {
@@ -279,7 +314,7 @@
         try {
           const serverDraft = await getDraft(data.slug, draftSessionKey(fp))
           if (serverDraft && serverDraft.currentPageIndex > 0 && Object.keys(serverDraft.answers).length > 0) {
-            resumePrompt = { answers: serverDraft.answers, currentIndex: serverDraft.currentPageIndex, accumulatedTimeMs: 0 }
+            resumePrompt = { answers: serverDraft.answers, currentIndex: serverDraft.currentPageIndex, accumulatedTimeMs: 0, linkCode: serverDraft.linkCode }
           }
         } catch { /* server unavailable — continue without draft */ }
       }
@@ -354,7 +389,8 @@
     const s   = untrack(() => slug)
     if (vs !== 'question') return
     if (_draftInitialSkip) { _draftInitialSkip = false; return }
-    if (fp && s) saveDraft(s, draftSessionKey(fp), ans, idx).catch(() => {})
+    const lc  = untrack(() => linkCode)
+    if (fp && s) saveDraft(s, draftSessionKey(fp), ans, idx, lc).catch(() => {})
   })
 
   let questionErrors = $derived(runner.questionErrors)
@@ -371,6 +407,14 @@
   // cadangan `settings` tidak punya `logoUrl`, jadi `settings.logoUrl` tidak
   // lolos typecheck.
   const logoUrl = $derived(survey?.settings?.logoUrl ?? null)
+  // Gaya kustom per survei (Kustom Styling Survei), dipasang SATU KALI di elemen
+  // akar sebagai custom property CSS. Semua komponen di bawahnya sudah membaca
+  // token app.css, jadi tidak ada satu pun prop warna yang perlu dioper — dan
+  // permukaan baru nanti ikut terwarnai tanpa perubahan apa pun di sini.
+  //
+  // Dibaca dari `survey` langsung, bukan dari `settings`, dengan alasan yang
+  // sama seperti logoUrl di atas: literal cadangan tidak punya field ini.
+  const styleAttr = $derived(surveyStyleAttr(survey?.settings?.style ?? null))
 
   async function handleStart() {
     validationError = null
@@ -506,7 +550,7 @@
       const respondentEmail = emailQuestion ? (runner.answers[emailQuestion.id] as string | undefined) : undefined
       const durationSeconds = runner.getDurationSeconds()
 
-      await submitSurveyAnswers(slug, runner.answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie, undefined, undefined, invitationToken, locale)
+      await submitSurveyAnswers(slug, runner.answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie, undefined, undefined, invitationToken, linkCode, locale)
 
       clearSavedState()
       if (fingerprintHash && slug) deleteDraft(slug, draftSessionKey(fingerprintHash)).catch(() => {})
@@ -535,6 +579,17 @@
         submitError = i18n.t('alreadySubmitted')
         viewState = 'question'
         clearSavedState()
+      } else if (msg === 'link_invalid') {
+        // Gerbang, bukan toast — dan draf TIDAK dihapus: kalau petugas memberi
+        // tautan baru, jawabannya masih ada.
+        linkBlockReason = 'invalid'
+        inviteBlocked = 'link'
+      } else if (msg === 'link_required') {
+        // Ihatec F1 — 410 LINK_REQUIRED: sakelar hidup dan payload dikirim tanpa
+        // linkCode. Gerbang yang sama dengan link_invalid, teks beda; draf TIDAK
+        // dihapus (pola v1 dipertahankan persis).
+        linkBlockReason = 'required'
+        inviteBlocked = 'link'
       } else if (msg === 'survey_closed') {
         viewState = 'closed'
         clearSavedState()
@@ -683,7 +738,7 @@
   ontouchend={onTouchEnd}
 />
 
-<div class="page" class:page-question={viewState === 'question'}>
+<div class="page" class:page-question={viewState === 'question'} style={styleAttr}>
   {#if !inviteBlocked && (viewState === 'welcome' || viewState === 'question')}
     <LanguagePicker choices={languages} {locale} onChange={setLocale} />
   {/if}
@@ -691,6 +746,7 @@
     <div class="centered-wrap">
       <InviteBlockedPage
         state={inviteBlocked}
+        linkReason={linkBlockReason}
         title={survey?.title ?? ''}
         {logoUrl}
       />
@@ -877,14 +933,29 @@
 </div>
 
 <style>
+  /* Latar halaman responden. Ketiga lapisannya dibaca dari custom property yang
+     dipasang $lib/surveyStyle.ts di elemen ini; tanpa gaya kustom seluruhnya
+     jatuh ke cadangan dan hasilnya sama persis dengan sebelum fitur ini ada.
+
+     Urutan lapisan: overlay kecerahan PALING ATAS (supaya ia menggelapkan atau
+     mencerahkan gambar, bukan tertimpa olehnya), lalu gambar latar, lalu warna
+     latar sebagai dasar yang selalu ada — itulah yang membuat gambar gagal muat
+     tidak pernah menyisakan halaman tanpa latar. */
   .page {
     min-height: 100vh;
-    background: var(--canvas);
+    /* Cadangan LITERAL, bukan var(--canvas): sejak slot `card` ada, --canvas bisa
+       ikut diwarnai pemilik survei, dan halaman akan diam-diam ikut berubah warna
+       hanya karena kartunya diatur. #ffffff adalah nilai --canvas platform. */
+    background-color: var(--page-bg, #ffffff);
+    background-image: linear-gradient(var(--page-bg-overlay, transparent), var(--page-bg-overlay, transparent)), var(--page-bg-image, none);
+    background-size: auto, var(--page-bg-size, cover);
+    background-repeat: repeat, var(--page-bg-repeat, no-repeat);
+    background-position: center, center;
+    /* Gambar latar ikut bergulir bersama isi. `fixed` menghasilkan latar yang
+       melompat dan terpotong di Safari iOS, dan itu peranti yang paling sering
+       dipakai responden. */
+    background-attachment: scroll, scroll;
     transition: background-color 0.2s ease;
-  }
-
-  .page.page-question {
-    background: var(--canvas);
   }
 
   .centered-wrap {
