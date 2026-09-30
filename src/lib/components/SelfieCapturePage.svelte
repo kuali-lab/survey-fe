@@ -330,8 +330,12 @@
 
 <style>
   /* ─── Intro card ───────────────────────────────────────────────────────── */
+  /* Tanpa gaya kustom kartu ini tak terlihat, jadi padding cadangannya 0. */
   .intro {
-    background: var(--canvas);
+    --pad: var(--state-card-padding-selfie, var(--card-padding, 0px));
+    background: var(--state-card-bg-selfie, var(--canvas));
+    padding: var(--pad);
+    border-radius: var(--radius-card);
     max-width: 480px;
     width: 100%;
     display: flex;
