@@ -73,8 +73,15 @@
 </div>
 
 <style>
+  /* Tanpa kartu bawaan (T1): isinya cuma judul, keterangan pendek, dan satu
+     tombol, jadi kartu memotong latar kustom tanpa menambah apa pun. Pemilik
+     survei bisa menyalakannya lewat `style.cards`; keterbacaan teks di atas
+     latar halaman tetap pilihannya, bukan warna tetap di sini. */
   .welcome {
-    background: var(--canvas);
+    --pad: var(--state-card-padding-welcome, 0px);
+    background: var(--state-card-bg-welcome, transparent);
+    padding: var(--pad);
+    border-radius: var(--radius-card);
     max-width: 560px;
     width: 100%;
     display: flex;

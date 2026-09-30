@@ -69,8 +69,13 @@
 </div>
 
 <style>
+  /* Tanpa kartu bawaan, alasan sama dengan WelcomePage (T1). Ikon centang
+     memakai --ink/--on-ink, jadi ia tetap ikut warna tombol pemilik survei. */
   .closing {
-    background: var(--canvas);
+    --pad: var(--state-card-padding-closing, 0px);
+    background: var(--state-card-bg-closing, transparent);
+    padding: var(--pad);
+    border-radius: var(--radius-card);
     max-width: 560px;
     width: 100%;
     display: flex;

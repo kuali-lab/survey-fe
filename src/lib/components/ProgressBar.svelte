@@ -16,7 +16,11 @@
     position: sticky;
     top: 0;
     z-index: 10;
-    background: var(--canvas);
+    /* Bilah ini duduk di atas HALAMAN, bukan di dalam kartu, jadi --canvas
+       (slot kartu) salah permukaan: survei yang cuma mengunggah foto latar
+       mendapat balok putih melintang di atas fotonya. Cadangannya menjaga
+       survei tanpa gaya kustom tetap punya latar lengket. */
+    background: var(--chrome-surface, var(--canvas));
     padding: 12px 16px;
     display: flex;
     align-items: center;

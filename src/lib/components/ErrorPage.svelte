@@ -48,8 +48,18 @@
 </div>
 
 <style>
+  /* Jarak atas ilustrasi menyusut seiring padding kartu: tanpa kartu ia tetap
+     16px, dengan kartu padding-nya yang menyediakan jarak itu. */
+  .illustration {
+    padding-top: max(0px, calc(16px - var(--pad)));
+  }
+
+  /* Tanpa gaya kustom kartu ini tak terlihat, jadi padding cadangannya 0. */
   .error-page {
-    background: var(--canvas);
+    --pad: var(--state-card-padding-error, var(--card-padding, 0px));
+    background: var(--state-card-bg-error, var(--canvas));
+    padding: var(--pad);
+    border-radius: var(--radius-card);
     max-width: 480px;
     width: 100%;
     display: flex;
@@ -57,10 +67,6 @@
     align-items: center;
     text-align: center;
     gap: 20px;
-  }
-
-  .illustration {
-    padding: 16px 0 0;
   }
 
   .body {

@@ -42,8 +42,12 @@
 </div>
 
 <style>
+  /* Tanpa gaya kustom kartu ini tak terlihat, jadi padding cadangannya 0. */
   .closed {
-    background: var(--canvas);
+    --pad: var(--state-card-padding-closed, var(--card-padding, 0px));
+    background: var(--state-card-bg-closed, var(--canvas));
+    padding: var(--pad);
+    border-radius: var(--radius-card);
     max-width: 560px;
     width: 100%;
     display: flex;
@@ -53,8 +57,10 @@
     gap: 20px;
   }
 
+  /* Melebar menembus padding kartu supaya gambar penutup tetap selebar kartu. */
   .cover {
-    width: 100%;
+    width: calc(100% + var(--pad) * 2);
+    margin: calc(var(--pad) * -1) calc(var(--pad) * -1) 0;
     aspect-ratio: 16 / 9;
     overflow: hidden;
     background: var(--canvas-soft);
@@ -67,8 +73,9 @@
     object-fit: cover;
   }
 
+  /* Jarak atas menyusut seiring padding kartu, sama seperti di ErrorPage. */
   .illustration {
-    padding: 24px 0 8px;
+    padding: max(0px, calc(24px - var(--pad))) 0 8px;
   }
 
   .body {

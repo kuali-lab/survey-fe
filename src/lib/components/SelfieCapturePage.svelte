@@ -267,7 +267,7 @@
         <ellipse
           cx="50%" cy="44%" rx="34%" ry="28%"
           fill="none"
-          stroke={faceAligned ? '#22c55e' : 'white'}
+          stroke={faceAligned ? 'var(--success)' : 'white'}
           stroke-width={faceAligned ? 3 : 2}
           stroke-opacity="0.95"
         />
@@ -330,8 +330,12 @@
 
 <style>
   /* ─── Intro card ───────────────────────────────────────────────────────── */
+  /* Tanpa gaya kustom kartu ini tak terlihat, jadi padding cadangannya 0. */
   .intro {
-    background: var(--canvas);
+    --pad: var(--state-card-padding-selfie, var(--card-padding, 0px));
+    background: var(--state-card-bg-selfie, var(--canvas));
+    padding: var(--pad);
+    border-radius: var(--radius-card);
     max-width: 480px;
     width: 100%;
     display: flex;

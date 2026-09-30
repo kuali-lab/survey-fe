@@ -80,8 +80,12 @@
 </div>
 
 <style>
+  /* Tanpa gaya kustom kartu ini tak terlihat, jadi padding cadangannya 0. */
   .gate {
-    background: var(--canvas);
+    --pad: var(--state-card-padding-location, var(--card-padding, 0px));
+    background: var(--state-card-bg-location, var(--canvas));
+    padding: var(--pad);
+    border-radius: var(--radius-card);
     max-width: 480px;
     width: 100%;
     display: flex;

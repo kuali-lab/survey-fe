@@ -133,6 +133,23 @@ export async function getInvitationStatus(token: string): Promise<'ok' | 'comple
   }
 }
 
+/**
+ * Gerbang kode cabang tautan (M6a): 'invalid' bila kode tidak aktif/tak dikenal,
+ * 'active' selain itu. Bentuknya sengaja sama dengan getInvitationStatus —
+ * respons non-OK, bentuk badan asing, atau jaringan gagal → 'active' (fail-open;
+ * yang berwenang tetap 410 LINK_INVALID saat submit).
+ */
+export async function getLinkStatus(slug: string, code: string): Promise<'active' | 'invalid'> {
+  try {
+    const res = await fetch(`${PUBLIC_API_BASE_URL}/s/${encodeURIComponent(slug)}/links/${encodeURIComponent(code)}/status`)
+    if (!res.ok) return 'active'
+    const data = await res.json()
+    return data?.status === 'invalid' ? 'invalid' : 'active'
+  } catch {
+    return 'active'
+  }
+}
+
 // One-response-per-device pre-check (public, no auth). Returns 'completed' when
 // this device fingerprint already has a response for the survey, so the runner
 // can show a block screen before the form. Fail-open ('ok') on any error — the
@@ -299,6 +316,7 @@ export async function submitSurveyAnswers(
   surveyorCode?: string,
   submissionId?: string,
   invitationToken?: string | null,
+  linkCode?: string | null,
   /**
    * The language the respondent actually FILLED the survey in (two-language
    * surveys). A record only: the answers themselves are always primary-language
@@ -330,6 +348,9 @@ export async function submitSurveyAnswers(
       // invite state to 'completed' and bypass the require_login email-dedup
       // when the invite has been reopened for re-fill.
       invitationToken: invitationToken ?? undefined,
+      // Kode cabang tautan (M6a), mentah; server yang trim/lowercase. Kode
+      // tidak aktif → 410 LINK_INVALID, diperiksa sebelum kuota & validasi.
+      linkCode: linkCode ?? undefined,
       language: language || undefined,
     })
   })
@@ -345,18 +366,21 @@ export async function saveDraft(
   sessionKey: string,
   answers: Answers,
   currentPageIndex: number,
+  linkCode?: string | null,
 ): Promise<void> {
   await fetch(`${PUBLIC_API_BASE_URL}/s/${slug}/draft`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionKey, answers, currentPageIndex }),
+    // `linkCode` yang absen pada simpan-ulang MENGHAPUS nilai di server (K60) —
+    // pemanggil wajib selalu mengirim kode yang sedang dipegang.
+    body: JSON.stringify({ sessionKey, answers, currentPageIndex, linkCode: linkCode ?? undefined }),
   })
 }
 
 export async function getDraft(
   slug: string,
   sessionKey: string,
-): Promise<{ answers: Answers; currentPageIndex: number } | null> {
+): Promise<{ answers: Answers; currentPageIndex: number; linkCode?: string } | null> {
   const res = await fetch(`${PUBLIC_API_BASE_URL}/s/${slug}/draft?sessionKey=${encodeURIComponent(sessionKey)}`)
   if (!res.ok) return null
   return res.json()
