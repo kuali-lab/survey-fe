@@ -16,7 +16,7 @@
     visibleOptions, dependencyDisabledHint, dependencyEmptyMessage, dependencyParentLabel,
   } from '$lib/optionDependency.js'
   import { getRegionName, resolveRegionName } from '$lib/regionNames.js'
-  import { SEARCH_DEBOUNCE_MS, filterBySearch, effectiveMinChars, debounce } from '$lib/optionSearch.js'
+  import { SEARCH_DEBOUNCE_MS, filterBySearch, effectiveMinChars, debounce, shouldShowSearchBar } from '$lib/optionSearch.js'
   import { applyNumberInput, numberInputText, numberInputCompare } from '$lib/numberInput.js'
   import { fade, fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
@@ -911,6 +911,7 @@
   </div>
 
 {:else if question.type === 'checkbox'}
+  {#if shouldShowSearchBar(question)}
   <div class="search-box checkbox-search-box">
     <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
     <input
@@ -920,6 +921,7 @@
       oninput={(e) => { checkboxSearchQuery = (e.currentTarget as HTMLInputElement).value }}
     />
   </div>
+  {/if}
   {#if question.hideOptionsUntilSearch && checkboxDebouncedSearch === ''}
     <p class="checkbox-search-hint">{i18n.t('ddTypeToSearch')}</p>
   {:else if checkboxDisplayOptions.length === 0}
@@ -1022,6 +1024,7 @@
         disabled={dependencyWaiting}
         notice={dependencyEmptyText}
         hideUntilSearch={question.hideOptionsUntilSearch === true}
+        showSearchBox={shouldShowSearchBar(question)}
       />
     {#if isOtherSelected}
       <input

@@ -249,13 +249,6 @@
         {/if}
       </div>
 
-      {#if runner.autoAdvancing}
-        <div class="auto-advance-hint" aria-live="polite">
-          <span class="auto-advance-spinner" aria-hidden="true"></span>
-          Lanjut otomatis…
-        </div>
-      {/if}
-
       <div class="nav">
         <!-- Penegakan M1 di sini selalu mati — runner surveyor memasang
              `enforceAllowBack: false`. Kondisinya ditulis tetap supaya aturan
@@ -358,30 +351,6 @@
       border-top: 1px solid var(--canvas-soft);
       z-index: 5;
     }
-  }
-
-  .auto-advance-hint {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-body);
-    margin: 8px 0 0;
-    align-self: flex-start;
-  }
-
-  .auto-advance-spinner {
-    width: 12px;
-    height: 12px;
-    border: 2px solid var(--canvas-soft);
-    border-top-color: var(--ink);
-    border-radius: 50%;
-    animation: auto-spin 0.6s linear infinite;
-  }
-
-  @keyframes auto-spin {
-    to { transform: rotate(360deg); }
   }
 
   @media (min-width: 768px) {

@@ -125,9 +125,6 @@
     // Pressing the last-page button opens the confirm modal rather than
     // submitting directly. confirmSubmit() then runs the real gates + submit.
     onFinish: () => { showSubmitConfirm = true },
-    // Never auto-submit — the respondent must press "Kirim Jawaban" so they can
-    // review their answers first (covers the last page and skip-to-END rules).
-    autoSubmit: false,
     getLocale: () => locale,
     // A filtered dropdown was wiped because its source answer changed: push the
     // trimmed answer map to the server draft now (it is otherwise only written

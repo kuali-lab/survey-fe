@@ -53,13 +53,13 @@ export function nextUnansweredRow(rows: MatrixRow[], value: MatrixAnswer, after 
  * a stacked list, where the full label is readable.
  */
 export const CHIP_LABEL_MAX = 3
-export const CHIP_COLUMNS = 5
+export const CHIP_COLUMNS = 10
 
 export function isChipScale(cols: MatrixCol[]): boolean {
   return cols.length > 0 && cols.every((c) => c.label.trim().length <= CHIP_LABEL_MAX)
 }
 
-/** Chips per row: 5, or fewer when the scale is shorter than that. */
+/** Chips per row: 10, or fewer when the scale is shorter than that. */
 export function chipColumns(cols: MatrixCol[]): number {
   return Math.min(cols.length, CHIP_COLUMNS)
 }

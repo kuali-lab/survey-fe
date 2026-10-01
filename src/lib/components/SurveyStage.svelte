@@ -134,13 +134,6 @@
       <div class="submit-error">{submitError}</div>
     {/if}
 
-    {#if runner.autoAdvancing}
-      <div class="auto-advance-hint" aria-live="polite">
-        <span class="auto-advance-spinner" aria-hidden="true"></span>
-        {i18n.t('autoAdvance')}
-      </div>
-    {/if}
-
     <div class="nav">
       <!--
         `runner.canGoBack` di sini KOSMETIK, bukan penegakan: tombol mati yang
@@ -285,27 +278,4 @@
     margin-top: 8px;
   }
 
-  .auto-advance-hint {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-body);
-    margin: 8px 0 0;
-    align-self: flex-start;
-  }
-
-  .auto-advance-spinner {
-    width: 12px;
-    height: 12px;
-    border: 2px solid var(--canvas-soft);
-    border-top-color: var(--ink);
-    border-radius: 50%;
-    animation: auto-spin 0.6s linear infinite;
-  }
-
-  @keyframes auto-spin {
-    to { transform: rotate(360deg); }
-  }
 </style>
