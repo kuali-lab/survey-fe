@@ -263,6 +263,85 @@ describe('SurveyRunner — No-Back guard (settings.allowBack)', () => {
   })
 })
 
+// Dari 'n' (hal. 3) jawaban 'back' memerintahkan kembali ke 'j' (hal. 1).
+const goBackNtoJ: SkipRule = {
+  id: 'gb1', questionId: 'n', sourceQuestionId: 'n', operator: 'equals', value: 'back',
+  action: 'go_back', targetQuestionId: 'j', logicGroup: 'AND:0',
+}
+
+describe('SurveyRunner — aksi logika go_back', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function atN(overrides: SurveyOverrides = {}) {
+    const r = makeRunner('one_per_page', undefined, { skipRules: [goBackNtoJ], ...overrides })
+    r.loadFrom({ answers: { j: 'SD', n: 'back' }, currentIndex: 3 })
+    return r
+  }
+
+  it('jumps back to the target page, keeps answers, trims navHistory', async () => {
+    const r = atN()
+    ;(r as unknown as { navHistory: number[] }).navHistory = [0, 1, 2]
+    await r.handleNext()
+    expect(r.currentIndex).toBe(1)
+    expect(navHistoryOf(r)).toEqual([0])
+    expect(r.answers).toEqual({ j: 'SD', n: 'back' })
+  })
+
+  it('Sebelumnya after the jump goes to the page before the target', async () => {
+    const r = atN()
+    ;(r as unknown as { navHistory: number[] }).navHistory = [0, 1, 2]
+    await r.handleNext()
+    r.handleBack()
+    expect(r.currentIndex).toBe(0)
+  })
+
+  it('fires only once per rule: the second time it advances normally', async () => {
+    const onFinish = vi.fn()
+    const survey = makeSurvey('one_per_page', { skipRules: [goBackNtoJ] })
+    const r = new SurveyRunner({ getSurvey: () => survey, onFinish })
+    r.loadFrom({ answers: { j: 'SD', n: 'back' }, currentIndex: 3 })
+    await r.handleNext()
+    expect(r.currentIndex).toBe(1)
+    r.currentIndex = 3
+    await r.handleNext()
+    expect(r.currentIndex).toBe(3)
+    expect(onFinish).toHaveBeenCalledTimes(1)
+  })
+
+  it('still jumps when allowBack is false (rule-ordered, not the back button)', async () => {
+    const r = atN({ allowBack: false })
+    await r.handleNext()
+    expect(r.currentIndex).toBe(1)
+    expect(r.canGoBack).toBe(false) // tombol manual tetap mengikuti allowBack
+  })
+
+  it('missing target falls through to the normal advance', async () => {
+    const onFinish = vi.fn()
+    const survey = makeSurvey('one_per_page', { skipRules: [{ ...goBackNtoJ, targetQuestionId: 'gone' }] })
+    const r = new SurveyRunner({ getSurvey: () => survey, onFinish })
+    r.loadFrom({ answers: { n: 'back' }, currentIndex: 3 })
+    await r.handleNext()
+    expect(onFinish).toHaveBeenCalledTimes(1)
+  })
+
+  it('a go_back target that is not earlier falls through (never loops)', async () => {
+    const r = makeRunner('one_per_page', undefined, { skipRules: [{ ...goBackNtoJ, questionId: 'j', sourceQuestionId: 'j', value: 'SD', targetQuestionId: 'n' }] })
+    r.loadFrom({ answers: { j: 'SD' }, currentIndex: 1 })
+    await r.handleNext()
+    expect(r.currentIndex).toBe(2)
+  })
+
+  it('a survey without go_back behaves as before', async () => {
+    const r = makeRunner('one_per_page', undefined, { skipRules: [skipRuleJtoN] })
+    r.loadFrom({ answers: { j: 'SD' }, currentIndex: 1 })
+    await r.handleNext()
+    expect(r.currentIndex).toBe(3)
+    expect(navHistoryOf(r)).toEqual([1])
+  })
+})
+
 // ── Pilihan Bertingkat: Kota → Mall → Brand (+ a catalog filter off Brand) ──
 function makeCascadeSurvey(opts: { brandRequired?: boolean; displayMode?: 'scroll' | 'one_per_page' } = {}): Survey {
   const opt = (label: string, i: number, extra: Record<string, unknown> = {}) => ({ id: `o-${label}`, label, sortOrder: i, ...extra })

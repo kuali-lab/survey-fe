@@ -12,7 +12,7 @@
 
 import type { Survey, Question, Answers, AnswerValue, SurveySettings } from '$lib/types.js'
 import { getAnswerableQuestions } from '$lib/utils.js'
-import { evaluateNext } from '$lib/skipLogic.js'
+import { findFiredRule } from '$lib/skipLogic.js'
 import { isValidPhoneFormat } from '$lib/phone.js'
 import { collectDependents, pruneDependentAnswers, visibleOptions } from '$lib/optionDependency.js'
 import {
@@ -119,6 +119,9 @@ export class SurveyRunner {
   // Navigation history stack: tracks the actual page indices the user
   // visited so that handleBack() can retrace skip-logic jumps correctly.
   private navHistory: number[] = []
+  // go_back rules already fired this session (anti-loop). Not persisted in drafts:
+  // a resumed draft may bounce once more, which is bounded and harmless.
+  private usedGoBackIds = new Set<string>()
 
   // ---- Private nav guards ----
   private lastNavTime = 0
@@ -396,28 +399,32 @@ export class SurveyRunner {
     // Push current page to navigation history before moving forward.
     this.navHistory.push(this.currentIndex)
 
-    let next: string | null | 'END' = null
-    for (const q of this.currentPage.questions) {
-      const skipDest = evaluateNext(q.id, this.answers, this.questions, this.skipRules)
-      if (skipDest) {
-        next = skipDest
-        break
-      }
-    }
+    const rule = this.firedRule()
+    const next = rule ? (rule.action === 'end_survey' ? 'END' : rule.targetQuestionId) : null
 
     if (next === 'END') {
       await this._onFinish()
       return
     }
 
-    if (next !== null) {
+    if (rule && next) {
       const targetPageIdx = this.surveyPages.findIndex((p) => p.questions.some((q) => q.id === next))
-      // Jump only FORWARD. The builder already restricts targets to order > host,
-      // but the engine enforces it too (defense-in-depth, audit §4): a backward
-      // or self jump from corrupt/stale data could loop forever, so it is
-      // ignored and we fall through to the normal sequential advance below.
-      // targetPageIdx === -1 (target deleted/not found) also falls through.
-      if (targetPageIdx > this.currentIndex) {
+      if (rule.action === 'go_back') {
+        // Only strictly earlier pages; the answers stay (D1). Drop history from the
+        // target on so "Sebelumnya" does not leak the pages we just left.
+        if (targetPageIdx >= 0 && targetPageIdx < this.currentIndex) {
+          this.usedGoBackIds.add(rule.id)
+          this.navHistory = this.navHistory.filter((i) => i < targetPageIdx)
+          this.currentIndex = targetPageIdx
+          if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+          return
+        }
+      } else if (targetPageIdx > this.currentIndex) {
+        // Jump only FORWARD. The builder already restricts targets to order > host,
+        // but the engine enforces it too (defense-in-depth, audit §4): a backward
+        // or self jump from corrupt/stale data could loop forever, so it is
+        // ignored and we fall through to the normal sequential advance below.
+        // targetPageIdx === -1 (target deleted/not found) also falls through.
         this.currentIndex = targetPageIdx
         if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
         return
@@ -486,6 +493,15 @@ export class SurveyRunner {
     if (cleared.length > 0) this._onDependentsCleared?.(cleared)
   }
 
+  // First satisfied skip rule across the current page's questions (priority order).
+  private firedRule() {
+    for (const q of this.currentPage?.questions ?? []) {
+      const rule = findFiredRule(q.id, this.answers, this.questions, this.skipRules, this.usedGoBackIds)
+      if (rule) return rule
+    }
+    return null
+  }
+
   // ---- Jump-to / reset (for recap, surveyor "next respondent") ----
   jumpTo = (qid: string) => {
     const idx = this.surveyPages.findIndex((p) => p.questions.some((q) => q.id === qid))
@@ -501,6 +517,7 @@ export class SurveyRunner {
     this.currentIndex = 0
     this.questionErrors = {}
     this.navHistory = []
+    this.usedGoBackIds = new Set()
     this.accumulatedTimeMs = 0
     this.lastActiveTime = Date.now()
   }

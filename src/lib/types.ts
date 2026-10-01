@@ -205,7 +205,7 @@ export interface SkipRule {
   sourceQuestionId: string
   operator: 'equals' | 'not_equals' | 'empty' | 'not_empty' | 'contains' | 'not_contains' | 'greater_than' | 'less_than' | 'greater_than_equals' | 'less_than_equals' | 'before' | 'after'
   value: string
-  action: 'skip_to' | 'end_survey'
+  action: 'skip_to' | 'end_survey' | 'go_back'
   targetQuestionId: string
   logicGroup: string
 }

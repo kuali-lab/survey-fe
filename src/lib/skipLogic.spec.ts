@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { evaluateNext } from './skipLogic.js'
+import { evaluateNext, findFiredRule } from './skipLogic.js'
 import type { Question, SkipRule, Answers } from './types.js'
 
 /**
@@ -145,5 +145,28 @@ describe('Top of Mind answers — rules see the full selection', () => {
   it('empty / not_empty follow the first pick', () => {
     expect(fires('not_empty', '', tom)).toBe(true)
     expect(fires('empty', '', { first: '', selected: [] })).toBe(true)
+  })
+})
+
+describe('go_back action', () => {
+  const goBack: SkipRule = { ...rule('equals', 'x'), id: 'gb1', action: 'go_back', targetQuestionId: 'q1' }
+  const args = ['q2', { q1: 'x' }, QUESTIONS] as const
+
+  it('findFiredRule returns the go_back rule so callers can tell it from skip_to', () => {
+    expect(findFiredRule(...args, [goBack])?.action).toBe('go_back')
+    expect(findFiredRule(...args, [rule('equals', 'x')])?.action).toBe('skip_to')
+  })
+
+  it('evaluateNext keeps returning the target id (compat)', () => {
+    expect(evaluateNext(...args, [goBack])).toBe('q1')
+  })
+
+  it('ignores a go_back rule already used this session', () => {
+    expect(findFiredRule(...args, [goBack], new Set(['gb1']))).toBeNull()
+  })
+
+  it('the used set never mutes skip_to rules', () => {
+    const skip = { ...rule('equals', 'x'), id: 'gb1' }
+    expect(findFiredRule(...args, [skip], new Set(['gb1']))?.action).toBe('skip_to')
   })
 })
