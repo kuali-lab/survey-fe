@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { MIN_SEARCH_CHARS, SEARCH_DEBOUNCE_MS, filterBySearch, debounce, effectiveMinChars } from './optionSearch.js'
+import { MIN_SEARCH_CHARS, SEARCH_DEBOUNCE_MS, filterBySearch, debounce, effectiveMinChars, shouldShowSearchBar } from './optionSearch.js'
 
 describe('filterBySearch', () => {
   const items = [
@@ -101,5 +101,35 @@ describe('effectiveMinChars', () => {
 
   it('falls back to MIN_SEARCH_CHARS for an empty option list', () => {
     expect(effectiveMinChars([], getText)).toBe(MIN_SEARCH_CHARS)
+  })
+})
+
+describe('shouldShowSearchBar', () => {
+  // `enableSearchBar` (backend contract): undefined/false = hidden by default,
+  // true = shown. Checkbox dan dropdown manual mengikuti toggle ini apa adanya.
+  it('is hidden when enableSearchBar is undefined (survei lama, belum punya field ini)', () => {
+    expect(shouldShowSearchBar({})).toBe(false)
+  })
+
+  it('is hidden when enableSearchBar is explicitly false', () => {
+    expect(shouldShowSearchBar({ enableSearchBar: false })).toBe(false)
+  })
+
+  it('is shown when enableSearchBar is true', () => {
+    expect(shouldShowSearchBar({ enableSearchBar: true })).toBe(true)
+  })
+
+  // Override 1: dropdown ASYNC (hasAsyncOptions) memuat opsi bertahap lewat
+  // infinite scroll — search adalah satu-satunya cara praktis menyaring
+  // katalog yang bisa berisi ratusan ribu baris. Toggle tidak boleh
+  // mematikannya meski enableSearchBar belum dinyalakan.
+  it('stays shown for an async dropdown even when enableSearchBar is false', () => {
+    expect(shouldShowSearchBar({ enableSearchBar: false, hasAsyncOptions: true })).toBe(true)
+  })
+
+  // Override 2: "Sembunyikan Opsi" butuh kotak pencarian untuk bisa menampilkan
+  // apa pun sama sekali — tanpa kotaknya, pertanyaan itu permanen kosong.
+  it('stays shown when hideOptionsUntilSearch is on even when enableSearchBar is false', () => {
+    expect(shouldShowSearchBar({ enableSearchBar: false, hideOptionsUntilSearch: true })).toBe(true)
   })
 })
