@@ -2,8 +2,8 @@
  * SurveyRunner — Svelte 5 rune-based composable for the question flow.
  *
  * Extracted from src/routes/s/[slug]/+page.svelte so the surveyor interview
- * route can reuse the exact same pagination, validation, skip-rule, auto-
- * advance, and keyboard/wheel/touch behavior as the respondent flow.
+ * route can reuse the exact same pagination, validation, skip-rule, and
+ * keyboard/wheel/touch behavior as the respondent flow.
  *
  * The runner owns question-flow state (answers, currentIndex, errors, timer).
  * The hosting page owns surrounding lifecycle (welcome, gates, submit, etc.)
@@ -58,10 +58,6 @@ function answerValuesEqual(a: AnswerValue | undefined, b: AnswerValue | undefine
   return JSON.stringify(a) === JSON.stringify(b)
 }
 
-const AUTO_ADVANCE_TYPES = new Set([
-  'single_choice', 'yes_no', 'image_choice', 'nps', 'rating', 'opinion_scale', 'dropdown',
-])
-
 const DEFAULT_SETTINGS: SurveySettings = {
   showProgress: true,
   showBranding: true,
@@ -89,16 +85,6 @@ export type RunnerOptions = {
    * Surveyor mode passes "Tinjau Jawaban" (it routes to /recap instead).
    */
   lastButtonLabel?: string
-  /**
-   * Whether auto-advance is allowed to finish the survey (fire onFinish) — i.e.
-   * advancing off the last page, or following a skip rule that resolves to END.
-   * Defaults to true. The respondent flow passes false so the survey never
-   * auto-submits: the respondent must press "Kirim Jawaban" and gets a chance
-   * to review. Surveyor mode keeps it true — its onFinish only jumps to /recap
-   * (a review screen), not a submit. Auto-advance between non-final questions is
-   * unaffected.
-   */
-  autoSubmit?: boolean
   /**
    * Fired after handleAnswer clears the answers of filtered dropdowns whose
    * source question just changed value (Daftar Pilihan Bersaring). The page
@@ -128,7 +114,6 @@ export class SurveyRunner {
   answers = $state<Answers>({})
   currentIndex = $state(0)
   questionErrors = $state<Record<string, string>>({})
-  autoAdvancing = $state(false)
   accumulatedTimeMs = $state(0)
   lastActiveTime = $state(0)
   // Navigation history stack: tracks the actual page indices the user
@@ -136,7 +121,6 @@ export class SurveyRunner {
   private navHistory: number[] = []
 
   // ---- Private nav guards ----
-  private autoAdvanceTimer: ReturnType<typeof setTimeout> | null = null
   private lastNavTime = 0
   private touchStartY = 0
   private touchStartScrollY = 0
@@ -145,14 +129,12 @@ export class SurveyRunner {
   private _onFinish!: () => void | Promise<void>
   private _lastButtonLabel!: string | undefined
   private _getLocale!: () => string
-  private _autoSubmit = true
   private _enforceAllowBack = true
   private _onDependentsCleared: ((clearedIds: string[]) => void) | undefined
 
   constructor(opts: RunnerOptions) {
     this._getSurvey = opts.getSurvey
     this._onFinish = opts.onFinish
-    this._autoSubmit = opts.autoSubmit ?? true
     this._lastButtonLabel = opts.lastButtonLabel
     this._onDependentsCleared = opts.onDependentsCleared
     this._enforceAllowBack = opts.enforceAllowBack ?? true
@@ -179,9 +161,9 @@ export class SurveyRunner {
 
   // Skip logic requires per-page evaluation, so any active skip rule forces
   // one_per_page. Everything that branches on display mode — pagination, the
-  // page's scroll-vs-paged render branch, nav handlers, progress, and auto-
-  // advance — reads this single derived so they can never diverge. Scroll
-  // layout is therefore used only when the survey has no skip rules.
+  // page's scroll-vs-paged render branch, nav handlers, and progress — reads
+  // this single derived so they can never diverge. Scroll layout is therefore
+  // used only when the survey has no skip rules.
   // Top of Mind forces it too: its second stage is an extended question on its
   // own screen, which only exists one per page (the backend forces the same in
   // the public payload; this covers cached survey copies and preview drafts).
@@ -406,7 +388,6 @@ export class SurveyRunner {
 
   // ---- Navigation ----
   handleNext = async () => {
-    this.cancelAutoAdvance()
     this.questionErrors = {}
 
     if (!this.validateCurrentPage()) return
@@ -458,7 +439,6 @@ export class SurveyRunner {
     // sementara menyembunyikan tombol hanya menutup satu. Alur surveyor tidak ikut
     // tertutup: ia mematikan penegakan lewat `enforceAllowBack` (lihat `canGoBack`).
     if (!this.canGoBack) return
-    this.cancelAutoAdvance()
     this.questionErrors = {}
     // Top of Mind (paged): back out of stage 2 first — clearing the first pick
     // clears the rest with it, which is the same reset a re-pick does.
@@ -504,83 +484,12 @@ export class SurveyRunner {
       this.questionErrors = nextErrors
     }
     if (cleared.length > 0) this._onDependentsCleared?.(cleared)
-
-    if (
-      this.effectiveDisplayMode !== 'scroll' &&
-      this.currentPage &&
-      this.currentPage.questions.length === 1 &&
-      this.currentPage.questions[0].id === qid
-    ) {
-      this.cancelAutoAdvance()
-      // When auto-submit is off (respondent flow), never let auto-advance finish
-      // the survey — neither off the last page nor via a skip-to-END rule. The
-      // respondent must press "Kirim Jawaban" so they can review first.
-      const wouldFinish = !this._autoSubmit && this.autoAdvanceWouldFinish()
-      if (!wouldFinish && this.shouldAutoAdvance(this.currentPage.questions[0], value)) {
-        this.autoAdvancing = true
-        this.autoAdvanceTimer = setTimeout(() => {
-          this.autoAdvanceTimer = null
-          this.autoAdvancing = false
-          void this.handleNext()
-        }, 400)
-      }
-    }
-  }
-
-  // Mirrors handleNext's branch selection to predict whether advancing from the
-  // current page would finish the survey (fire onFinish) rather than move to a
-  // later page. Used to suppress auto-submit when autoSubmit is off.
-  private autoAdvanceWouldFinish(): boolean {
-    if (!this.currentPage) return false
-    let next: string | null | 'END' = null
-    for (const q of this.currentPage.questions) {
-      const skipDest = evaluateNext(q.id, this.answers, this.questions, this.skipRules)
-      if (skipDest) {
-        next = skipDest
-        break
-      }
-    }
-    if (next === 'END') return true
-    if (next !== null) {
-      const targetPageIdx = this.surveyPages.findIndex((p) => p.questions.some((q) => q.id === next))
-      if (targetPageIdx > this.currentIndex) return false
-    }
-    return this.currentIndex >= this.surveyPages.length - 1
-  }
-
-  private shouldAutoAdvance(q: Question, v: AnswerValue): boolean {
-    if (!AUTO_ADVANCE_TYPES.has(q.type)) return false
-    // Multi-select dropdown (§A): one tap is one pick among several, not an
-    // answer — auto-advancing off the first tap would end the question before
-    // the respondent can pick a second option.
-    if (q.type === 'dropdown' && q.multiSelect) return false
-    if (v === null || v === undefined) return false
-    if (typeof v === 'string' && v === '') return false
-
-    // single-select with "Other": skip auto-advance when in the free-text branch
-    if ((q.type === 'single_choice' || q.type === 'dropdown') && q.options) {
-      const otherOpt = q.options.find((o) => o.isOther)
-      if (otherOpt && typeof v === 'string') {
-        const standardLabels = q.options.filter((o) => !o.isOther).map((o) => o.label)
-        if (!standardLabels.includes(v)) return false
-      }
-    }
-    return true
-  }
-
-  cancelAutoAdvance = () => {
-    if (this.autoAdvanceTimer) {
-      clearTimeout(this.autoAdvanceTimer)
-      this.autoAdvanceTimer = null
-    }
-    this.autoAdvancing = false
   }
 
   // ---- Jump-to / reset (for recap, surveyor "next respondent") ----
   jumpTo = (qid: string) => {
     const idx = this.surveyPages.findIndex((p) => p.questions.some((q) => q.id === qid))
     if (idx >= 0) {
-      this.cancelAutoAdvance()
       this.questionErrors = {}
       this.currentIndex = idx
       if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -588,7 +497,6 @@ export class SurveyRunner {
   }
 
   reset = () => {
-    this.cancelAutoAdvance()
     this.answers = {}
     this.currentIndex = 0
     this.questionErrors = {}
@@ -645,7 +553,6 @@ export class SurveyRunner {
   handleWheel = (e: WheelEvent) => {
     if (this.effectiveDisplayMode === 'scroll') return
     if (!this.currentPage) return
-    if (this.autoAdvancing) return
     if (Date.now() - this.lastNavTime < 700) return
 
     const sy = window.scrollY
@@ -669,7 +576,6 @@ export class SurveyRunner {
   handleTouchEnd = (e: TouchEvent) => {
     if (this.effectiveDisplayMode === 'scroll') return
     if (!this.currentPage) return
-    if (this.autoAdvancing) return
     if (Date.now() - this.lastNavTime < 700) return
 
     const endY = e.changedTouches[0]?.clientY ?? 0
