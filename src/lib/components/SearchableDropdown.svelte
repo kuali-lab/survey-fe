@@ -24,6 +24,7 @@
     options = [], value = '', onChange, placeholder = '', hasAsyncOptions = false, questionId = '', slug = '',
     filterActive = false, filter = null, filterHint = '', filterEmptyMessage = '',
     disabled = false, notice = '', multiple = false, atLimit = false, hideUntilSearch = false,
+    showSearchBox = true,
   } = $props<{
     // `label` = the VALUE emitted through onChange (primary language). `translations`
     // only affects the text that is displayed and searched.
@@ -64,6 +65,11 @@
     // usual `minChars` gate still applies once they do — this toggle changes
     // when the list starts hidden, not how many characters narrow it.
     hideUntilSearch?: boolean;
+    // Kotak pencarian (enableSearchBar, kontrak backend): true menampilkannya,
+    // false menyembunyikannya — caller (QuestionInput) yang memutuskan lewat
+    // shouldShowSearchBar, termasuk override untuk dropdown async/hideUntilSearch.
+    // Default true supaya pemanggil lain (kalau ada) tetap seperti semula.
+    showSearchBox?: boolean;
   }>();
 
   // Disabled until every source answer is present. The catalog filter only
@@ -260,15 +266,17 @@
 
   {#if isOpen}
     <div class="dropdown-menu" bind:this={dropdownMenu} transition:fade={{ duration: 100 }}>
+      {#if showSearchBox}
       <div class="search-box">
         <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-        <input 
+        <input
           bind:this={searchInput}
           bind:value={searchQuery}
-          type="text" 
-          placeholder={i18n.t('ddSearch')} 
+          type="text"
+          placeholder={i18n.t('ddSearch')}
         />
       </div>
+      {/if}
 
       {#if hideUntilSearch && debouncedSearch === ''}
         <div class="empty-state">{i18n.t('ddTypeToSearch')}</div>

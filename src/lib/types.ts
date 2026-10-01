@@ -171,6 +171,12 @@ export interface Question {
   // display flag — the submitted answer is still a label match either way, no
   // storage/validation impact.
   hideOptionsUntilSearch?: boolean
+  // Kotak pencarian checkbox/dropdown/region (kontrak backend: default false
+  // artinya TIDAK tampil, berlaku survei lama maupun baru tanpa field ini).
+  // Hanya relevan untuk checkbox/dropdown/region — backend tidak memvalidasi
+  // per-tipe, frontend yang mengatur kapan dipakai (lihat shouldShowSearchBar
+  // di optionSearch.ts).
+  enableSearchBar?: boolean
 
   // Relational config
   hasAsyncOptions?: boolean
@@ -199,7 +205,7 @@ export interface SkipRule {
   sourceQuestionId: string
   operator: 'equals' | 'not_equals' | 'empty' | 'not_empty' | 'contains' | 'not_contains' | 'greater_than' | 'less_than' | 'greater_than_equals' | 'less_than_equals' | 'before' | 'after'
   value: string
-  action: 'skip_to' | 'end_survey'
+  action: 'skip_to' | 'end_survey' | 'go_back'
   targetQuestionId: string
   logicGroup: string
 }

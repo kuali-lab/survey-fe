@@ -59,13 +59,15 @@ function canonYesNo(v: unknown): unknown {
   return v
 }
 
-/** Returns the ID of next question, 'END' to submit now, or null to advance normally */
-export function evaluateNext(
+/** Returns the first satisfied rule (by priority) for the question, or null to advance normally.
+ *  `usedGoBackIds` are go_back rules already fired this session — ignored (anti-loop). */
+export function findFiredRule(
   currentQuestionId: string,
   answers: Answers,
   questions: Question[],
-  skipRules: SkipRule[]
-): string | 'END' | null {
+  skipRules: SkipRule[],
+  usedGoBackIds?: ReadonlySet<string>
+): SkipRule | null {
   const rules = skipRules.filter(r => r.questionId === currentQuestionId)
   if (rules.length === 0) return null
 
@@ -115,9 +117,24 @@ export function evaluateNext(
 
     if (isSatisfied) {
       const rule = groupRules[0]
-      return rule.action === 'end_survey' ? 'END' : (rule.targetQuestionId ?? null)
+      if (rule.action === 'go_back' && usedGoBackIds?.has(rule.id)) continue
+      return rule
     }
   }
 
   return null
+}
+
+/** Returns the ID of next question, 'END' to submit now, or null to advance normally.
+ *  A go_back rule yields its (earlier) target id like skip_to; callers that must tell
+ *  them apart use findFiredRule. */
+export function evaluateNext(
+  currentQuestionId: string,
+  answers: Answers,
+  questions: Question[],
+  skipRules: SkipRule[]
+): string | 'END' | null {
+  const rule = findFiredRule(currentQuestionId, answers, questions, skipRules)
+  if (!rule) return null
+  return rule.action === 'end_survey' ? 'END' : (rule.targetQuestionId ?? null)
 }
