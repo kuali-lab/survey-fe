@@ -52,7 +52,6 @@
     // ia membuka dialog konfirmasi kirim; di sini tidak ada yang dikirim, jadi
     // tidak ada yang perlu dikonfirmasi.
     onFinish: () => { layar = 'closing' },
-    autoSubmit: false,
   })
 
   const questionErrors = $derived(runner.questionErrors)

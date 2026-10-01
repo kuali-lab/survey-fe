@@ -171,6 +171,12 @@ export interface Question {
   // display flag — the submitted answer is still a label match either way, no
   // storage/validation impact.
   hideOptionsUntilSearch?: boolean
+  // Kotak pencarian checkbox/dropdown/region (kontrak backend: default false
+  // artinya TIDAK tampil, berlaku survei lama maupun baru tanpa field ini).
+  // Hanya relevan untuk checkbox/dropdown/region — backend tidak memvalidasi
+  // per-tipe, frontend yang mengatur kapan dipakai (lihat shouldShowSearchBar
+  // di optionSearch.ts).
+  enableSearchBar?: boolean
 
   // Relational config
   hasAsyncOptions?: boolean

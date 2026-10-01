@@ -54,6 +54,29 @@ export function effectiveMinChars<T>(items: T[], getSearchText: (item: T) => str
 }
 
 /**
+ * Whether a question's search box (checkbox's own, or the one inside
+ * SearchableDropdown) should render. Governed by `enableSearchBar` — default
+ * false/undefined means hidden, matching the backend contract (old and new
+ * surveys alike start with no search bar until the owner turns it on).
+ *
+ * Two cases override that default to `true` regardless of the setting,
+ * because the search box is load-bearing there, not a convenience:
+ * - `hasAsyncOptions`: an async/catalog dropdown loads its options page by
+ *   page (infinite scroll) and can hold up to hundreds of thousands of rows —
+ *   without the search box there is no practical way to reach a specific one.
+ * - `hideOptionsUntilSearch` ("Sembunyikan Opsi"): the option list only ever
+ *   appears once something is typed, so hiding the search box would make the
+ *   question permanently unanswerable.
+ */
+export function shouldShowSearchBar(question: {
+  enableSearchBar?: boolean
+  hasAsyncOptions?: boolean
+  hideOptionsUntilSearch?: boolean
+}): boolean {
+  return question.enableSearchBar === true || question.hasAsyncOptions === true || question.hideOptionsUntilSearch === true
+}
+
+/**
  * A debounced wrapper around `fn` — the SAME timer is reused across calls
  * (unlike calling `debounce()` fresh inside a reactive block, which would
  * create a new, never-cancelled timer every time). Create it once per

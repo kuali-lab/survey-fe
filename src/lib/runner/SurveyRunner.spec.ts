@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import type { Question, SkipRule, Survey } from '$lib/types.js'
+import type { AnswerValue, Question, SkipRule, Survey } from '$lib/types.js'
 import { SurveyRunner } from './SurveyRunner.svelte.js'
 
 /**
@@ -63,7 +63,6 @@ function makeRunner(
   return new SurveyRunner({
     getSurvey: () => survey,
     onFinish: () => {},
-    autoSubmit: false,
     onDependentsCleared,
     ...(overrides.enforceAllowBack === undefined ? {} : { enforceAllowBack: overrides.enforceAllowBack }),
   })
@@ -205,7 +204,6 @@ describe('SurveyRunner — No-Back guard (settings.allowBack)', () => {
     const r = makeRunner('one_per_page', undefined, { allowBack: false, skipRules: [skipRuleJtoN] })
     void r.handleNext()
     r.handleAnswer('j', 'SD')
-    r.cancelAutoAdvance()
     void r.handleNext()
     expect(r.currentIndex).toBe(3)
     expect(navHistoryOf(r)).toEqual([0, 1])
@@ -302,7 +300,7 @@ describe('SurveyRunner — aksi logika go_back', () => {
   it('fires only once per rule: the second time it advances normally', async () => {
     const onFinish = vi.fn()
     const survey = makeSurvey('one_per_page', { skipRules: [goBackNtoJ] })
-    const r = new SurveyRunner({ getSurvey: () => survey, onFinish, autoSubmit: false })
+    const r = new SurveyRunner({ getSurvey: () => survey, onFinish })
     r.loadFrom({ answers: { j: 'SD', n: 'back' }, currentIndex: 3 })
     await r.handleNext()
     expect(r.currentIndex).toBe(1)
@@ -322,7 +320,7 @@ describe('SurveyRunner — aksi logika go_back', () => {
   it('missing target falls through to the normal advance', async () => {
     const onFinish = vi.fn()
     const survey = makeSurvey('one_per_page', { skipRules: [{ ...goBackNtoJ, targetQuestionId: 'gone' }] })
-    const r = new SurveyRunner({ getSurvey: () => survey, onFinish, autoSubmit: false })
+    const r = new SurveyRunner({ getSurvey: () => survey, onFinish })
     r.loadFrom({ answers: { n: 'back' }, currentIndex: 3 })
     await r.handleNext()
     expect(onFinish).toHaveBeenCalledTimes(1)
@@ -333,12 +331,6 @@ describe('SurveyRunner — aksi logika go_back', () => {
     r.loadFrom({ answers: { j: 'SD' }, currentIndex: 1 })
     await r.handleNext()
     expect(r.currentIndex).toBe(2)
-  })
-
-  it('autoAdvanceWouldFinish is false for an active go_back on the last page', () => {
-    const r = atN()
-    const wouldFinish = (r as unknown as { autoAdvanceWouldFinish: () => boolean }).autoAdvanceWouldFinish()
-    expect(wouldFinish).toBe(false)
   })
 
   it('a survey without go_back behaves as before', async () => {
@@ -383,7 +375,7 @@ function makeCascadeSurvey(opts: { brandRequired?: boolean; displayMode?: 'scrol
 
 function makeCascadeRunner(onDependentsCleared?: (ids: string[]) => void, opts: Parameters<typeof makeCascadeSurvey>[0] = {}) {
   const survey = makeCascadeSurvey(opts)
-  return new SurveyRunner({ getSurvey: () => survey, onFinish: () => {}, autoSubmit: false, onDependentsCleared })
+  return new SurveyRunner({ getSurvey: () => survey, onFinish: () => {}, onDependentsCleared })
 }
 
 describe('SurveyRunner — Pilihan Bertingkat', () => {
@@ -483,7 +475,7 @@ function makeTomRunner(opts: { required?: boolean; maxSelections?: number; displ
       q({ id: 'n', type: 'short_text', sortOrder: 2 }),
     ],
   }
-  return new SurveyRunner({ getSurvey: () => survey, onFinish: () => {}, autoSubmit: false })
+  return new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
 }
 
 function keyPress(r: SurveyRunner, key: string) {
@@ -491,8 +483,46 @@ function keyPress(r: SurveyRunner, key: string) {
   ;(r as unknown as { handleKeydown: (e: KeyboardEvent) => void }).handleKeydown(e)
 }
 
-describe('SurveyRunner — dropdown multi-select auto-advance (§A)', () => {
-  function makeMultiDropdownRunner() {
+// Auto-advance (a 400ms timer that fired handleNext after answering one of a
+// fixed set of question types) was removed entirely — manual navigation only,
+// forever (user decision). These guard against it ever coming back.
+describe('SurveyRunner — no auto-advance (manual navigation only)', () => {
+  function makeSingleQuestionRunner(type: Question['type']): SurveyRunner {
+    const survey: Survey = {
+      id: 'sv', title: 'PID',
+      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
+      skipRules: [], closeMessage: null, closeImageUrl: null,
+      questions: [
+        q({ id: 'a', type, sortOrder: 1 }),
+        q({ id: 'n', type: 'short_text', sortOrder: 2 }),
+      ],
+    }
+    return new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
+  }
+
+  const formerAutoAdvanceTypes: Array<[Question['type'], AnswerValue]> = [
+    ['single_choice', 'SD'],
+    ['yes_no', 'yes'],
+    ['image_choice', 'Gambar A'],
+    ['nps', 8],
+    ['rating', 4],
+    ['opinion_scale', 3],
+    ['dropdown', 'Merah'],
+  ]
+
+  it.each(formerAutoAdvanceTypes)('%s: answering stays on the page without pressing "Selanjutnya"', (type, value) => {
+    vi.useFakeTimers()
+    try {
+      const r = makeSingleQuestionRunner(type)
+      r.handleAnswer('a', value)
+      vi.advanceTimersByTime(1000)
+      expect(r.currentIndex).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a multi-select dropdown still accepts a second pick without navigating away', () => {
     const survey: Survey = {
       id: 'sv', title: 'PID',
       settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
@@ -505,28 +535,12 @@ describe('SurveyRunner — dropdown multi-select auto-advance (§A)', () => {
         q({ id: 'n', type: 'short_text', sortOrder: 2 }),
       ],
     }
-    return new SurveyRunner({ getSurvey: () => survey, onFinish: () => {}, autoSubmit: false })
-  }
-
-  it('does not auto-advance on the first pick — the respondent may want a second', () => {
-    const r = makeMultiDropdownRunner()
+    const r = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
     r.handleAnswer('d', ['Merah'])
-    expect(r.autoAdvancing).toBe(false)
-  })
-
-  it('a plain (non-multi) dropdown still auto-advances — regression guard', () => {
-    const survey: Survey = {
-      id: 'sv', title: 'PID',
-      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
-      skipRules: [], closeMessage: null, closeImageUrl: null,
-      questions: [
-        q({ id: 'd', type: 'dropdown', sortOrder: 1, options: [{ id: 'o1', label: 'Merah', value: 'Merah', sortOrder: 0 }] }),
-        q({ id: 'n', type: 'short_text', sortOrder: 2 }),
-      ],
-    }
-    const r = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {}, autoSubmit: false })
-    r.handleAnswer('d', 'Merah')
-    expect(r.autoAdvancing).toBe(true)
+    expect(r.currentIndex).toBe(0)
+    r.handleAnswer('d', ['Merah', 'Biru'])
+    expect(r.answers.d).toEqual(['Merah', 'Biru'])
+    expect(r.currentIndex).toBe(0)
   })
 })
 
@@ -559,10 +573,10 @@ describe('SurveyRunner — Top of Mind', () => {
     expect(r.currentIndex).toBe(1)
   })
 
-  it('does not auto-advance after the first pick (stage 2 still to come)', () => {
+  it('does not advance off the page after the first pick (stage 2 still to come)', () => {
     const r = makeTomRunner()
     r.handleAnswer('brand', { first: 'Aqua', selected: ['Aqua'] })
-    expect(r.autoAdvancing).toBe(false)
+    expect(r.currentIndex).toBe(0)
   })
 
   it('back-navigation keeps the two-stage answer intact', async () => {

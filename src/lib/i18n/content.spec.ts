@@ -146,7 +146,7 @@ describe('t', () => {
 describe('language never touches data', () => {
   const makeRunner = (locale: string) => {
     const survey = buildBilingualMockSurvey()
-    return new SurveyRunner({ getSurvey: () => survey, onFinish: () => {}, autoSubmit: false, getLocale: () => locale })
+    return new SurveyRunner({ getSurvey: () => survey, onFinish: () => {}, getLocale: () => locale })
   }
 
   it('an English respondent tapping "Rarely" stores the primary label and still triggers the skip rule written against "Jarang"', async () => {
@@ -169,7 +169,7 @@ describe('language never touches data', () => {
     expect(en.questionErrors.bq2).toBe('This question is required.')
 
     const survey = buildBilingualMockSurvey()
-    const legacy = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {}, autoSubmit: false })
+    const legacy = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
     expect(legacy.nextButtonLabel).toBe('Selanjutnya')
     await legacy.handleNext()
     expect(legacy.questionErrors.bq2).toBe('Pertanyaan ini wajib diisi.')

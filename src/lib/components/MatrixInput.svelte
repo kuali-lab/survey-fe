@@ -497,20 +497,23 @@
     min-width: 0;
   }
 
-  /* Short scales: 1–10 becomes two rows of five instead of ten buttons. */
+  /* Short scales (up to 10, e.g. an NPS 0–10) fit one grid row instead of
+     wrapping. A tighter gap than the stacked `.options` list buys back the
+     width a 10-column row needs to keep each chip comfortably tappable. */
   .options.chips {
     display: grid;
-    grid-template-columns: repeat(var(--chip-cols, 5), minmax(0, 1fr));
-    gap: 6px;
+    grid-template-columns: repeat(var(--chip-cols, 10), minmax(0, 1fr));
+    gap: 4px;
   }
 
   .chip {
     min-height: 46px;
+    padding: 0 2px;
     border: 1px solid var(--hairline);
     border-radius: var(--radius-md);
     background: var(--canvas);
     font-family: var(--font);
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--text-primary);
     cursor: pointer;

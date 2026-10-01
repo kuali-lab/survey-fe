@@ -79,8 +79,17 @@ describe('matrixCompact — chip scale', () => {
     expect(isChipScale([])).toBe(false)
   })
 
-  it('caps chips at five per row, fewer for a short scale', () => {
-    expect(chipColumns(cols(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']))).toBe(5)
+  it('caps chips at ten per row, fewer for a short scale', () => {
+    expect(chipColumns(cols(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']))).toBe(10)
     expect(chipColumns(cols(['1', '2', '3']))).toBe(3)
+  })
+
+  it('an NPS-style 10-option scale puts every chip in one grid row', () => {
+    // chipColumns feeds `--chip-cols` straight into MatrixInput's
+    // `grid-template-columns: repeat(var(--chip-cols), ...)` — returning the
+    // full count here is what keeps all 10 chips on a single row instead of
+    // wrapping to a second one.
+    const npsScale = cols(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
+    expect(chipColumns(npsScale)).toBe(npsScale.length)
   })
 })
