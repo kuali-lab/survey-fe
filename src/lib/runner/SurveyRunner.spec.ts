@@ -861,14 +861,14 @@ describe('SurveyRunner — required contact_info needs all four fields', () => {
 
   it('three of four fields filled still fails', async () => {
     const r = makeContactRunner()
-    r.handleAnswer('c', { firstName: 'Budi', lastName: 'Santoso', phone: '0812', email: '' })
+    r.handleAnswer('c', { firstName: 'Budi', lastName: 'Santoso', phone: '081234567890', email: '' })
     await r.handleNext()
     expect(r.questionErrors.c).toBeTruthy()
   })
 
   it('all four fields filled passes', async () => {
     const r = makeContactRunner()
-    r.handleAnswer('c', { firstName: 'Budi', lastName: 'Santoso', phone: '0812', email: 'budi@example.test' })
+    r.handleAnswer('c', { firstName: 'Budi', lastName: 'Santoso', phone: '081234567890', email: 'budi@example.test' })
     await r.handleNext()
     expect(r.questionErrors.c).toBeUndefined()
     expect(r.currentIndex).toBe(1)
@@ -876,9 +876,43 @@ describe('SurveyRunner — required contact_info needs all four fields', () => {
 
   it('a whitespace-only field counts as empty', async () => {
     const r = makeContactRunner()
-    r.handleAnswer('c', { firstName: 'Budi', lastName: 'Santoso', phone: '0812', email: '   ' })
+    r.handleAnswer('c', { firstName: 'Budi', lastName: 'Santoso', phone: '081234567890', email: '   ' })
     await r.handleNext()
     expect(r.questionErrors.c).toBe('Lengkapi seluruh data kontak.')
+  })
+
+  // A filled-but-malformed phone/email used to count as "filled" for
+  // completeness purposes (any non-empty string passed), so all four fields
+  // present but one malformed wrongly showed "Lengkapi seluruh data kontak."
+  // — confusing when the card genuinely IS all filled in. Format is now
+  // checked with the SAME rule and message as the standalone phone/email
+  // question types, before completeness, so the respondent sees the actual
+  // problem.
+  it('a non-numeric/too-short phone fails with the specific phone message, not the generic one', async () => {
+    const r = makeContactRunner()
+    r.handleAnswer('c', { firstName: 'Budi', lastName: 'Santoso', phone: '123', email: 'budi@example.test' })
+    await r.handleNext()
+    expect(r.questionErrors.c).toBe('Format nomor telepon belum sesuai.')
+  })
+
+  it('a malformed email fails with the specific email message, not the generic one', async () => {
+    const r = makeContactRunner()
+    r.handleAnswer('c', { firstName: 'Budi', lastName: 'Santoso', phone: '081234567890', email: 'bukan-email' })
+    await r.handleNext()
+    expect(r.questionErrors.c).toBe('Format email belum sesuai.')
+  })
+
+  it('format is still checked on an optional, untouched-except-one-field card', async () => {
+    const survey: Survey = {
+      id: 'sv-contact-fmt', title: 'CONTACT-FMT',
+      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
+      skipRules: [], closeMessage: null, closeImageUrl: null,
+      questions: [q({ id: 'c', type: 'contact_info', sortOrder: 1, required: false })],
+    }
+    const r = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
+    r.handleAnswer('c', { firstName: '', lastName: '', phone: '123', email: '' })
+    await r.handleNext()
+    expect(r.questionErrors.c).toBe('Format nomor telepon belum sesuai.')
   })
 
   // K108 (02 Okt 2026): once any field of an optional contact_info is touched,
@@ -905,7 +939,7 @@ describe('SurveyRunner — required contact_info needs all four fields', () => {
       questions: [q({ id: 'c', type: 'contact_info', sortOrder: 1, required: false })],
     }
     const r = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
-    r.handleAnswer('c', { firstName: 'Budi', lastName: 'Santoso', phone: '0812', email: 'budi@example.test' })
+    r.handleAnswer('c', { firstName: 'Budi', lastName: 'Santoso', phone: '081234567890', email: 'budi@example.test' })
     await r.handleNext()
     expect(r.questionErrors.c).toBeUndefined()
   })
