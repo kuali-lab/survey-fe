@@ -803,7 +803,11 @@ describe('SurveyRunner — required region must reach its configured depth', () 
     expect(r.questionErrors.w).toBeUndefined()
   })
 
-  it('a non-required region question accepts a partial answer too', async () => {
+  // K108 (02 Okt 2026): completeness is no longer tied to `required` — once a
+  // respondent starts a region answer, it must reach the configured depth
+  // whether the question is required or not. Only a FULLY untouched optional
+  // question (test above) is exempt.
+  it('a non-required region question still must reach full depth once touched', async () => {
     const survey: Survey = {
       id: 'sv-region-opt2', title: 'REGION-OPT2',
       settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
@@ -812,6 +816,19 @@ describe('SurveyRunner — required region must reach its configured depth', () 
     }
     const r = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
     r.handleAnswer('w', '32')
+    await r.handleNext()
+    expect(r.questionErrors.w).toBe('Lengkapi wilayah sampai Desa.')
+  })
+
+  it('a non-required region question passes once it reaches full depth', async () => {
+    const survey: Survey = {
+      id: 'sv-region-opt3', title: 'REGION-OPT3',
+      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
+      skipRules: [], closeMessage: null, closeImageUrl: null,
+      questions: [q({ id: 'w', type: 'region', sortOrder: 1, required: false, regionDepth: 4 })],
+    }
+    const r = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
+    r.handleAnswer('w', '32.73.01.1001')
     await r.handleNext()
     expect(r.questionErrors.w).toBeUndefined()
   })
@@ -864,7 +881,10 @@ describe('SurveyRunner — required contact_info needs all four fields', () => {
     expect(r.questionErrors.c).toBe('Lengkapi seluruh data kontak.')
   })
 
-  it('a non-required contact_info question accepts a partial answer', async () => {
+  // K108 (02 Okt 2026): once any field of an optional contact_info is touched,
+  // all four must be filled — same completeness rule as required, minus the
+  // "must answer at all" part. A fully untouched optional card stays exempt.
+  it('a non-required contact_info question still must be complete once touched', async () => {
     const survey: Survey = {
       id: 'sv-contact-opt', title: 'CONTACT-OPT',
       settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
@@ -874,6 +894,87 @@ describe('SurveyRunner — required contact_info needs all four fields', () => {
     const r = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
     r.handleAnswer('c', { firstName: 'Budi', lastName: '', phone: '', email: '' })
     await r.handleNext()
+    expect(r.questionErrors.c).toBe('Lengkapi seluruh data kontak.')
+  })
+
+  it('a non-required contact_info question passes once fully filled', async () => {
+    const survey: Survey = {
+      id: 'sv-contact-opt2', title: 'CONTACT-OPT2',
+      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
+      skipRules: [], closeMessage: null, closeImageUrl: null,
+      questions: [q({ id: 'c', type: 'contact_info', sortOrder: 1, required: false })],
+    }
+    const r = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
+    r.handleAnswer('c', { firstName: 'Budi', lastName: 'Santoso', phone: '0812', email: 'budi@example.test' })
+    await r.handleNext()
     expect(r.questionErrors.c).toBeUndefined()
+  })
+
+  it('a non-required contact_info question left fully untouched stays exempt', async () => {
+    const survey: Survey = {
+      id: 'sv-contact-opt3', title: 'CONTACT-OPT3',
+      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
+      skipRules: [], closeMessage: null, closeImageUrl: null,
+      questions: [q({ id: 'c', type: 'contact_info', sortOrder: 1, required: false })],
+    }
+    const r = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
+    await r.handleNext()
+    expect(r.questionErrors.c).toBeUndefined()
+  })
+})
+
+// ── K108 (02 Okt 2026): matrix completeness independent of `required` ────────
+// A matrix with some rows set used to pass outright when the question itself
+// was optional. Once any row is touched, every row must be — same rule as
+// required, minus the "must answer at all" part.
+describe('SurveyRunner — optional matrix must be complete once touched', () => {
+  function makeMatrixRunner(required: boolean): SurveyRunner {
+    const survey: Survey = {
+      id: 'sv-matrix', title: 'MATRIX',
+      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
+      skipRules: [], closeMessage: null, closeImageUrl: null,
+      questions: [
+        q({
+          id: 'm', type: 'matrix', sortOrder: 1, required,
+          matrixRows: [{ id: 'r1', label: 'Baris A', sortOrder: 0 }, { id: 'r2', label: 'Baris B', sortOrder: 1 }],
+          matrixCols: [{ id: 'c1', label: 'Setuju', sortOrder: 0 }],
+        }),
+        q({ id: 'n', type: 'short_text', sortOrder: 2 }),
+      ],
+    }
+    return new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
+  }
+
+  it('optional matrix left fully untouched stays exempt', async () => {
+    const r = makeMatrixRunner(false)
+    await r.handleNext()
+    expect(r.questionErrors.m).toBeUndefined()
+  })
+
+  it('optional matrix with one of two rows filled fails', async () => {
+    const r = makeMatrixRunner(false)
+    r.handleAnswer('m', { 'Baris A': 'Setuju' })
+    await r.handleNext()
+    expect(r.questionErrors.m).toBe('Mohon lengkapi semua baris.')
+  })
+
+  it('optional matrix with every row filled passes', async () => {
+    const r = makeMatrixRunner(false)
+    r.handleAnswer('m', { 'Baris A': 'Setuju', 'Baris B': 'Setuju' })
+    await r.handleNext()
+    expect(r.questionErrors.m).toBeUndefined()
+  })
+
+  it('required matrix behavior is unchanged: fully untouched fails on the generic required check', async () => {
+    const r = makeMatrixRunner(true)
+    await r.handleNext()
+    expect(r.questionErrors.m).toBe('Pertanyaan ini wajib diisi.')
+  })
+
+  it('required matrix behavior is unchanged: partial still fails on the matrix-specific check', async () => {
+    const r = makeMatrixRunner(true)
+    r.handleAnswer('m', { 'Baris A': 'Setuju' })
+    await r.handleNext()
+    expect(r.questionErrors.m).toBe('Mohon lengkapi semua baris.')
   })
 })
