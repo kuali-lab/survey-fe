@@ -733,3 +733,147 @@ describe('SurveyRunner — builder question_group does not affect respondent pag
     expect(r.canGoBack).toBe(true)
   })
 })
+
+// ── Required: region must reach its configured depth ─────────────────────────
+// A region answer is the deepest selected BPS code, dot-delimited per level
+// (e.g. "32.73" = provinsi+kabupaten). A required region question must be
+// answered all the way to `regionDepth`, not just the top level — otherwise
+// "wajib diisi sampai Desa" silently accepts a province-only answer.
+describe('SurveyRunner — required region must reach its configured depth', () => {
+  function makeRegionRunner(regionDepth: number): SurveyRunner {
+    const survey: Survey = {
+      id: 'sv-region', title: 'REGION',
+      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
+      skipRules: [], closeMessage: null, closeImageUrl: null,
+      questions: [
+        q({ id: 'w', type: 'region', sortOrder: 1, required: true, regionDepth }),
+        q({ id: 'n', type: 'short_text', sortOrder: 2 }),
+      ],
+    }
+    return new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
+  }
+
+  it('province-only answer fails a required region set to Desa (depth 4)', async () => {
+    const r = makeRegionRunner(4)
+    r.handleAnswer('w', '32')
+    await r.handleNext()
+    expect(r.questionErrors.w).toBe('Lengkapi wilayah sampai Desa.')
+    expect(r.currentIndex).toBe(0)
+  })
+
+  it('kabupaten/kota-only answer still fails when depth is Kecamatan (3)', async () => {
+    const r = makeRegionRunner(3)
+    r.handleAnswer('w', '32.73')
+    await r.handleNext()
+    expect(r.questionErrors.w).toBeTruthy()
+    expect(r.currentIndex).toBe(0)
+  })
+
+  it('an answer reaching the full configured depth passes', async () => {
+    const r = makeRegionRunner(4)
+    r.handleAnswer('w', '32.73.01.1001')
+    await r.handleNext()
+    expect(r.questionErrors.w).toBeUndefined()
+    expect(r.currentIndex).toBe(1)
+  })
+
+  it('one level short of a depth-4 requirement still fails (boundary)', async () => {
+    const r = makeRegionRunner(4)
+    r.handleAnswer('w', '32.73.01')
+    await r.handleNext()
+    expect(r.questionErrors.w).toBe('Lengkapi wilayah sampai Desa.')
+  })
+
+  it('depth 1 (Provinsi only) is satisfied by a province-only answer', async () => {
+    const r = makeRegionRunner(1)
+    r.handleAnswer('w', '32')
+    await r.handleNext()
+    expect(r.questionErrors.w).toBeUndefined()
+  })
+
+  it('a non-required region question is unaffected (no answer at all)', async () => {
+    const survey: Survey = {
+      id: 'sv-region-opt', title: 'REGION-OPT',
+      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
+      skipRules: [], closeMessage: null, closeImageUrl: null,
+      questions: [q({ id: 'w', type: 'region', sortOrder: 1, required: false, regionDepth: 4 })],
+    }
+    const r = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
+    await r.handleNext()
+    expect(r.questionErrors.w).toBeUndefined()
+  })
+
+  it('a non-required region question accepts a partial answer too', async () => {
+    const survey: Survey = {
+      id: 'sv-region-opt2', title: 'REGION-OPT2',
+      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
+      skipRules: [], closeMessage: null, closeImageUrl: null,
+      questions: [q({ id: 'w', type: 'region', sortOrder: 1, required: false, regionDepth: 4 })],
+    }
+    const r = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
+    r.handleAnswer('w', '32')
+    await r.handleNext()
+    expect(r.questionErrors.w).toBeUndefined()
+  })
+})
+
+// ── Required: contact_info must have every sub-field filled ──────────────────
+// K106 (02 Okt 2026): a required contact_info question must have ALL FOUR
+// sub-fields filled, not just one — "wajib" means the whole card is complete.
+describe('SurveyRunner — required contact_info needs all four fields', () => {
+  function makeContactRunner(): SurveyRunner {
+    const survey: Survey = {
+      id: 'sv-contact', title: 'CONTACT',
+      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
+      skipRules: [], closeMessage: null, closeImageUrl: null,
+      questions: [
+        q({ id: 'c', type: 'contact_info', sortOrder: 1, required: true }),
+        q({ id: 'n', type: 'short_text', sortOrder: 2 }),
+      ],
+    }
+    return new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
+  }
+
+  it('only one field filled still fails (today it wrongly passes)', async () => {
+    const r = makeContactRunner()
+    r.handleAnswer('c', { firstName: 'Budi', lastName: '', phone: '', email: '' })
+    await r.handleNext()
+    expect(r.questionErrors.c).toBe('Lengkapi seluruh data kontak.')
+    expect(r.currentIndex).toBe(0)
+  })
+
+  it('three of four fields filled still fails', async () => {
+    const r = makeContactRunner()
+    r.handleAnswer('c', { firstName: 'Budi', lastName: 'Santoso', phone: '0812', email: '' })
+    await r.handleNext()
+    expect(r.questionErrors.c).toBeTruthy()
+  })
+
+  it('all four fields filled passes', async () => {
+    const r = makeContactRunner()
+    r.handleAnswer('c', { firstName: 'Budi', lastName: 'Santoso', phone: '0812', email: 'budi@example.test' })
+    await r.handleNext()
+    expect(r.questionErrors.c).toBeUndefined()
+    expect(r.currentIndex).toBe(1)
+  })
+
+  it('a whitespace-only field counts as empty', async () => {
+    const r = makeContactRunner()
+    r.handleAnswer('c', { firstName: 'Budi', lastName: 'Santoso', phone: '0812', email: '   ' })
+    await r.handleNext()
+    expect(r.questionErrors.c).toBe('Lengkapi seluruh data kontak.')
+  })
+
+  it('a non-required contact_info question accepts a partial answer', async () => {
+    const survey: Survey = {
+      id: 'sv-contact-opt', title: 'CONTACT-OPT',
+      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
+      skipRules: [], closeMessage: null, closeImageUrl: null,
+      questions: [q({ id: 'c', type: 'contact_info', sortOrder: 1, required: false })],
+    }
+    const r = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
+    r.handleAnswer('c', { firstName: 'Budi', lastName: '', phone: '', email: '' })
+    await r.handleNext()
+    expect(r.questionErrors.c).toBeUndefined()
+  })
+})

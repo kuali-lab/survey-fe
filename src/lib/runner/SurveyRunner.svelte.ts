@@ -26,6 +26,13 @@ export type { SurveyPage }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+// Mirrors RegionInput.svelte's LEVEL_LABELS exactly — kept as a small local
+// copy rather than a shared import so this file stays plain TS, no Svelte
+// compiler dependency (same reasoning as sections.ts). Keep these two arrays
+// in sync by hand; a mismatch here means the error message names a level
+// differently than the picker the respondent just used.
+const REGION_LEVEL_LABELS = ['Provinsi', 'Kabupaten/Kota', 'Kecamatan', 'Desa']
+
 function isEmptyAnswer(v: AnswerValue | undefined): boolean {
   return (
     v === null ||
@@ -292,10 +299,21 @@ export class SurveyRunner {
       if (answer === null || answer === undefined) return this.msg('errRequired')
       if (typeof answer === 'string' && answer.trim() === '') return this.msg('errRequired')
       if (Array.isArray(answer) && answer.length === 0) return this.msg('errPickOne')
+      // contact_info: required means the WHOLE card, not just one field — a
+      // name with no way to reach the respondent back is not a usable contact.
       if (q.type === 'contact_info') {
         const c = answer as { firstName?: string; lastName?: string; phone?: string; email?: string }
-        const filled = [c.firstName, c.lastName, c.phone, c.email].some((v) => v && v.trim() !== '')
-        if (!filled) return this.msg('errContact')
+        const allFilled = [c.firstName, c.lastName, c.phone, c.email].every((v) => v && v.trim() !== '')
+        if (!allFilled) return this.msg('errContact')
+      }
+      // Region: the answer is the deepest selected BPS code, dot-delimited per
+      // level, so its segment count IS the depth reached. A required region
+      // question must reach q.regionDepth, not just the top level — otherwise
+      // "wajib sampai Desa" silently accepts a province-only pick.
+      if (q.type === 'region' && typeof answer === 'string') {
+        const depth = Math.min(4, Math.max(1, q.regionDepth || 2))
+        const reached = answer.split('.').length
+        if (reached < depth) return this.msg('errRegionDepth', { level: REGION_LEVEL_LABELS[depth - 1] })
       }
     }
 
