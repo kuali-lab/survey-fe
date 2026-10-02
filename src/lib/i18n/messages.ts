@@ -38,8 +38,9 @@ const id = {
 
   errRequired: 'Pertanyaan ini wajib diisi.',
   errPickOne: 'Pilih minimal satu jawaban.',
-  errContact: 'Isi minimal satu data kontak.',
+  errContact: 'Lengkapi seluruh data kontak.',
   errMatrixRows: 'Mohon lengkapi semua baris.',
+  errRegionDepth: 'Lengkapi wilayah sampai {level}.',
   errMinLength: 'Minimal {n} karakter.',
   errMaxLength: 'Maksimal {n} karakter.',
   errMinValue: 'Nilai minimal adalah {n}.',
@@ -118,8 +119,9 @@ const en: Record<MessageKey, string> = {
 
   errRequired: 'This question is required.',
   errPickOne: 'Choose at least one answer.',
-  errContact: 'Fill in at least one contact detail.',
+  errContact: 'Please fill in every contact detail.',
   errMatrixRows: 'Please complete every row.',
+  errRegionDepth: 'Please complete the region down to {level}.',
   errMinLength: 'At least {n} characters.',
   errMaxLength: 'At most {n} characters.',
   errMinValue: 'The minimum value is {n}.',
