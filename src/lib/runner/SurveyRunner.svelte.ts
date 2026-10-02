@@ -291,6 +291,23 @@ export class SurveyRunner {
     // own check. "Lainnya" stays optional.
     const depStatus = isEmptyAnswer(answer) ? visibleOptions(q, this.answers, this.questions).status : 'inactive'
     const requiredHere = q.required && depStatus !== 'empty' && depStatus !== 'waiting'
+
+    // contact_info: a filled phone/email sub-field gets the SAME format check
+    // as the standalone phone/email question types (below), with the SAME
+    // specific message — checked first, before completeness, so "phone isn't
+    // digits" or "email format wrong" never gets swallowed into the generic
+    // "complete the card" message just because every field happens to be
+    // non-empty. Runs regardless of `required`: a malformed phone is wrong
+    // whether or not the card itself is mandatory. An empty sub-field is not
+    // a format error — that's the completeness checks' job, further below.
+    if (q.type === 'contact_info') {
+      const c = (answer ?? {}) as { phone?: string; email?: string }
+      const phone = c.phone?.trim() ?? ''
+      const email = c.email?.trim() ?? ''
+      if (phone !== '' && !isValidPhoneFormat(phone)) return this.msg('errPhone')
+      if (email !== '' && !EMAIL_RE.test(email)) return this.msg('errEmail')
+    }
+
     if (requiredHere) {
       // Top of Mind: stage 1 (the first pick) is what "required" means; stage 2
       // is always optional. A plain array here (draft saved before the toggle)
