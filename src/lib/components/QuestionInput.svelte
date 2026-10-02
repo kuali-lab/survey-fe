@@ -288,6 +288,21 @@
     onChange({ ...contactValue, [field]: val })
   }
 
+  // Phone inputs sanitize to digits-only. Svelte's value={} binding caches the
+  // last value IT assigned and skips re-touching the DOM when a re-render
+  // produces that same string again (e.g. typing only letters into an empty
+  // field sanitizes to '' every time) — so the binding alone can't correct a
+  // native, uncontrolled keystroke the browser already let through. Force the
+  // DOM back to the sanitized value synchronously, in the same event, so
+  // invalid characters never visibly linger regardless of what the binding
+  // would have done on its own.
+  function onPhoneInput(e: Event, apply: (sanitized: string) => void) {
+    const input = e.currentTarget as HTMLInputElement
+    const sanitized = sanitizePhoneInput(input.value)
+    if (input.value !== sanitized) input.value = sanitized
+    apply(sanitized)
+  }
+
   // ── is_other ("Lainnya") state ──
   const otherOption = $derived(options.find(o => o.isOther))
 
@@ -691,7 +706,7 @@
     inputmode="numeric"
     placeholder="081234567890"
     value={strValue}
-    oninput={(e) => onChange(sanitizePhoneInput((e.currentTarget as HTMLInputElement).value))}
+    oninput={(e) => onPhoneInput(e, onChange)}
     onblur={() => onBlur?.()}
   />
 
@@ -1162,7 +1177,7 @@
       inputmode="numeric"
       placeholder={i18n.t('phone')}
       value={contactValue.phone}
-      oninput={(e) => updateContact('phone', sanitizePhoneInput((e.currentTarget as HTMLInputElement).value))}
+      oninput={(e) => onPhoneInput(e, (v) => updateContact('phone', v))}
     />
     <input
       class="text-input"
