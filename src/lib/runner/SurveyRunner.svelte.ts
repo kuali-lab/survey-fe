@@ -220,8 +220,9 @@ export class SurveyRunner {
   )
 
   // ---- Derived: pagination ----
-  // one_per_page: each standalone question is its own page; each group is one
-  // page (members inside). Ordered by sort_order so it matches the builder.
+  // one_per_page: every question is its own page, grouped or not — a builder
+  // question_group is organizational only and must never bundle its members
+  // onto one respondent screen.
   surveyPages = $derived.by<SurveyPage[]>(() => {
     const questions = this.questions
     const answerable = this.answerableQuestions
@@ -234,10 +235,10 @@ export class SurveyRunner {
     if (mode === 'scroll') {
       return [{ id: 'all', questions: answerable }]
     }
-    // Flatten groups into per-question pages only when skip logic is live, so a
-    // group never leaks skipped siblings/pre-target questions (audit Temuan F).
-    // Non-skip one_per_page surveys keep their grouped pages unchanged.
-    return buildSurveySections(questions, answerable, this.skipRules.length > 0)
+    // Always flatten groups into per-question pages: this branch only runs in
+    // one_per_page mode, where a group page would otherwise show all its
+    // members at once (also required for skip logic, audit Temuan F).
+    return buildSurveySections(questions, answerable, true)
   })
 
   currentPage = $derived(this.surveyPages[this.currentIndex] ?? null)

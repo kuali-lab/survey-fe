@@ -640,3 +640,96 @@ describe('SurveyRunner — Top of Mind', () => {
     expect(r.effectiveDisplayMode).toBe('scroll')
   })
 })
+
+// ─── M5 question_group: sidebar grouping is organizational only ─────────────
+// A builder-side group must never change the respondent-facing flow. In
+// one_per_page mode every question is still its own page, grouped or not.
+describe('SurveyRunner — builder question_group does not affect respondent pagination', () => {
+  function makeGroupedRunner(displayMode: 'scroll' | 'one_per_page' = 'one_per_page'): SurveyRunner {
+    const survey: Survey = {
+      id: 'sv-grp', title: 'GRP',
+      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode },
+      skipRules: [], closeMessage: null, closeImageUrl: null,
+      questions: [
+        q({ id: 'g1', type: 'question_group', sortOrder: 1, title: 'Data Diri' }),
+        q({ id: 'a', type: 'short_text', sortOrder: 2, groupId: 'g1' }),
+        q({ id: 'b', type: 'short_text', sortOrder: 3, groupId: 'g1' }),
+        q({ id: 'c', type: 'short_text', sortOrder: 4, groupId: 'g1' }),
+        q({ id: 'd', type: 'short_text', sortOrder: 5 }),
+      ],
+    }
+    return new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
+  }
+
+  it('one_per_page with no skip rules still shows one question per page inside a group', () => {
+    const r = makeGroupedRunner('one_per_page')
+    expect(r.surveyPages.length).toBe(4)
+    expect(r.surveyPages.every((p) => p.questions.length === 1)).toBe(true)
+    expect(r.surveyPages.map((p) => p.questions[0].id)).toEqual(['a', 'b', 'c', 'd'])
+  })
+
+  it('scroll mode keeps the group as one visual section (unaffected by this fix)', () => {
+    const r = makeGroupedRunner('scroll')
+    expect(r.surveyPages.length).toBe(1)
+    expect(r.scrollSections.find((s) => s.id === 'g1')?.questions.map((qq) => qq.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('a single-member group is also one page, same as before this fix', () => {
+    const survey: Survey = {
+      id: 'sv-grp-1', title: 'GRP1',
+      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
+      skipRules: [], closeMessage: null, closeImageUrl: null,
+      questions: [
+        q({ id: 'g1', type: 'question_group', sortOrder: 1, title: 'Solo' }),
+        q({ id: 'a', type: 'short_text', sortOrder: 2, groupId: 'g1' }),
+      ],
+    }
+    const r = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
+    expect(r.surveyPages.length).toBe(1)
+    expect(r.surveyPages[0].questions.map((qq) => qq.id)).toEqual(['a'])
+  })
+
+  it('stays flattened the same way when a skip rule is also active (Temuan F unaffected)', () => {
+    const skippedSurvey: Survey = {
+      id: 'sv-grp-skip', title: 'GRP-SKIP',
+      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
+      skipRules: [skipRuleJtoN],
+      closeMessage: null, closeImageUrl: null,
+      questions: [
+        q({ id: 'g1', type: 'question_group', sortOrder: 1, title: 'Data Diri' }),
+        q({ id: 'a', type: 'short_text', sortOrder: 2, groupId: 'g1' }),
+        q({ id: 'b', type: 'short_text', sortOrder: 3, groupId: 'g1' }),
+      ],
+    }
+    const r2 = new SurveyRunner({ getSurvey: () => skippedSurvey, onFinish: () => {} })
+    expect(r2.surveyPages.length).toBe(2)
+    expect(r2.surveyPages.every((p) => p.questions.length === 1)).toBe(true)
+  })
+
+  it('a Top of Mind question sharing a group with a sibling still gets its own stage-2 page', () => {
+    // Before the fix, a non-flattened group page held BOTH [brand, note], so
+    // tomStage2QuestionId's page.questions.length === 1 check never matched —
+    // this pins that the fix also closes that latent TOM/group interaction.
+    const survey: Survey = {
+      id: 'sv-grp-tom', title: 'GRP-TOM',
+      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
+      skipRules: [], closeMessage: null, closeImageUrl: null,
+      questions: [
+        q({ id: 'g1', type: 'question_group', sortOrder: 1, title: 'Merek' }),
+        q({
+          id: 'brand', type: 'checkbox', sortOrder: 2, groupId: 'g1', topOfMind: true,
+          options: [
+            { id: 'a', label: 'Aqua', sortOrder: 0 },
+            { id: 'b', label: 'Cleo', sortOrder: 1 },
+          ],
+        }),
+        q({ id: 'note', type: 'short_text', sortOrder: 3, groupId: 'g1' }),
+      ],
+    }
+    const r = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
+    expect(r.surveyPages.length).toBe(2)
+    r.handleAnswer('brand', { first: 'Aqua', selected: ['Aqua'] })
+    expect(r.tomStage2QuestionId).toBe('brand')
+    expect(r.canGoBack).toBe(true)
+  })
+})
