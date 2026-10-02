@@ -306,34 +306,49 @@ export class SurveyRunner {
         const allFilled = [c.firstName, c.lastName, c.phone, c.email].every((v) => v && v.trim() !== '')
         if (!allFilled) return this.msg('errContact')
       }
-      // Region: the answer is the deepest selected BPS code, dot-delimited per
-      // level, so its segment count IS the depth reached. A required region
-      // question must reach q.regionDepth, not just the top level — otherwise
-      // "wajib sampai Desa" silently accepts a province-only pick.
-      if (q.type === 'region' && typeof answer === 'string') {
-        const depth = Math.min(4, Math.max(1, q.regionDepth || 2))
-        const reached = answer.split('.').length
-        if (reached < depth) return this.msg('errRegionDepth', { level: REGION_LEVEL_LABELS[depth - 1] })
-      }
     }
 
-    // Matrix: a required matrix must have EVERY row answered. The generic
-    // required check above only catches a fully empty answer (null) — a matrix
-    // with some rows set is a non-empty object, so a partially filled matrix
-    // would otherwise pass. The value is Record<rowLabel, colLabel>.
-    if (q.type === 'matrix' && q.required) {
+    // Region: the answer is the deepest selected BPS code, dot-delimited per
+    // level, so its segment count IS the depth reached. K108 (02 Okt 2026):
+    // this runs regardless of `required` — a non-empty-but-shallow pick (e.g.
+    // province only, depth configured to Desa) is never a valid end state,
+    // optional or not. An optional, fully untouched answer (null) never
+    // reaches this — the condition below only matches a non-empty string.
+    if (q.type === 'region' && typeof answer === 'string' && answer.trim() !== '') {
+      const depth = Math.min(4, Math.max(1, q.regionDepth || 2))
+      const reached = answer.trim().split('.').length
+      if (reached < depth) return this.msg('errRegionDepth', { level: REGION_LEVEL_LABELS[depth - 1] })
+    }
+
+    // contact_info, continued (K108): once ANY field is touched, all four must
+    // be — a half-filled card is never a valid end state. The required path
+    // above already enforces "all four" unconditionally (including fully
+    // blank); this adds the same completeness rule for an OPTIONAL question,
+    // where leaving it fully untouched is still fine.
+    if (q.type === 'contact_info' && !requiredHere) {
+      const c = (answer ?? {}) as { firstName?: string; lastName?: string; phone?: string; email?: string }
+      const filledCount = [c.firstName, c.lastName, c.phone, c.email].filter((v) => v && v.trim() !== '').length
+      if (filledCount > 0 && filledCount < 4) return this.msg('errContact')
+    }
+
+    // Matrix: a required matrix must have EVERY row answered (checked first,
+    // exact pre-K108 behavior). K108 adds the same rule for an OPTIONAL
+    // matrix: some rows set is a non-empty object that used to pass outright —
+    // once any row is touched, every row must be, same as required. Fully
+    // untouched stays fine when optional. The value is Record<rowLabel, colLabel>.
+    if (q.type === 'matrix') {
       const rows = q.matrixRows ?? []
       const val =
         answer && typeof answer === 'object' && !Array.isArray(answer)
           ? (answer as Record<string, string>)
           : {}
-      const allAnswered =
-        rows.length > 0 &&
-        rows.every((r) => {
-          const cell = val[r.label]
-          return typeof cell === 'string' && cell.trim() !== ''
-        })
-      if (!allAnswered) return this.msg('errMatrixRows')
+      const isRowFilled = (label: string) => typeof val[label] === 'string' && val[label].trim() !== ''
+      const filledCount = rows.filter((r) => isRowFilled(r.label)).length
+      if (requiredHere) {
+        if (!(rows.length > 0 && filledCount === rows.length)) return this.msg('errMatrixRows')
+      } else if (filledCount > 0 && filledCount < rows.length) {
+        return this.msg('errMatrixRows')
+      }
     }
 
     const isEmpty = isEmptyAnswer(answer)
