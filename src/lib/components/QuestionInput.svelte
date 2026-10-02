@@ -295,13 +295,23 @@
   // native, uncontrolled keystroke the browser already let through. Force the
   // DOM back to the sanitized value synchronously, in the same event, so
   // invalid characters never visibly linger regardless of what the binding
-  // would have done on its own.
-  function onPhoneInput(e: Event, apply: (sanitized: string) => void) {
+  // would have done on its own. Returns whether a keystroke was rejected, so
+  // each call site can surface its own live warning (same shake+message
+  // pattern the `number` type already uses for min/max — see numberWarn).
+  function onPhoneInput(e: Event, apply: (sanitized: string) => void): boolean {
     const input = e.currentTarget as HTMLInputElement
     const sanitized = sanitizePhoneInput(input.value)
-    if (input.value !== sanitized) input.value = sanitized
+    const rejected = input.value !== sanitized
+    if (rejected) input.value = sanitized
     apply(sanitized)
+    return rejected
   }
+
+  const PHONE_DIGITS_ONLY_WARN = 'Hanya menerima angka.'
+  let phoneWarn = $state<string | null>(null)
+  let phoneShakeKey = $state(0)
+  let contactPhoneWarn = $state<string | null>(null)
+  let contactPhoneShakeKey = $state(0)
 
   // ── is_other ("Lainnya") state ──
   const otherOption = $derived(options.find(o => o.isOther))
@@ -706,9 +716,14 @@
     inputmode="numeric"
     placeholder="081234567890"
     value={strValue}
-    oninput={(e) => onPhoneInput(e, onChange)}
-    onblur={() => onBlur?.()}
+    oninput={(e) => { phoneWarn = onPhoneInput(e, onChange) ? PHONE_DIGITS_ONLY_WARN : null; if (phoneWarn) phoneShakeKey++ }}
+    onblur={() => { phoneWarn = null; onBlur?.() }}
   />
+  {#if phoneWarn}
+    {#key phoneShakeKey}
+      <p class="number-warn" role="alert">{phoneWarn}</p>
+    {/key}
+  {/if}
 
 {:else if question.type === 'website'}
   <div class="url-field">
@@ -1171,14 +1186,21 @@
       value={contactValue.lastName}
       oninput={(e) => updateContact('lastName', (e.currentTarget as HTMLInputElement).value)}
     />
-    <input
-      class="text-input"
-      type="tel"
-      inputmode="numeric"
-      placeholder={i18n.t('phone')}
-      value={contactValue.phone}
-      oninput={(e) => onPhoneInput(e, (v) => updateContact('phone', v))}
-    />
+    <div>
+      <input
+        class="text-input"
+        type="tel"
+        inputmode="numeric"
+        placeholder={i18n.t('phone')}
+        value={contactValue.phone}
+        oninput={(e) => { contactPhoneWarn = onPhoneInput(e, (v) => updateContact('phone', v)) ? PHONE_DIGITS_ONLY_WARN : null; if (contactPhoneWarn) contactPhoneShakeKey++ }}
+      />
+      {#if contactPhoneWarn}
+        {#key contactPhoneShakeKey}
+          <p class="number-warn" role="alert">{contactPhoneWarn}</p>
+        {/key}
+      {/if}
+    </div>
     <input
       class="text-input"
       type="email"
