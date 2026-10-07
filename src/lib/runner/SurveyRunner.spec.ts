@@ -1139,6 +1139,25 @@ describe('SurveyRunner — tipe tabel', () => {
     expect(runner.progress).toBe(33)
   })
 
+  it('state tabel bertahan saat Lanjut lalu Sebelumnya (one_per_page)', async () => {
+    const { runner } = await onTablePage({ required: true })
+    const filled = { '1': { ...full, btu: 0 }, '2': full }
+    runner.handleAnswer('t', filled)
+    await runner.handleNext()
+    runner.handleBack()
+    expect(runner.currentIndex).toBe(1)
+    expect(runner.answers.t).toEqual(filled)
+  })
+
+  it('draf tabel bolak-balik JSON (localStorage/server) tetap utuh dan tervalidasi sama', async () => {
+    const { runner } = makeTableRunner({ required: true })
+    const draft = JSON.parse(JSON.stringify({ answers: { g: 'Ya', t: { '1': { murid: '0', judul: 'a' } } }, currentIndex: 1 }))
+    runner.loadFrom(draft)
+    expect(runner.answers.t).toEqual({ '1': { murid: '0', judul: 'a' } })
+    await runner.handleNext()
+    expect(runner.questionErrors.t).toBe('Lengkapi kolom «Jumlah murid» pada baris «IPA».')
+  })
+
   it('label baris dan kolom di pesan mengikuti bahasa aktif', async () => {
     const { runner } = await onTablePage({ required: true, locale: 'en' })
     runner.handleAnswer('t', { '2': full })
