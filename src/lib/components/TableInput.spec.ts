@@ -43,14 +43,30 @@ describe('TableCellInput', () => {
     expect(body).not.toContain('aria-invalid')
   })
 
-  it('teks: maxlength dari kolom; sel tidak valid membawa aria-invalid + aria-describedby', () => {
+  it('teks: textarea satu baris yang tumbuh (gaya .text-input existing), maxlength dari kolom; sel tidak valid membawa aria-invalid + aria-describedby', () => {
     const { body } = render(TableCellInput, {
-      props: { column: col('Judul', 'short_text', { maxLength: 40 }), value: 'Buku', label: 'IPA — Judul', invalid: true, describedBy: 'q-error-t', onChange: noop },
+      props: { column: col('Judul', 'short_text', { maxLength: 40 }), value: 'Baris 1\nBaris 2', label: 'IPA — Judul', invalid: true, describedBy: 'q-error-t', onChange: noop },
     })
-    expect(body).toContain('type="text"')
+    expect(body).toMatch(/<textarea[^>]*class="text-input grow-input[^"]*"/)
+    expect(body).toMatch(/<textarea[^>]*rows="1"/)
+    expect(body).not.toContain('type="text"')
     expect(body).toContain('maxlength="40"')
+    expect(body).toContain('aria-label="IPA — Judul"')
     expect(body).toContain('aria-invalid="true"')
     expect(body).toContain('aria-describedby="q-error-t"')
+    expect(body).toContain('Baris 1\nBaris 2</textarea>')
+  })
+
+  it.each<[string, Question]>([
+    ['angka', col('n', 'number')],
+    ['teks', col('j', 'short_text')],
+    ['dropdown', col('d', 'dropdown', { options: [{ id: 'a', label: 'Ya', sortOrder: 0 }] })],
+  ])('%s: ukuran padat hanya di grid (wrapValue), accordion memakai ukuran input biasa', (_, column) => {
+    const grid = render(TableCellInput, { props: { column, value: undefined, label: 'A — B', wrapValue: true, onChange: noop } })
+    expect(grid.body).toMatch(/class="text-input[^"]*cell-dense/)
+    const list = render(TableCellInput, { props: { column, value: undefined, label: 'A — B', onChange: noop } })
+    expect(list.body).toContain('class="text-input')
+    expect(list.body).not.toContain('cell-dense')
   })
 
   it('dropdown: <select> bawaan, opsi bernilai label bahasa utama', () => {
@@ -74,17 +90,17 @@ describe('TableCellInput', () => {
     expect(empty.body).not.toMatch(/<select[^>]*title=/)
   })
 
-  it('dropdown grid (wrapValue): label terpilih tampil utuh sebagai teks yang bisa turun baris; accordion tetap select polos', () => {
+  it('dropdown: label terpilih tampil utuh di muka bergaya .text-input (bisa turun baris), select transparan memegang a11y', () => {
     const column = col('Tahun', 'dropdown', {
       options: [{ id: 'a', label: '2022 atau sebelumnya', sortOrder: 0 }],
     })
-    const grid = render(TableCellInput, { props: { column, value: '2022 atau sebelumnya', label: 'IPA — Tahun', wrapValue: true, onChange: noop } })
-    expect(grid.body).toMatch(/class="select-face[^"]*"[^>]*aria-hidden="true"[^>]*>2022 atau sebelumnya</)
-    expect(grid.body).toContain('aria-label="IPA — Tahun"')
-    const gridEmpty = render(TableCellInput, { props: { column, value: undefined, label: 'IPA — Tahun', wrapValue: true, onChange: noop } })
-    expect(gridEmpty.body).toMatch(/class="select-face[^"]*"[^>]*>Pilih</)
-    const list = render(TableCellInput, { props: { column, value: '2022 atau sebelumnya', label: 'IPA — Tahun', onChange: noop } })
-    expect(list.body).not.toContain('select-face')
+    for (const wrapValue of [true, false]) {
+      const chosen = render(TableCellInput, { props: { column, value: '2022 atau sebelumnya', label: 'IPA — Tahun', wrapValue, onChange: noop } })
+      expect(chosen.body).toMatch(/class="text-input select-face[^"]*"[^>]*aria-hidden="true"[^>]*>2022 atau sebelumnya</)
+      expect(chosen.body).toContain('aria-label="IPA — Tahun"')
+      const empty = render(TableCellInput, { props: { column, value: undefined, label: 'IPA — Tahun', wrapValue, onChange: noop } })
+      expect(empty.body).toMatch(/class="text-input select-face[^"]*"[^>]*>Pilih</)
+    }
   })
 })
 

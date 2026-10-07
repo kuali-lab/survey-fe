@@ -3,9 +3,11 @@
    * Satu sel tipe Tabel (angka, teks pendek, atau pilihan), dipakai grid desktop
    * dan accordion ponsel. Nilai yang dikirim ke atas selalu bahasa utama: label
    * opsi apa adanya, angka sebagai teks literal (lihat numberInput.ts).
+   * Gaya isian = `.text-input` global (app.css); grid menambah `.cell-dense`.
    */
   import type { AnswerValue, Question } from '$lib/types.js'
   import { applyNumberInput, numberInputCompare, numberInputText } from '$lib/numberInput.js'
+  import { autoExpand } from '$lib/growTextarea.js'
   import { useI18n } from '$lib/i18n/context.js'
 
   let {
@@ -26,7 +28,7 @@
     describedBy?: string
     /** Id petunjuk kolom yang tampil di samping sel (accordion). */
     hintId?: string
-    /** Grid: label terpilih ditampilkan sebagai teks yang bisa turun baris, bukan terpotong elipsis. */
+    /** Grid desktop: ukuran padat (`.cell-dense`). */
     wrapValue?: boolean
     onChange: (v: AnswerValue) => void
   } = $props()
@@ -64,7 +66,8 @@
 
 {#if column.type === 'number'}
   <input
-    class="cell-input"
+    class="text-input"
+    class:cell-dense={wrapValue}
     type="number"
     inputmode="decimal"
     min={column.minValue}
@@ -77,12 +80,13 @@
     onblur={onNumberBlur}
   />
 {:else if column.type === 'dropdown'}
-  <div class="select-box" class:wrap={wrapValue}>
-    {#if wrapValue}
-      <span class="select-face" class:invalid aria-hidden="true">{chosen ? i18n.label(chosen) : i18n.t('tableSelectPlaceholder')}</span>
-    {/if}
+  <!-- Select bawaan tak bisa turun baris dan SearchableDropdown memotong label
+       (elipsis) serta menu absolutnya terpotong wadah gulir tabel. Muka bergaya
+       .text-input menampilkan label utuh; select transparan di atasnya memegang
+       klik, keyboard, dan pembaca layar. -->
+  <div class="select-box">
+    <span class="text-input select-face" class:cell-dense={wrapValue} class:invalid aria-hidden="true">{chosen ? i18n.label(chosen) : i18n.t('tableSelectPlaceholder')}</span>
     <select
-      class="cell-input"
       value={text}
       title={chosen ? i18n.label(chosen) : undefined}
       aria-label={label}
@@ -97,16 +101,19 @@
     </select>
   </div>
 {:else}
-  <input
-    class="cell-input"
-    type="text"
+  <!-- Enter = baris baru; runner mengabaikan tombol dari TEXTAREA, jadi tidak maju halaman. -->
+  <textarea
+    class="text-input grow-input"
+    class:cell-dense={wrapValue}
+    rows="1"
     maxlength={column.maxLength}
     value={text}
     aria-label={label}
     aria-invalid={invalid || undefined}
     aria-describedby={ariaDescribedBy}
     oninput={(e) => onChange(e.currentTarget.value)}
-  />
+    use:autoExpand
+  ></textarea>
 {/if}
 {#if warn}
   {#key shakeKey}
@@ -115,87 +122,74 @@
 {/if}
 
 <style>
-  /* Berbeda dari .text-input kartu: grid punya baris belang ber-latar --canvas-soft,
-     jadi sel butuh batas sendiri (tertiary-60: 3,25:1 di putih, 3,03:1 di belang). */
-  .cell-input {
-    width: 100%;
-    /* --cell-min / --cell-pad diisi sel grid; accordion memakai bawaan. */
-    min-width: var(--cell-min, 0);
-    height: 44px;
-    border: 1px solid var(--tertiary-60);
-    border-radius: var(--radius-input);
-    padding: 0 var(--cell-pad, 10px);
-    font-family: var(--font);
-    font-size: 16px;
-    color: var(--text-primary);
-    background: var(--canvas);
-    transition: border-color 0.15s, box-shadow 0.15s;
-  }
+  .text-input { display: block; }
 
-  /* Cincin 2px lewat box-shadow agar ukuran sel tidak bergeser. */
-  .cell-input:focus {
-    outline: none;
-    border-color: var(--text-primary);
-    box-shadow: 0 0 0 1px var(--text-primary);
-  }
-
-  .cell-input[aria-invalid='true'] {
+  .text-input[aria-invalid='true'],
+  .select-face.invalid {
     border-color: var(--error);
-    box-shadow: 0 0 0 1px var(--error);
   }
 
-  select.cell-input {
-    min-width: var(--cell-min, 8rem);
-    text-overflow: ellipsis;
+  /* Grid desktop: 14px, kontrol ±32px. --cell-min dari columnMinRem (table.ts);
+     padding 6px dan batas fokus 2px ikut dihitung di sana. */
+  .cell-dense {
+    min-width: var(--cell-min, 0);
+    height: auto;
+    min-height: 32px;
+    padding: 5px 6px;
+    font-size: 14px;
+    line-height: 20px;
   }
 
-  /* Select bawaan tak bisa turun baris: di grid ia transparan di atas .select-face,
-     jadi klik, keyboard, dan pembaca layar tetap milik select. */
-  .select-box.wrap { position: relative; }
+  input.cell-dense { height: 32px; padding-block: 0; }
+
+  /* Sentuh (iPad): <16px memicu zoom saat fokus, dan target sentuh minimal 44px. */
+  @media (pointer: coarse) {
+    .cell-dense { font-size: 16px; min-height: 44px; }
+    input.cell-dense { height: 44px; }
+  }
+
+  .select-box { position: relative; }
 
   .select-face {
-    display: block;
-    min-width: var(--cell-min, 8rem);
-    min-height: 44px;
-    padding: 10px 30px 10px var(--cell-pad, 10px);
-    border: 1px solid var(--tertiary-60);
-    border-radius: var(--radius-input);
-    background: var(--canvas);
-    font-size: 16px;
+    height: auto;
+    min-height: 52px;
+    padding: 14px 36px 14px 16px;
     line-height: 1.4;
-    color: var(--text-primary);
     overflow-wrap: anywhere;
   }
+
+  .select-face.cell-dense { padding-right: 22px; }
 
   .select-face::after {
     content: '';
     position: absolute;
-    top: 19px;
-    right: 12px;
+    top: 50%;
+    right: 16px;
     width: 6px;
     height: 6px;
+    margin-top: -5px;
     border-right: 2px solid var(--text-body);
     border-bottom: 2px solid var(--text-body);
     transform: rotate(45deg);
   }
 
-  .select-box.wrap select {
+  .select-face.cell-dense::after { right: 9px; }
+
+  .select-box select {
     position: absolute;
     inset: 0;
+    width: 100%;
     height: 100%;
-    min-width: 0;
     opacity: 0;
     cursor: pointer;
+    font-size: 16px;
   }
 
-  .select-box.wrap:focus-within .select-face {
-    border-color: var(--text-primary);
-    box-shadow: 0 0 0 1px var(--text-primary);
-  }
-
-  .select-face.invalid {
-    border-color: var(--error);
-    box-shadow: 0 0 0 1px var(--error);
+  /* Fokus milik select; muka meniru .text-input:focus (app.css). */
+  .select-box:focus-within .select-face {
+    background: var(--canvas);
+    border-color: var(--ink);
+    border-width: 2px;
   }
 
   .cell-warn {

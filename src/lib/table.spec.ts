@@ -200,6 +200,12 @@ describe('scalarRuleError sebagai penilai sel (penanda sel = sel di pesan galat)
     const issue = validateTable(q, { '1': { murid: '1', judul: 'ab' }, '2': { murid: '2', judul: 'abcd' } }, rules)
     expect(issue).toMatchObject({ rowKey: '2', columnId: 'judul', message: 'IPA — judul: errMaxLength:3' })
   })
+
+  it('baris baru di sel teks bukan galat; panjangnya dihitung satu karakter', () => {
+    const multi = { '1': { murid: '1', judul: 'a\nb' }, '2': { murid: '2', judul: 'c' } }
+    expect(validateTable(q, multi, rules)).toBeNull()
+    expect(validateTable(q, { ...multi, '2': { murid: '2', judul: 'a\nbc' } }, rules)).toMatchObject({ rowKey: '2', columnId: 'judul' })
+  })
 })
 
 describe('tableRecap', () => {

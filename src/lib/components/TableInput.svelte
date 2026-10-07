@@ -70,7 +70,7 @@
     openRow = next ? keyOf(next) : null
     if (!next) return
     await tick()
-    listEl?.querySelector<HTMLElement>(`[data-row="${keyOf(next)}"] .fields :is(input, select)`)?.focus()
+    listEl?.querySelector<HTMLElement>(`[data-row="${keyOf(next)}"] .fields :is(input, textarea, select)`)?.focus()
   }
 </script>
 
@@ -229,7 +229,8 @@
     border-bottom: 1px solid var(--hairline);
   }
 
-  .grid-row:nth-child(even) { background: var(--canvas-soft); }
+  /* Garis antarbaris, bukan baris belang: isian abu (.text-input) hilang di latar abu. */
+  .grid-row + .grid-row { border-top: 1px solid var(--hairline); }
 
   .row-head {
     padding: 8px 8px 8px 4px;
@@ -241,7 +242,7 @@
 
   /* --cell-min: lantai dari columnMinRem; padding 3px dihitung requiredGridWidth (ubah keduanya bersamaan).
      Di pita histeresis tabel bisa melebar ≤16px dan digulir di .grid-wrap. */
-  .cell { padding: 6px 3px; vertical-align: top; --cell-pad: 6px; }
+  .cell { padding: 6px 3px; vertical-align: top; }
 
   /* ── Accordion: pola .item MatrixInput ── */
   .list { display: flex; flex-direction: column; gap: 8px; }
