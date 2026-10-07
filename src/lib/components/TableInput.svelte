@@ -9,7 +9,7 @@
   import { slide } from 'svelte/transition'
   import type { AnswerValue, Question, TableRow } from '$lib/types.js'
   import {
-    activeRows, filledCount, firstOpenRow, groupRows, isCompactTable, isRowComplete, setCell,
+    ROW_HEAD_WEIGHT, activeRows, columnWeight, filledCount, firstOpenRow, groupRows, isCompactTable, isRowComplete, setCell,
     toTableAnswer, validateTable,
   } from '$lib/table.js'
   import { questionErrorId, scalarRuleError } from '$lib/utils.js'
@@ -35,6 +35,10 @@
   const groups = $derived(groupRows(question))
   const columns = $derived(question.fields ?? [])
   const errorId = $derived(questionErrorId(question.id))
+  // Lebar kolom grid proporsional terhadap isi: dropdown berlabel panjang dapat ruang lebih.
+  const weights = $derived(columns.map(columnWeight))
+  const totalWeight = $derived(weights.reduce((sum, w) => sum + w, ROW_HEAD_WEIGHT))
+  const pct = (w: number) => `${(w / totalWeight) * 100}%`
 
   let width = $state(0)
   const compact = $derived(isCompactTable(width, columns.length))
@@ -76,6 +80,7 @@
     invalid={isInvalid(row, col)}
     describedBy={errorId}
     {hintId}
+    wrapValue={!compact}
     onChange={(v) => update(row, col, v)}
   />
 {/snippet}
@@ -84,6 +89,10 @@
   {#if !compact}
     <table class="grid">
       <caption class="sr-only">{i18n.plain(question, 'title')}</caption>
+      <colgroup>
+        <col style:width={pct(ROW_HEAD_WEIGHT)} />
+        {#each weights as w, i (i)}<col style:width={pct(w)} />{/each}
+      </colgroup>
       <thead>
         <tr>
           <td class="corner"></td>
@@ -226,7 +235,6 @@
     text-align: left;
     color: var(--text-primary);
     line-height: 1.4;
-    width: 22%;
   }
 
   .cell { padding: 6px 4px; vertical-align: top; }

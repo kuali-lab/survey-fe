@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { AnswerValue, Question, TableAnswer } from './types.js'
 import {
-  COMPACT_BREAKPOINT, activeRows, filledCount, firstOpenRow, groupRows, isCellFilled, isCompactTable,
+  COMPACT_BREAKPOINT, activeRows, columnWeight, filledCount, firstOpenRow, groupRows, isCellFilled, isCompactTable,
   isRowComplete, isTableTouched, pruneTableAnswer, requiredCount, setCell, tableRecap, validateTable,
 } from './table.js'
 import { scalarRuleError } from './utils.js'
@@ -232,5 +232,24 @@ describe('groupRows (K115: baris judul kelompok)', () => {
       ['Kelas 1', [1, 2]], ['Kelas 2', [3]], ['', [4]],
     ])
     expect(groupRows(table()).map((g) => g.group)).toEqual([''])
+  })
+})
+
+describe('columnWeight (lebar kolom grid)', () => {
+  const dropdown = (...labels: string[]) =>
+    col('d', 'dropdown', false, { options: labels.map((label, i) => ({ id: String(i), label, sortOrder: i })) })
+
+  it('dropdown mengikuti label opsi terpanjang, lebih lebar dari angka dan teks', () => {
+    const tahun = dropdown('2023', '2022 atau sebelumnya')
+    expect(columnWeight(tahun)).toBeGreaterThan(columnWeight(dropdown('2023', '2024')))
+    expect(columnWeight(tahun)).toBeGreaterThan(columnWeight(col('j', 'short_text', false)))
+    expect(columnWeight(col('n', 'number', false))).toBeLessThan(columnWeight(col('j', 'short_text', false)))
+  })
+
+  it('dibatasi bawah (opsi pendek atau tanpa opsi) dan atas (label sangat panjang)', () => {
+    const min = columnWeight(dropdown())
+    expect(columnWeight(dropdown('A'))).toBe(min)
+    expect(columnWeight(col('d', 'dropdown', false))).toBe(min)
+    expect(columnWeight(dropdown('x'.repeat(200)))).toBe(columnWeight(dropdown('x'.repeat(60))))
   })
 })

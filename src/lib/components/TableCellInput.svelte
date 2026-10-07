@@ -15,6 +15,7 @@
     invalid = false,
     describedBy,
     hintId,
+    wrapValue = false,
     onChange,
   }: {
     column: Question
@@ -25,12 +26,15 @@
     describedBy?: string
     /** Id petunjuk kolom yang tampil di samping sel (accordion). */
     hintId?: string
+    /** Grid: label terpilih ditampilkan sebagai teks yang bisa turun baris, bukan terpotong elipsis. */
+    wrapValue?: boolean
     onChange: (v: AnswerValue) => void
   } = $props()
 
   const i18n = useI18n()
   const ariaDescribedBy = $derived([hintId, invalid ? describedBy : undefined].filter(Boolean).join(' ') || undefined)
   const text = $derived(typeof value === 'string' ? value : '')
+  const chosen = $derived(column.options?.find((o) => o.label === text))
   // Peringatan rentang angka saat mengetik; shakeKey memutar ulang animasi getar.
   let warn = $state<string | null>(null)
   let shakeKey = $state(0)
@@ -73,19 +77,25 @@
     onblur={onNumberBlur}
   />
 {:else if column.type === 'dropdown'}
-  <select
-    class="cell-input"
-    value={text}
-    aria-label={label}
-    aria-invalid={invalid || undefined}
-    aria-describedby={ariaDescribedBy}
-    onchange={(e) => onChange(e.currentTarget.value)}
-  >
-    <option value="">{i18n.t('tableSelectPlaceholder')}</option>
-    {#each column.options ?? [] as opt (opt.id)}
-      <option value={opt.label}>{i18n.label(opt)}</option>
-    {/each}
-  </select>
+  <div class="select-box" class:wrap={wrapValue}>
+    {#if wrapValue}
+      <span class="select-face" class:invalid aria-hidden="true">{chosen ? i18n.label(chosen) : i18n.t('tableSelectPlaceholder')}</span>
+    {/if}
+    <select
+      class="cell-input"
+      value={text}
+      title={chosen ? i18n.label(chosen) : undefined}
+      aria-label={label}
+      aria-invalid={invalid || undefined}
+      aria-describedby={ariaDescribedBy}
+      onchange={(e) => onChange(e.currentTarget.value)}
+    >
+      <option value="">{i18n.t('tableSelectPlaceholder')}</option>
+      {#each column.options ?? [] as opt (opt.id)}
+        <option value={opt.label}>{i18n.label(opt)}</option>
+      {/each}
+    </select>
+  </div>
 {:else}
   <input
     class="cell-input"
@@ -136,6 +146,55 @@
   select.cell-input {
     min-width: 8rem;
     text-overflow: ellipsis;
+  }
+
+  /* Select bawaan tak bisa turun baris: di grid ia transparan di atas .select-face,
+     jadi klik, keyboard, dan pembaca layar tetap milik select. */
+  .select-box.wrap { position: relative; }
+
+  .select-face {
+    display: block;
+    min-width: 8rem;
+    min-height: 44px;
+    padding: 10px 30px 10px 10px;
+    border: 1px solid var(--tertiary-60);
+    border-radius: var(--radius-input);
+    background: var(--canvas);
+    font-size: 16px;
+    line-height: 1.4;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+  }
+
+  .select-face::after {
+    content: '';
+    position: absolute;
+    top: 19px;
+    right: 12px;
+    width: 6px;
+    height: 6px;
+    border-right: 2px solid var(--text-body);
+    border-bottom: 2px solid var(--text-body);
+    transform: rotate(45deg);
+  }
+
+  .select-box.wrap select {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    min-width: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .select-box.wrap:focus-within .select-face {
+    border-color: var(--text-primary);
+    box-shadow: 0 0 0 1px var(--text-primary);
+  }
+
+  .select-face.invalid {
+    border-color: var(--error);
+    box-shadow: 0 0 0 1px var(--error);
   }
 
   .cell-warn {

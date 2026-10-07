@@ -26,6 +26,20 @@ export function isCompactTable(width: number, columnCount: number): boolean {
   return width <= COMPACT_BREAKPOINT || columnCount > 5
 }
 
+/** Bobot kolom judul baris di grid; satuan sama dengan `columnWeight`. */
+export const ROW_HEAD_WEIGHT = 11
+
+/**
+ * Bobot lebar kolom grid (±1 karakter per satuan). Dropdown selebar label opsi
+ * terpanjang + 7 untuk padding dan panah, supaya nilai terpilih tidak terpotong.
+ */
+export function columnWeight(col: Question): number {
+  if (col.type === 'number') return 7
+  if (col.type !== 'dropdown') return 9
+  const longest = Math.max(0, ...(col.options ?? []).map((o) => o.label.length))
+  return Math.min(Math.max(longest + 7, 12), 28)
+}
+
 export function activeRows(q: Question): TableRow[] {
   return (q.tableRows ?? []).filter((r) => !r.deleted)
 }

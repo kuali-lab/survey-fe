@@ -63,6 +63,29 @@ describe('TableCellInput', () => {
     // Placeholder pendek supaya muat di lebar kolom grid desktop.
     expect(body).toMatch(/<option value=""[^>]*>Pilih<\/option>/)
   })
+
+  it('dropdown: title berisi label terpilih (jaring pengaman bila terpotong); kosong tanpa title', () => {
+    const column = col('Kurikulum', 'dropdown', {
+      options: [{ id: 'a', label: 'Kurikulum Merdeka', sortOrder: 0 }, { id: 'b', label: 'Kurikulum 2013', sortOrder: 1 }],
+    })
+    const chosen = render(TableCellInput, { props: { column, value: 'Kurikulum Merdeka', label: 'IPA — Kurikulum', onChange: noop } })
+    expect(chosen.body).toMatch(/<select[^>]*title="Kurikulum Merdeka"/)
+    const empty = render(TableCellInput, { props: { column, value: undefined, label: 'IPA — Kurikulum', onChange: noop } })
+    expect(empty.body).not.toMatch(/<select[^>]*title=/)
+  })
+
+  it('dropdown grid (wrapValue): label terpilih tampil utuh sebagai teks yang bisa turun baris; accordion tetap select polos', () => {
+    const column = col('Tahun', 'dropdown', {
+      options: [{ id: 'a', label: '2022 atau sebelumnya', sortOrder: 0 }],
+    })
+    const grid = render(TableCellInput, { props: { column, value: '2022 atau sebelumnya', label: 'IPA — Tahun', wrapValue: true, onChange: noop } })
+    expect(grid.body).toMatch(/class="select-face[^"]*"[^>]*aria-hidden="true"[^>]*>2022 atau sebelumnya</)
+    expect(grid.body).toContain('aria-label="IPA — Tahun"')
+    const gridEmpty = render(TableCellInput, { props: { column, value: undefined, label: 'IPA — Tahun', wrapValue: true, onChange: noop } })
+    expect(gridEmpty.body).toMatch(/class="select-face[^"]*"[^>]*>Pilih</)
+    const list = render(TableCellInput, { props: { column, value: '2022 atau sebelumnya', label: 'IPA — Tahun', onChange: noop } })
+    expect(list.body).not.toContain('select-face')
+  })
 })
 
 describe('TableInput — markup awal (accordion)', () => {
