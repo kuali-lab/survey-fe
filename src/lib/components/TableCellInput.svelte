@@ -6,7 +6,7 @@
    * Gaya isian = `.text-input` global (app.css); grid menambah `.cell-dense`.
    */
   import type { AnswerValue, Question } from '$lib/types.js'
-  import { applyNumberInput, numberInputCompare, numberInputText } from '$lib/numberInput.js'
+  import { applyNumberInput, noWheelChange, numberInputCompare, numberInputText } from '$lib/numberInput.js'
   import { autoExpand } from '$lib/growTextarea.js'
   import { useI18n } from '$lib/i18n/context.js'
 
@@ -78,6 +78,7 @@
     aria-describedby={ariaDescribedBy}
     oninput={onNumberInput}
     onblur={onNumberBlur}
+    use:noWheelChange
   />
 {:else if column.type === 'dropdown'}
   <!-- Select bawaan tak bisa turun baris dan SearchableDropdown memotong label

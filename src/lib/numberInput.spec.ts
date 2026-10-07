@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { applyNumberInput, numberInputText, numberInputCompare } from './numberInput.js'
+import { applyNumberInput, noWheelChange, numberInputText, numberInputCompare } from './numberInput.js'
 
 describe('applyNumberInput — leading zeros', () => {
   it('keeps a leading-zero identifier intact (NISN)', () => {
@@ -214,5 +214,47 @@ describe('scope guard — the bounded scales must keep sending real numbers', ()
   it('calls applyNumberInput from exactly one place', () => {
     const calls = src.match(/applyNumberInput\(/g) ?? []
     expect(calls).toHaveLength(1)
+  })
+})
+
+describe('noWheelChange — roda mouse tidak mengubah isian angka', () => {
+  // Vitest tanpa DOM: elemen tiruan dengan ownerDocument.activeElement dan blur().
+  function fakeInput(focused: boolean) {
+    const listeners = new Map<string, { fn: () => void; opts: unknown }>()
+    const node = {
+      blurred: false,
+      ownerDocument: { activeElement: null as unknown },
+      blur() { this.blurred = true },
+      addEventListener: (type: string, fn: () => void, opts: unknown) => listeners.set(type, { fn, opts }),
+      removeEventListener: (type: string, fn: () => void) => {
+        if (listeners.get(type)?.fn === fn) listeners.delete(type)
+      },
+    }
+    if (focused) node.ownerDocument.activeElement = node
+    return { node, listeners }
+  }
+
+  it.each([[true, true], [false, false]])('fokus %s → blur %s; listener pasif sehingga halaman tetap bergulir', (focused, blurred) => {
+    const { node, listeners } = fakeInput(focused)
+    noWheelChange(node as unknown as HTMLInputElement)
+    listeners.get('wheel')?.fn()
+    expect(node.blurred).toBe(blurred)
+    expect(listeners.get('wheel')?.opts).toEqual({ passive: true })
+  })
+
+  it('destroy melepas listener wheel', () => {
+    const { node, listeners } = fakeInput(true)
+    noWheelChange(node as unknown as HTMLInputElement).destroy()
+    expect(listeners.has('wheel')).toBe(false)
+  })
+})
+
+describe('applyNumberInput — kolom dengan min 0 tidak menerima minus', () => {
+  it('minus diberi peringatan saat mengetik (dinaikkan ke min saat blur)', () => {
+    expect(applyNumberInput('-3', { minValue: 0 })).toEqual({ text: '-3', value: '-3', warn: 'Nilai minimal 0.' })
+  })
+
+  it('di atas max dijepit ke max (termasuk hasil panah atas yang memicu input)', () => {
+    expect(applyNumberInput('101', { minValue: 0, maxValue: 100 })).toEqual({ text: '100', value: '100', warn: 'Nilai maksimal 100.' })
   })
 })
