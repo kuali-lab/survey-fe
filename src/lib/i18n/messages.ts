@@ -48,6 +48,7 @@ const id = {
   errEmail: 'Format email belum sesuai.',
   errPhone: 'Format nomor telepon belum sesuai.',
   errUploading: 'Tunggu hingga berkas selesai diunggah.',
+  errTableCell: 'Lengkapi kolom «{col}» pada baris «{row}».',
 
   other: 'Lainnya',
   otherPlaceholder: 'Tuliskan jawaban Anda...',
@@ -129,6 +130,7 @@ const en: Record<MessageKey, string> = {
   errEmail: 'That email format does not look right.',
   errPhone: 'That phone number format does not look right.',
   errUploading: 'Please wait until the file has finished uploading.',
+  errTableCell: 'Fill in the «{col}» column in the «{row}» row.',
 
   other: 'Other',
   otherPlaceholder: 'Type your answer...',

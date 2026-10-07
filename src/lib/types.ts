@@ -11,6 +11,9 @@ export type QuestionType =
   // berulang adalah KARTU-nya. Induk tidak menyimpan jawaban sendiri — field-nya
   // yang menyimpan, masing-masing dengan `repeat_index` = nomor kartu.
   | 'repeat_group'
+  // Tabel: baris tetap dari pembuat survei (`tableRows`), kolom = pertanyaan anak
+  // di `fields`. Jawabannya `TableAnswer`, dikunci key baris lalu id kolom.
+  | 'table'
 
 // ── Two-language surveys ─────────────────────────────────────────────────────
 // The same shape the builder writes (dashboard-fe). ALL optional: older surveys,
@@ -52,6 +55,19 @@ export interface MatrixRow {
   label: string
   sortOrder: number
   translations?: TranslatedText
+}
+
+/**
+ * Baris tipe Tabel. `key` stabil walau label diganti, dan dipakai sebagai kunci
+ * jawaban (bentuk string, "1" bukan "01"). Payload publik sudah membuang baris
+ * `deleted`; tanda itu tetap dibaca untuk salinan survei di singgahan lama.
+ */
+export interface TableRow {
+  key: number
+  label: string
+  group?: string
+  translations?: TranslatedText
+  deleted?: boolean
 }
 
 export interface MatrixCol {
@@ -195,6 +211,7 @@ export interface Question {
   showLabel?: boolean | null
   matrixRows?: MatrixRow[]
   matrixCols?: MatrixCol[]
+  tableRows?: TableRow[]
   /** Scalar text translations per language code. Option/row/column labels carry their own. */
   translations?: Record<string, QuestionTextTranslation>
 }
@@ -311,7 +328,13 @@ export interface TopOfMindAnswer {
  */
 export type RepeatGroupAnswer = Record<string, string>[]
 
-export type AnswerValue = string | number | string[] | Record<string, string> | RepeatGroupAnswer | ContactInfo | TopOfMindAnswer | null
+/**
+ * Jawaban tipe Tabel: `{ "<key baris>": { "<id kolom>": nilai } }`. Sel kosong =
+ * kuncinya tidak ada, baris tanpa sel = kunci barisnya tidak ada (kontrak BE).
+ */
+export type TableAnswer = Record<string, Record<string, string | number>>
+
+export type AnswerValue = string | number | string[] | Record<string, string> | RepeatGroupAnswer | TableAnswer | ContactInfo | TopOfMindAnswer | null
 
 export type Answers = Record<string, AnswerValue>
 
