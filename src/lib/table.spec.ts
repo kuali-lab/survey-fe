@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { AnswerValue, Question, TableAnswer } from './types.js'
 import {
-  COMPACT_BREAKPOINT, activeRows, columnMinRem, columnWeight, filledCount, firstOpenRow, groupRows, isCellFilled, isCompactTable,
+  COMPACT_BREAKPOINT, activeRows, canBreakout, columnMinRem, columnWeight, filledCount, firstOpenRow, groupRows, isCellFilled, isCompactTable,
   isRowComplete, isTableTouched, pruneTableAnswer, requiredCount, requiredGridWidth, setCell, tableRecap, validateTable,
 } from './table.js'
 import { scalarRuleError } from './utils.js'
@@ -326,4 +326,19 @@ describe('columnMinRem (lebar minimum kolom grid, mode padat 14px)', () => {
     expect(columnMinRem(long)).toBe(columnMinRem(dropdown()))
     expect(columnWeight(long)).toBeGreaterThan(columnWeight(dropdown()))
   })
+})
+
+describe('canBreakout', () => {
+  const q = (imageUrl: string | null, imageLayout: string | null) => ({ ...table(), imageUrl, imageLayout })
+
+  it.each([['left'], ['right']])('gambar inline %s: tidak melebar (pusat kolom bergeser dari pusat viewport)', (layout) => {
+    expect(canBreakout(q('a.png', layout))).toBe(false)
+  })
+
+  it.each<[string | null, string | null]>([[null, null], ['a.png', null], ['a.png', 'top'], [null, 'left']])(
+    'tanpa gambar inline (url %s, layout %s): boleh melebar',
+    (url, layout) => {
+      expect(canBreakout(q(url, layout))).toBe(true)
+    },
+  )
 })

@@ -9,7 +9,7 @@
   import { slide } from 'svelte/transition'
   import type { AnswerValue, Question, TableRow } from '$lib/types.js'
   import {
-    ROW_HEAD_WEIGHT, activeRows, columnMinRem, columnWeight, filledCount, firstOpenRow, groupRows, isCompactTable, isRowComplete, requiredGridWidth, setCell,
+    ROW_HEAD_WEIGHT, activeRows, canBreakout, columnMinRem, columnWeight, filledCount, firstOpenRow, groupRows, isCompactTable, isRowComplete, requiredGridWidth, setCell,
     toTableAnswer, validateTable,
   } from '$lib/table.js'
   import { questionErrorId, scalarRuleError } from '$lib/utils.js'
@@ -40,14 +40,16 @@
   const totalWeight = $derived(weights.reduce((sum, w) => sum + w, ROW_HEAD_WEIGHT))
   const pct = (w: number) => `${(w / totalWeight) * 100}%`
 
-  // width: lebar wadah grid termasuk breakout; contentWidth: kolom konten pertanyaan.
-  let width = $state(0)
+  // spanWidth: wadah breakout; contentWidth: kolom konten. Tanpa breakout grid diukur di kolom konten.
+  const breakout = $derived(canBreakout(question))
+  let spanWidth = $state(0)
   let contentWidth = $state(0)
+  const width = $derived(breakout ? spanWidth : contentWidth)
   // Bukan state: hanya diingat untuk histeresis isCompactTable, render awal (lebar 0) accordion.
   let wasCompact = true
   const compact = $derived.by(() => (wasCompact = isCompactTable(width, columns, wasCompact)))
   // Melebar keluar kolom konten hanya bila lantai kolom tak muat di dalamnya.
-  const wide = $derived(!compact && requiredGridWidth(columns) > contentWidth)
+  const wide = $derived(breakout && !compact && requiredGridWidth(columns) > contentWidth)
 
   // Penilai sel sama dengan runner, jadi sel yang ditandai = sel di pesan galat.
   const invalid = $derived(error ? validateTable(question, value, (c, v) => scalarRuleError(c, v, i18n.t)) : null)
@@ -92,8 +94,8 @@
 {/snippet}
 
 <div class="table-q" bind:clientWidth={contentWidth}>
-  <!-- Pengukur: selebar wadah grid (termasuk breakout), apa pun tampilan yang aktif. -->
-  <div class="table-span" aria-hidden="true" bind:clientWidth={width}></div>
+  <!-- Pengukur: selebar wadah breakout, apa pun tampilan yang aktif. -->
+  {#if breakout}<div class="table-span" aria-hidden="true" bind:clientWidth={spanWidth}></div>{/if}
   {#if !compact}
     <div class="grid-wrap" class:table-span={wide}>
     <table class="grid">
@@ -187,12 +189,12 @@
 <style>
   .table-q { width: 100%; min-width: 0; }
 
-  /* ≥768px kolom konten 720px; grid yang tak muat boleh melebar sampai min(960px, viewport - 32px),
-     dipusatkan lewat margin negatif. Di bawahnya (ponsel, tablet sempit) tetap 100%. */
+  /* ≥768px kolom konten 720px; grid yang tak muat boleh melebar sampai 960px, dipusatkan lewat
+     margin negatif. 100vw ikut lebar scrollbar klasik (±17px), jadi -48px menyisakan ±15px tiap sisi. */
   .table-span { width: 100%; }
   @media (min-width: 768px) {
     .table-span {
-      --span: min(960px, 100vw - 32px);
+      --span: min(960px, 100vw - 48px);
       width: var(--span);
       margin-left: calc((100% - var(--span)) / 2);
     }

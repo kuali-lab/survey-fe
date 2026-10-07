@@ -118,9 +118,14 @@ describe('TableInput — markup awal (accordion)', () => {
     expect(body).not.toContain('aria-label="Matematika — Murid"')
   })
 
-  it('pengukur lebar selebar wadah grid (breakout ≥768px) selalu ada, kosong dan tersembunyi dari pembaca layar', () => {
+  it('pengukur lebar selebar wadah grid (breakout ≥768px) ada tanpa gambar inline, kosong dan tersembunyi dari pembaca layar', () => {
     const { body } = render(TableInput, { props: { question: table, value: null, onChange: noop } })
     expect(body).toMatch(/<div class="table-span[^"]*" aria-hidden="true"><\/div>/)
+  })
+
+  it.each([['left'], ['right']])('gambar inline %s: tanpa pengukur breakout', (imageLayout) => {
+    const { body } = render(TableInput, { props: { question: { ...table, imageUrl: 'a.png', imageLayout }, value: null, onChange: noop } })
+    expect(body).not.toContain('table-span')
   })
 
   it('badge n/m sel terisi, judul kelompok, keterangan kolom, dan tombol baris berikutnya hanya bila ada', () => {

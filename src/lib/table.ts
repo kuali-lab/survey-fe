@@ -41,6 +41,14 @@ export function isCompactTable(width: number, columns: Question[], wasCompact = 
   return width < requiredGridWidth(columns) - (wasCompact ? 0 : GRID_HYSTERESIS_PX)
 }
 
+/**
+ * Grid boleh melebar keluar kolom konten (breakout, lihat TableInput) hanya bila
+ * kolomnya di tengah viewport; gambar inline kiri/kanan (QuestionCard) menggesernya.
+ */
+export function canBreakout(q: Question): boolean {
+  return !(q.imageUrl && (q.imageLayout === 'left' || q.imageLayout === 'right'))
+}
+
 /** Bobot kolom judul baris di grid; satuan sama dengan `columnWeight`. */
 export const ROW_HEAD_WEIGHT = 11
 
