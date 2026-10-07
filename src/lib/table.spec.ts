@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { AnswerValue, Question, TableAnswer } from './types.js'
 import {
   COMPACT_BREAKPOINT, activeRows, columnMinRem, columnWeight, filledCount, firstOpenRow, groupRows, isCellFilled, isCompactTable,
-  isRowComplete, isTableTouched, pruneTableAnswer, requiredCount, setCell, tableRecap, validateTable,
+  isRowComplete, isTableTouched, pruneTableAnswer, requiredCount, requiredGridWidth, setCell, tableRecap, validateTable,
 } from './table.js'
 import { scalarRuleError } from './utils.js'
 
@@ -209,12 +209,44 @@ describe('tableRecap', () => {
   })
 })
 
-describe('isCompactTable', () => {
-  it.each<[number, number, boolean]>([
-    [0, 3, true], [COMPACT_BREAKPOINT, 3, true], [COMPACT_BREAKPOINT + 1, 3, false],
-    [720, 5, false], [720, 6, true], [900, 6, true],
-  ])('lebar %d, %d kolom → %s', (w, n, want) => {
-    expect(isCompactTable(w, n)).toBe(want)
+describe('isCompactTable (grid bila lantai kolom muat di lebar terukur)', () => {
+  const num = (id: string) => col(id, 'number', false)
+  const txt = (id: string) => col(id, 'short_text', false)
+  const dd = (id: string, ...labels: string[]) =>
+    col(id, 'dropdown', false, { options: labels.map((label, i) => ({ id: String(i), label, sortOrder: i })) })
+  const pskp = [num('a'), num('b'), txt('c'), dd('d', 'Ya', 'Tidak'), dd('e', '2023', '2022 atau sebelumnya')]
+  const numbers = (n: number) => Array.from({ length: n }, (_, i) => num(`n${i}`))
+
+  it('lantai PSKP: judul baris 96 + angka 2×94 + teks 134 + dropdown 2×126 = 670px', () => {
+    expect(requiredGridWidth(pskp)).toBe(670)
+    expect(requiredGridWidth([])).toBe(96)
+  })
+
+  it.each<[string, Question[], number, boolean]>([
+    ['PSKP 5 kolom, kontainer layar 1280 (±672)', pskp, 672, false],
+    ['PSKP 5 kolom, kontainer penuh 680', pskp, 680, false],
+    ['PSKP 5 kolom, 660 (lantai 670 tak muat)', pskp, 660, true],
+    ['6 kolom angka (lantai 660)', numbers(6), 672, false],
+    ['PSKP + 1 angka = 6 kolom (lantai 764)', [...pskp, num('f')], 672, true],
+    ['7 kolom angka (lantai 754)', numbers(7), 672, true],
+    ['7 kolom angka di lebar 760', numbers(7), 760, false],
+    ['3 kolom', pskp.slice(0, 3), 700, false],
+    ['lebar 640 selalu accordion', numbers(1), COMPACT_BREAKPOINT, true],
+    ['belum terukur (0)', numbers(1), 0, true],
+    ['0 kolom', [], 700, false],
+  ])('%s → compact %s', (_, columns, width, want) => {
+    expect(isCompactTable(width, columns)).toBe(want)
+  })
+
+  it('opsi dropdown panjang tidak menaikkan lantai', () => {
+    expect(requiredGridWidth([dd('x', 'a'.repeat(80))])).toBe(requiredGridWidth([dd('x', 'Ya')]))
+  })
+
+  it('histeresis: grid bertahan bila lebar turun kurang dari 16px di bawah lantai (scrollbar halaman muncul)', () => {
+    expect(isCompactTable(660, pskp, false)).toBe(false)
+    expect(isCompactTable(653, pskp, false)).toBe(true)
+    expect(isCompactTable(660, pskp, true)).toBe(true)
+    expect(isCompactTable(COMPACT_BREAKPOINT, numbers(1), false)).toBe(true)
   })
 })
 

@@ -18,12 +18,26 @@ export type TableIssue = { message: string; rowKey: string | null; columnId: str
 /** Penilai satu sel terisi; runner mengisinya dengan `validateOne(kolom, nilai)`. */
 export type CellValidator = (column: Question, value: AnswerValue) => string | null
 
+/** Lantai judul baris (px, termasuk padding 12px); label panjang turun baris. */
+export const ROW_HEAD_MIN_PX = 96
+/** Padding horizontal `.cell` (3px kiri + 3px kanan); tabel border-collapse tanpa batas vertikal. */
+const CELL_PAD_X = 6
+/** Kira-kira lebar scrollbar halaman: lebar yang hilang saat grid membuat halaman bergulir. */
+const GRID_HYSTERESIS_PX = 16
+
+/** Lebar minimum grid (px, 1rem = 16px): judul baris + lantai tiap kolom + padding sel. */
+export function requiredGridWidth(columns: Question[]): number {
+  return columns.reduce((sum, c) => sum + columnMinRem(c) * 16 + CELL_PAD_X, ROW_HEAD_MIN_PX)
+}
+
 /**
- * Konten survei maks 720px, jadi lebih dari 5 kolom tidak muat di lebar mana pun.
- * ponytail: ambang awal; angka final ditetapkan saat live-verify.
+ * Accordion bila ponsel (K111) atau lantai kolom tak muat. Grid yang sedang tampil
+ * bertahan sampai 16px di bawah lantai, supaya scrollbar halaman tidak membuatnya bolak-balik.
+ * ponytail: lantai judul baris tetap 96px, bukan diukur dari label; ukur bila label panjang sering menyempitkan sel.
  */
-export function isCompactTable(width: number, columnCount: number): boolean {
-  return width <= COMPACT_BREAKPOINT || columnCount > 5
+export function isCompactTable(width: number, columns: Question[], wasCompact = true): boolean {
+  if (width <= COMPACT_BREAKPOINT) return true
+  return width < requiredGridWidth(columns) - (wasCompact ? 0 : GRID_HYSTERESIS_PX)
 }
 
 /** Bobot kolom judul baris di grid; satuan sama dengan `columnWeight`. */

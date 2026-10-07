@@ -41,7 +41,9 @@
   const pct = (w: number) => `${(w / totalWeight) * 100}%`
 
   let width = $state(0)
-  const compact = $derived(isCompactTable(width, columns.length))
+  // Bukan state: hanya diingat untuk histeresis isCompactTable, render awal (lebar 0) accordion.
+  let wasCompact = true
+  const compact = $derived.by(() => (wasCompact = isCompactTable(width, columns, wasCompact)))
 
   // Penilai sel sama dengan runner, jadi sel yang ditandai = sel di pesan galat.
   const invalid = $derived(error ? validateTable(question, value, (c, v) => scalarRuleError(c, v, i18n.t)) : null)
@@ -237,7 +239,8 @@
     line-height: 1.4;
   }
 
-  /* --cell-min: lantai lebar isian dari columnMinRem; tabel boleh melebar dan digulir di .grid-wrap. */
+  /* --cell-min: lantai dari columnMinRem; padding 3px dihitung requiredGridWidth (ubah keduanya bersamaan).
+     Di pita histeresis tabel bisa melebar ≤16px dan digulir di .grid-wrap. */
   .cell { padding: 6px 3px; vertical-align: top; --cell-pad: 6px; }
 
   /* ── Accordion: pola .item MatrixInput ── */
