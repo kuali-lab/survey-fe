@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import type { AnswerValue, Question, SkipRule, Survey } from '$lib/types.js'
 import { SurveyRunner } from './SurveyRunner.svelte.js'
 
@@ -1015,6 +1015,11 @@ describe('SurveyRunner — optional matrix must be complete once touched', () =>
 
 // ── Tipe Tabel (01-flow-tipe-tabel.md §6.1, §6.4): validasi per sel lewat validateOne ──
 describe('SurveyRunner — tipe tabel', () => {
+  // Halaman tidak valid menjadwalkan scroll ke `.error` lewat setTimeout + document;
+  // timer palsu membuangnya supaya tidak jadi galat tak tertangani di Node.
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
   type TableSurveyOpts = {
     required?: boolean
     displayMode?: 'scroll' | 'one_per_page'

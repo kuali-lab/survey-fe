@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { AnswerValue, Question, TableAnswer } from './types.js'
 import {
-  COMPACT_BREAKPOINT, activeRows, filledCount, firstOpenRow, isCellFilled, isCompactTable,
+  COMPACT_BREAKPOINT, activeRows, filledCount, firstOpenRow, groupRows, isCellFilled, isCompactTable,
   isRowComplete, isTableTouched, requiredCount, setCell, tableRecap, validateTable,
 } from './table.js'
 
@@ -175,5 +175,22 @@ describe('isCompactTable', () => {
     [720, 5, false], [720, 6, true], [900, 6, false],
   ])('lebar %d, %d kolom → %s', (w, n, want) => {
     expect(isCompactTable(w, n)).toBe(want)
+  })
+})
+
+describe('groupRows (K115: baris judul kelompok)', () => {
+  it('memecah baris aktif berurutan per kelompok; tanpa kelompok = satu blok tanpa judul', () => {
+    const q = {
+      ...table(),
+      tableRows: [
+        { key: 1, label: 'A', group: 'Kelas 1' }, { key: 2, label: 'B', group: 'Kelas 1' },
+        { key: 9, label: 'X', group: 'Kelas 1', deleted: true },
+        { key: 3, label: 'C', group: 'Kelas 2' }, { key: 4, label: 'D' },
+      ],
+    }
+    expect(groupRows(q).map((g) => [g.group, g.rows.map((r) => r.key)])).toEqual([
+      ['Kelas 1', [1, 2]], ['Kelas 2', [3]], ['', [4]],
+    ])
+    expect(groupRows(table()).map((g) => g.group)).toEqual([''])
   })
 })

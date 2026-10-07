@@ -20,3 +20,8 @@ export function getQuestionNumber(question: Question, questions: Question[]): st
   const idx = getAnswerableQuestions(questions).findIndex(q => q.id === question.id)
   return idx >= 0 ? String(idx + 1) : ''
 }
+
+/** Id elemen pesan galat pertanyaan; dirujuk `aria-describedby` sel yang tidak valid. */
+export function questionErrorId(questionId: string): string {
+  return `q-error-${questionId}`
+}

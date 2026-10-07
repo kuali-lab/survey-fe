@@ -27,6 +27,18 @@ export function activeRows(q: Question): TableRow[] {
   return (q.tableRows ?? []).filter((r) => !r.deleted)
 }
 
+/** Baris aktif berurutan per kelompok (K115); `group` kosong = tanpa baris judul. */
+export function groupRows(q: Question): { group: string; rows: TableRow[] }[] {
+  const out: { group: string; rows: TableRow[] }[] = []
+  for (const row of activeRows(q)) {
+    const group = row.group ?? ''
+    const last = out[out.length - 1]
+    if (last && last.group === group) last.rows.push(row)
+    else out.push({ group, rows: [row] })
+  }
+  return out
+}
+
 /** Angka 0 dan "0" adalah jawaban; kosong = null/undefined/string blank. */
 export function isCellFilled(v: AnswerValue | undefined): boolean {
   if (typeof v === 'number') return !Number.isNaN(v)

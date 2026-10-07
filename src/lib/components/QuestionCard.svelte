@@ -5,6 +5,7 @@
   // pertanyaan yang tidak berulang ia meneruskan apa adanya.
   import QuestionField from './QuestionField.svelte'
   import { useI18n } from '$lib/i18n/context.js'
+  import { questionErrorId } from '$lib/utils.js'
 
   let {
     question,
@@ -81,6 +82,7 @@
             {questions}
             {pratinjau}
             {paged}
+            error={validationError}
           />
         </div>
       </div>
@@ -98,6 +100,7 @@
           {questions}
           {pratinjau}
           {paged}
+          error={validationError}
         />
       </div>
     {/if}
@@ -112,12 +115,13 @@
         {questions}
         {pratinjau}
         {paged}
+        error={validationError}
       />
     </div>
   {/if}
 
   {#if validationError}
-    <div class="error" role="alert">
+    <div class="error" id={questionErrorId(question.id)} role="alert">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
         <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
         <path d="M12 8v5M12 16v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
