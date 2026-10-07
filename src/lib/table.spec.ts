@@ -221,22 +221,34 @@ describe('isCompactTable (grid bila lantai kolom muat di lebar terukur)', () => 
   const dd = (id: string, ...labels: string[]) =>
     col(id, 'dropdown', false, { options: labels.map((label, i) => ({ id: String(i), label, sortOrder: i })) })
   const pskp = [num('a'), num('b'), txt('c'), dd('d', 'Ya', 'Tidak'), dd('e', '2023', '2022 atau sebelumnya')]
+  const mixed7 = [num('a'), num('b'), txt('c'), txt('d'), dd('e', 'Ya'), dd('f', 'Ya'), dd('g', 'Ya')]
+  const mixed9 = [...mixed7, num('h'), txt('i')]
+  const mixed10 = [...mixed9, num('j')]
   const numbers = (n: number) => Array.from({ length: n }, (_, i) => num(`n${i}`))
+  // Lebar kontainer terukur: konten 672 (layar >=768 tanpa breakout), breakout min(960, viewport - 32).
+  const CONTENT = 672
+  const wide = (viewport: number) => Math.min(960, viewport - 32)
 
-  it('lantai PSKP: judul baris 96 + angka 2×94 + teks 134 + dropdown 2×126 = 670px', () => {
-    expect(requiredGridWidth(pskp)).toBe(670)
-    expect(requiredGridWidth([])).toBe(96)
+  it('lantai PSKP: judul baris 80 + angka 2×80 + teks 110 + dropdown 2×102 = 554px', () => {
+    expect(requiredGridWidth(pskp)).toBe(554)
+    expect(requiredGridWidth([])).toBe(80)
+  })
+
+  it('PSKP muat di konten 672 dengan sisa >= 100px', () => {
+    expect(CONTENT - requiredGridWidth(pskp)).toBeGreaterThanOrEqual(100)
   })
 
   it.each<[string, Question[], number, boolean]>([
-    ['PSKP 5 kolom, kontainer layar 1280 (±672)', pskp, 672, false],
-    ['PSKP 5 kolom, kontainer penuh 680', pskp, 680, false],
-    ['PSKP 5 kolom, 660 (lantai 670 tak muat)', pskp, 660, true],
-    ['6 kolom angka (lantai 660)', numbers(6), 672, false],
-    ['PSKP + 1 angka = 6 kolom (lantai 764)', [...pskp, num('f')], 672, true],
-    ['7 kolom angka (lantai 754)', numbers(7), 672, true],
-    ['7 kolom angka di lebar 760', numbers(7), 760, false],
-    ['3 kolom', pskp.slice(0, 3), 700, false],
+    ['PSKP 5 kolom, konten 672', pskp, CONTENT, false],
+    ['PSKP 5 kolom, breakout 1280', pskp, wide(1280), false],
+    ['PSKP 5 kolom, 700px (konten 660)', pskp, 660, false],
+    ['7 kolom campuran (lantai 766), breakout 1280', mixed7, wide(1280), false],
+    ['7 kolom campuran, breakout 1024', mixed7, wide(1024), false],
+    ['7 kolom campuran, breakout 768 (736)', mixed7, wide(768), true],
+    ['7 kolom campuran, konten 672', mixed7, CONTENT, true],
+    ['9 kolom campuran (lantai 956), breakout 1280', mixed9, wide(1280), false],
+    ['10 kolom campuran (lantai 1036), breakout 1280', mixed10, wide(1280), true],
+    ['10 kolom angka (lantai 880), breakout 1280', numbers(10), wide(1280), false],
     ['lebar 640 selalu accordion', numbers(1), COMPACT_BREAKPOINT, true],
     ['belum terukur (0)', numbers(1), 0, true],
     ['0 kolom', [], 700, false],
@@ -249,9 +261,9 @@ describe('isCompactTable (grid bila lantai kolom muat di lebar terukur)', () => 
   })
 
   it('histeresis: grid bertahan bila lebar turun kurang dari 16px di bawah lantai (scrollbar halaman muncul)', () => {
-    expect(isCompactTable(660, pskp, false)).toBe(false)
-    expect(isCompactTable(653, pskp, false)).toBe(true)
-    expect(isCompactTable(660, pskp, true)).toBe(true)
+    expect(isCompactTable(760, mixed7, false)).toBe(false)
+    expect(isCompactTable(749, mixed7, false)).toBe(true)
+    expect(isCompactTable(760, mixed7, true)).toBe(true)
     expect(isCompactTable(COMPACT_BREAKPOINT, numbers(1), false)).toBe(true)
   })
 })
@@ -292,29 +304,26 @@ describe('columnWeight (lebar kolom grid)', () => {
   })
 })
 
-describe('columnMinRem (lebar minimum kolom grid)', () => {
+describe('columnMinRem (lebar minimum kolom grid, mode padat 14px)', () => {
   const dropdown = (...labels: string[]) =>
     col('d', 'dropdown', false, { options: labels.map((label, i) => ({ id: String(i), label, sortOrder: i })) })
+  // Ukur nyata Source Sans 3 14px (Chrome): "123456" 41,7px, "Kurikulum" 61px.
+  // Isian padat: padding 6px kiri-kanan, batas fokus 2px kiri-kanan, spinner angka 15px.
+  const chrome = 2 * 6 + 2 * 2
 
-  it('setiap jenis punya lantai tetap yang memuat isiannya', () => {
-    expect(columnMinRem(col('n', 'number', false))).toBe(5.5)
-    expect(columnMinRem(col('j', 'short_text', false))).toBe(8)
-    expect(columnMinRem(dropdown('2023', '2024'))).toBe(7.5)
+  it.each<[string, Question, number]>([
+    ['angka: 6 digit + spinner', col('n', 'number', false), 41.7 + 15 + chrome],
+    ['teks: satu kata ±"Matematika" (69px), selebihnya turun baris', col('j', 'short_text', false), 69 + chrome],
+    ['dropdown: "Kurikulum" utuh + panah (padding kanan 22px)', dropdown('2023', '2024'), 61 + 6 + 22 + 4],
+  ])('%s', (_, column, contentPx) => {
+    const px = columnMinRem(column) * 16
+    expect(px).toBeGreaterThanOrEqual(contentPx)
+    expect(px - contentPx).toBeLessThan(20)
   })
 
   it('opsi panjang tidak menaikkan lantai dropdown (label terpilih turun baris), bobotnya yang naik', () => {
     const long = dropdown('x'.repeat(200))
     expect(columnMinRem(long)).toBe(columnMinRem(dropdown()))
     expect(columnWeight(long)).toBeGreaterThan(columnWeight(dropdown()))
-  })
-
-  it('PSKP 5 kolom muat di konten 672px (42rem) bersama judul baris', () => {
-    const pskp = [
-      col('murid', 'number', true), col('btu', 'number', true), col('judul', 'short_text', false),
-      dropdown('2023', '2022 atau sebelumnya'), dropdown('Kurikulum Merdeka', 'Kurikulum 2013'),
-    ]
-    const cells = pskp.reduce((sum, c) => sum + columnMinRem(c), 0)
-    expect(cells).toBe(34)
-    expect(cells + 6).toBeLessThanOrEqual(42)
   })
 })

@@ -9,7 +9,7 @@
   import { slide } from 'svelte/transition'
   import type { AnswerValue, Question, TableRow } from '$lib/types.js'
   import {
-    ROW_HEAD_WEIGHT, activeRows, columnMinRem, columnWeight, filledCount, firstOpenRow, groupRows, isCompactTable, isRowComplete, setCell,
+    ROW_HEAD_WEIGHT, activeRows, columnMinRem, columnWeight, filledCount, firstOpenRow, groupRows, isCompactTable, isRowComplete, requiredGridWidth, setCell,
     toTableAnswer, validateTable,
   } from '$lib/table.js'
   import { questionErrorId, scalarRuleError } from '$lib/utils.js'
@@ -40,10 +40,14 @@
   const totalWeight = $derived(weights.reduce((sum, w) => sum + w, ROW_HEAD_WEIGHT))
   const pct = (w: number) => `${(w / totalWeight) * 100}%`
 
+  // width: lebar wadah grid termasuk breakout; contentWidth: kolom konten pertanyaan.
   let width = $state(0)
+  let contentWidth = $state(0)
   // Bukan state: hanya diingat untuk histeresis isCompactTable, render awal (lebar 0) accordion.
   let wasCompact = true
   const compact = $derived.by(() => (wasCompact = isCompactTable(width, columns, wasCompact)))
+  // Melebar keluar kolom konten hanya bila lantai kolom tak muat di dalamnya.
+  const wide = $derived(!compact && requiredGridWidth(columns) > contentWidth)
 
   // Penilai sel sama dengan runner, jadi sel yang ditandai = sel di pesan galat.
   const invalid = $derived(error ? validateTable(question, value, (c, v) => scalarRuleError(c, v, i18n.t)) : null)
@@ -87,8 +91,11 @@
   />
 {/snippet}
 
-<div class="table-q" class:grid-wrap={!compact} bind:clientWidth={width}>
+<div class="table-q" bind:clientWidth={contentWidth}>
+  <!-- Pengukur: selebar wadah grid (termasuk breakout), apa pun tampilan yang aktif. -->
+  <div class="table-span" aria-hidden="true" bind:clientWidth={width}></div>
   {#if !compact}
+    <div class="grid-wrap" class:table-span={wide}>
     <table class="grid">
       <caption class="sr-only">{i18n.plain(question, 'title')}</caption>
       <colgroup>
@@ -122,6 +129,7 @@
         </tbody>
       {/each}
     </table>
+    </div>
   {:else}
     <div class="list" bind:this={listEl}>
       {#each groups as g, gi (gi)}
@@ -178,8 +186,20 @@
 
 <style>
   .table-q { width: 100%; min-width: 0; }
-  /* Banyak kolom pilihan di lebar tanggung bisa melebihi kartu; gulir di tabel, bukan halaman. */
-  .table-q.grid-wrap { overflow-x: auto; }
+
+  /* ≥768px kolom konten 720px; grid yang tak muat boleh melebar sampai min(960px, viewport - 32px),
+     dipusatkan lewat margin negatif. Di bawahnya (ponsel, tablet sempit) tetap 100%. */
+  .table-span { width: 100%; }
+  @media (min-width: 768px) {
+    .table-span {
+      --span: min(960px, 100vw - 32px);
+      width: var(--span);
+      margin-left: calc((100% - var(--span)) / 2);
+    }
+  }
+
+  /* Di pita histeresis tabel bisa melebihi wadah ≤16px; gulir di tabel, bukan halaman. */
+  .grid-wrap { overflow-x: auto; }
 
   .sr-only {
     position: absolute;
@@ -201,7 +221,7 @@
   }
 
   /* ── Grid: pola .grid MatrixInput ── */
-  .grid { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .grid { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 20px; }
 
   .corner,
   .col-head {
@@ -210,7 +230,7 @@
   }
 
   .col-head {
-    padding: 8px 4px;
+    padding: 6px 3px;
     font-weight: 500;
     font-size: 13px;
     line-height: 1.3;
@@ -230,19 +250,20 @@
   }
 
   /* Garis antarbaris, bukan baris belang: isian abu (.text-input) hilang di latar abu. */
-  .grid-row + .grid-row { border-top: 1px solid var(--hairline); }
+  .grid-row { border-top: 1px solid var(--hairline); }
 
+  /* Rata atas sejajar baris pertama isian (sel 4px + isian 32px, teks 20px). */
   .row-head {
-    padding: 8px 8px 8px 4px;
+    padding: 10px 8px 6px 4px;
     font-weight: 400;
     text-align: left;
+    vertical-align: top;
     color: var(--text-primary);
-    line-height: 1.4;
+    line-height: 20px;
   }
 
-  /* --cell-min: lantai dari columnMinRem; padding 3px dihitung requiredGridWidth (ubah keduanya bersamaan).
-     Di pita histeresis tabel bisa melebar ≤16px dan digulir di .grid-wrap. */
-  .cell { padding: 6px 3px; vertical-align: top; }
+  /* --cell-min: lantai dari columnMinRem; padding 3px dihitung requiredGridWidth (ubah keduanya bersamaan). */
+  .cell { padding: 4px 3px; vertical-align: top; }
 
   /* ── Accordion: pola .item MatrixInput ── */
   .list { display: flex; flex-direction: column; gap: 8px; }

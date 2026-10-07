@@ -86,7 +86,7 @@
        .text-input menampilkan label utuh; select transparan di atasnya memegang
        klik, keyboard, dan pembaca layar. -->
   <div class="select-box">
-    <span class="text-input select-face" class:cell-dense={wrapValue} class:invalid aria-hidden="true">{chosen ? i18n.label(chosen) : i18n.t('tableSelectPlaceholder')}</span>
+    <span class="text-input grow-input select-face" class:cell-dense={wrapValue} class:invalid aria-hidden="true">{chosen ? i18n.label(chosen) : i18n.t('tableSelectPlaceholder')}</span>
     <select
       value={text}
       title={chosen ? i18n.label(chosen) : undefined}
@@ -125,10 +125,15 @@
 <style>
   .text-input { display: block; }
 
+  .select-box { position: relative; }
+
   .text-input[aria-invalid='true'],
   .select-face.invalid {
     border-color: var(--error);
   }
+
+  /* Ruang panah; ukuran lain dari .grow-input (app.css), .cell-dense di bawah menimpanya. */
+  .select-face { padding-right: 36px; }
 
   /* Grid desktop: 14px, kontrol ±32px. --cell-min dari columnMinRem (table.ts);
      padding 6px dan batas fokus 2px ikut dihitung di sana. */
@@ -147,16 +152,6 @@
   @media (pointer: coarse) {
     .cell-dense { font-size: 16px; min-height: 44px; }
     input.cell-dense { height: 44px; }
-  }
-
-  .select-box { position: relative; }
-
-  .select-face {
-    height: auto;
-    min-height: 52px;
-    padding: 14px 36px 14px 16px;
-    line-height: 1.4;
-    overflow-wrap: anywhere;
   }
 
   .select-face.cell-dense { padding-right: 22px; }

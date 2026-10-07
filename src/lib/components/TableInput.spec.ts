@@ -96,10 +96,10 @@ describe('TableCellInput', () => {
     })
     for (const wrapValue of [true, false]) {
       const chosen = render(TableCellInput, { props: { column, value: '2022 atau sebelumnya', label: 'IPA — Tahun', wrapValue, onChange: noop } })
-      expect(chosen.body).toMatch(/class="text-input select-face[^"]*"[^>]*aria-hidden="true"[^>]*>2022 atau sebelumnya</)
+      expect(chosen.body).toMatch(/class="text-input grow-input select-face[^"]*"[^>]*aria-hidden="true"[^>]*>2022 atau sebelumnya</)
       expect(chosen.body).toContain('aria-label="IPA — Tahun"')
       const empty = render(TableCellInput, { props: { column, value: undefined, label: 'IPA — Tahun', wrapValue, onChange: noop } })
-      expect(empty.body).toMatch(/class="text-input select-face[^"]*"[^>]*>Pilih</)
+      expect(empty.body).toMatch(/class="text-input grow-input select-face[^"]*"[^>]*>Pilih</)
     }
   })
 })
@@ -116,6 +116,11 @@ describe('TableInput — markup awal (accordion)', () => {
     expect(body).toContain(`id="${panelId}"`)
     expect(body).toContain('aria-label="IPA — Murid"')
     expect(body).not.toContain('aria-label="Matematika — Murid"')
+  })
+
+  it('pengukur lebar selebar wadah grid (breakout ≥768px) selalu ada, kosong dan tersembunyi dari pembaca layar', () => {
+    const { body } = render(TableInput, { props: { question: table, value: null, onChange: noop } })
+    expect(body).toMatch(/<div class="table-span[^"]*" aria-hidden="true"><\/div>/)
   })
 
   it('badge n/m sel terisi, judul kelompok, keterangan kolom, dan tombol baris berikutnya hanya bila ada', () => {

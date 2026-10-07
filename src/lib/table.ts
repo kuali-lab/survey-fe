@@ -19,7 +19,7 @@ export type TableIssue = { message: string; rowKey: string | null; columnId: str
 export type CellValidator = (column: Question, value: AnswerValue) => string | null
 
 /** Lantai judul baris (px, termasuk padding 12px); label panjang turun baris. */
-export const ROW_HEAD_MIN_PX = 96
+export const ROW_HEAD_MIN_PX = 80
 /** Padding horizontal `.cell` (3px kiri + 3px kanan); tabel border-collapse tanpa batas vertikal. */
 const CELL_PAD_X = 6
 /** Kira-kira lebar scrollbar halaman: lebar yang hilang saat grid membuat halaman bergulir. */
@@ -31,9 +31,10 @@ export function requiredGridWidth(columns: Question[]): number {
 }
 
 /**
- * Accordion bila ponsel (K111) atau lantai kolom tak muat. Grid yang sedang tampil
- * bertahan sampai 16px di bawah lantai, supaya scrollbar halaman tidak membuatnya bolak-balik.
- * ponytail: lantai judul baris tetap 96px, bukan diukur dari label; ukur bila label panjang sering menyempitkan sel.
+ * Accordion bila ponsel (K111) atau lantai kolom tak muat di lebar terukur (termasuk
+ * breakout ≥768px, lihat TableInput). Grid yang sedang tampil bertahan sampai 16px di
+ * bawah lantai, supaya scrollbar halaman tidak membuatnya bolak-balik.
+ * ponytail: lantai judul baris tetap 80px, bukan diukur dari label; ukur bila label panjang sering menyempitkan sel.
  */
 export function isCompactTable(width: number, columns: Question[], wasCompact = true): boolean {
   if (width <= COMPACT_BREAKPOINT) return true
@@ -55,13 +56,15 @@ export function columnWeight(col: Question): number {
 }
 
 /**
- * Lebar minimum isian sel grid (rem); bobot hanya membagi sisa lebar di atas lantai ini.
- * Angka: ±6 digit 16px + padding + spinner. Dropdown tetap: label terpilih turun baris lewat `select-face`.
+ * Lebar minimum isian sel grid padat (rem, font 14px); bobot hanya membagi sisa lebar.
+ * Diukur dari Source Sans 3 14px + padding 6px + batas fokus 2px (kiri-kanan):
+ * angka "123456" 41,7px + spinner 15px; dropdown "Kurikulum" 61px + panah 22px
+ * (label lebih panjang turun baris); teks ±88px isi, selebihnya turun baris.
  */
 export function columnMinRem(col: Question): number {
-  if (col.type === 'number') return 5.5
-  if (col.type === 'dropdown') return 7.5
-  return 8
+  if (col.type === 'number') return 4.625
+  if (col.type === 'dropdown') return 6
+  return 6.5
 }
 
 export function activeRows(q: Question): TableRow[] {
