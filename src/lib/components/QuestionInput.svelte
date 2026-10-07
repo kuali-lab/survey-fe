@@ -18,6 +18,7 @@
   import { getRegionName, resolveRegionName } from '$lib/regionNames.js'
   import { SEARCH_DEBOUNCE_MS, filterBySearch, effectiveMinChars, debounce, shouldShowSearchBar } from '$lib/optionSearch.js'
   import { applyNumberInput, numberInputText, numberInputCompare } from '$lib/numberInput.js'
+  import { autoExpand } from '$lib/growTextarea.js'
   import { fade, fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import { useI18n } from '$lib/i18n/context.js'
@@ -462,20 +463,6 @@
 
   function isImageUrl(url: string): boolean {
     return /\.(jpe?g|png|gif|webp|svg|avif|bmp)(\?|#|$)/i.test(url)
-  }
-
-  // Action: keep a textarea sized to its content. Adjusts on mount (so
-  // restored values from localStorage don't clip) and on every input.
-  function autoExpand(node: HTMLTextAreaElement) {
-    const adjust = () => {
-      node.style.height = 'auto'
-      node.style.height = node.scrollHeight + 'px'
-    }
-    adjust()
-    node.addEventListener('input', adjust)
-    return {
-      destroy() { node.removeEventListener('input', adjust) }
-    }
   }
 
   // ── Top of Mind: one list, two stages (see $lib/topOfMind.ts) ─────────────
