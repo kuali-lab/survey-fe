@@ -9,7 +9,7 @@
   import { slide } from 'svelte/transition'
   import type { AnswerValue, Question, TableRow } from '$lib/types.js'
   import {
-    ROW_HEAD_WEIGHT, activeRows, columnWeight, filledCount, firstOpenRow, groupRows, isCompactTable, isRowComplete, setCell,
+    ROW_HEAD_WEIGHT, activeRows, columnMinRem, columnWeight, filledCount, firstOpenRow, groupRows, isCompactTable, isRowComplete, setCell,
     toTableAnswer, validateTable,
   } from '$lib/table.js'
   import { questionErrorId, scalarRuleError } from '$lib/utils.js'
@@ -113,7 +113,7 @@
             <tr class="grid-row">
               <th class="row-head" scope="row">{i18n.label(row)}</th>
               {#each columns as col (col.id)}
-                <td class="cell">{@render cell(row, col)}</td>
+                <td class="cell" style:--cell-min="{columnMinRem(col)}rem">{@render cell(row, col)}</td>
               {/each}
             </tr>
           {/each}
@@ -230,14 +230,15 @@
   .grid-row:nth-child(even) { background: var(--canvas-soft); }
 
   .row-head {
-    padding: 8px 12px 8px 4px;
+    padding: 8px 8px 8px 4px;
     font-weight: 400;
     text-align: left;
     color: var(--text-primary);
     line-height: 1.4;
   }
 
-  .cell { padding: 6px 4px; vertical-align: top; }
+  /* --cell-min: lantai lebar isian dari columnMinRem; tabel boleh melebar dan digulir di .grid-wrap. */
+  .cell { padding: 6px 3px; vertical-align: top; --cell-pad: 6px; }
 
   /* ── Accordion: pola .item MatrixInput ── */
   .list { display: flex; flex-direction: column; gap: 8px; }

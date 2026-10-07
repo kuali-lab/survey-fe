@@ -40,6 +40,16 @@ export function columnWeight(col: Question): number {
   return Math.min(Math.max(longest + 7, 12), 28)
 }
 
+/**
+ * Lebar minimum isian sel grid (rem); bobot hanya membagi sisa lebar di atas lantai ini.
+ * Angka: ±6 digit 16px + padding + spinner. Dropdown tetap: label terpilih turun baris lewat `select-face`.
+ */
+export function columnMinRem(col: Question): number {
+  if (col.type === 'number') return 5.5
+  if (col.type === 'dropdown') return 7.5
+  return 8
+}
+
 export function activeRows(q: Question): TableRow[] {
   return (q.tableRows ?? []).filter((r) => !r.deleted)
 }

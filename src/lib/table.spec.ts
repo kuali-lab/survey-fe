@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { AnswerValue, Question, TableAnswer } from './types.js'
 import {
-  COMPACT_BREAKPOINT, activeRows, columnWeight, filledCount, firstOpenRow, groupRows, isCellFilled, isCompactTable,
+  COMPACT_BREAKPOINT, activeRows, columnMinRem, columnWeight, filledCount, firstOpenRow, groupRows, isCellFilled, isCompactTable,
   isRowComplete, isTableTouched, pruneTableAnswer, requiredCount, setCell, tableRecap, validateTable,
 } from './table.js'
 import { scalarRuleError } from './utils.js'
@@ -251,5 +251,32 @@ describe('columnWeight (lebar kolom grid)', () => {
     expect(columnWeight(dropdown('A'))).toBe(min)
     expect(columnWeight(col('d', 'dropdown', false))).toBe(min)
     expect(columnWeight(dropdown('x'.repeat(200)))).toBe(columnWeight(dropdown('x'.repeat(60))))
+  })
+})
+
+describe('columnMinRem (lebar minimum kolom grid)', () => {
+  const dropdown = (...labels: string[]) =>
+    col('d', 'dropdown', false, { options: labels.map((label, i) => ({ id: String(i), label, sortOrder: i })) })
+
+  it('setiap jenis punya lantai tetap yang memuat isiannya', () => {
+    expect(columnMinRem(col('n', 'number', false))).toBe(5.5)
+    expect(columnMinRem(col('j', 'short_text', false))).toBe(8)
+    expect(columnMinRem(dropdown('2023', '2024'))).toBe(7.5)
+  })
+
+  it('opsi panjang tidak menaikkan lantai dropdown (label terpilih turun baris), bobotnya yang naik', () => {
+    const long = dropdown('x'.repeat(200))
+    expect(columnMinRem(long)).toBe(columnMinRem(dropdown()))
+    expect(columnWeight(long)).toBeGreaterThan(columnWeight(dropdown()))
+  })
+
+  it('PSKP 5 kolom muat di konten 672px (42rem) bersama judul baris', () => {
+    const pskp = [
+      col('murid', 'number', true), col('btu', 'number', true), col('judul', 'short_text', false),
+      dropdown('2023', '2022 atau sebelumnya'), dropdown('Kurikulum Merdeka', 'Kurikulum 2013'),
+    ]
+    const cells = pskp.reduce((sum, c) => sum + columnMinRem(c), 0)
+    expect(cells).toBe(34)
+    expect(cells + 6).toBeLessThanOrEqual(42)
   })
 })

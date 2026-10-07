@@ -119,11 +119,12 @@
      jadi sel butuh batas sendiri (tertiary-60: 3,25:1 di putih, 3,03:1 di belang). */
   .cell-input {
     width: 100%;
-    min-width: 0;
+    /* --cell-min / --cell-pad diisi sel grid; accordion memakai bawaan. */
+    min-width: var(--cell-min, 0);
     height: 44px;
     border: 1px solid var(--tertiary-60);
     border-radius: var(--radius-input);
-    padding: 0 10px;
+    padding: 0 var(--cell-pad, 10px);
     font-family: var(--font);
     font-size: 16px;
     color: var(--text-primary);
@@ -144,7 +145,7 @@
   }
 
   select.cell-input {
-    min-width: 8rem;
+    min-width: var(--cell-min, 8rem);
     text-overflow: ellipsis;
   }
 
@@ -154,9 +155,9 @@
 
   .select-face {
     display: block;
-    min-width: 8rem;
+    min-width: var(--cell-min, 8rem);
     min-height: 44px;
-    padding: 10px 30px 10px 10px;
+    padding: 10px 30px 10px var(--cell-pad, 10px);
     border: 1px solid var(--tertiary-60);
     border-radius: var(--radius-input);
     background: var(--canvas);
