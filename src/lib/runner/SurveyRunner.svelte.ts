@@ -20,6 +20,8 @@ import {
   remainingOptions, setTopOfMindFirst, toggleTopOfMindRest, topOfMindFirst,
 } from '$lib/topOfMind.js'
 import { LEGACY_LOCALE, t, type MessageKey } from '$lib/i18n/messages.js'
+import { surveyLanguages } from '$lib/i18n/content.js'
+import { activeRows, isTableTouched, validateTable } from '$lib/table.js'
 import { buildSurveySections, type SurveyPage } from './sections.js'
 
 export type { SurveyPage }
@@ -266,7 +268,8 @@ export class SurveyRunner {
     if (mode === 'scroll') {
       let answered = 0
       for (const q of this.answerableQuestions) {
-        if (isAnsweredValue(this.answers[q.id])) answered++
+        const a = this.answers[q.id]
+        if (q.type === 'table' ? isTableTouched(a, activeRows(q)) : isAnsweredValue(a)) answered++
       }
       return Math.round((answered / total) * 100)
     }
@@ -283,6 +286,13 @@ export class SurveyRunner {
 
   // ---- Validation ----
   private validateOne(q: Question, answer: AnswerValue): string | null {
+    // Tabel: aturan wajib + K108 di table.ts; tiap sel terisi dinilai validateOne
+    // kolomnya, jadi rentang angka dan panjang teks memakai aturan yang sama.
+    if (q.type === 'table') {
+      const primary = surveyLanguages(this.survey).primary
+      return validateTable(q, answer, (col, v) => this.validateOne(col, v), this._getLocale(), primary)?.message ?? null
+    }
+
     // Pilihan Bertingkat D-1: a required dependent the respondent cannot answer
     // is treated as satisfied, so it never traps them. That is the case when the
     // parent is answered but leaves no mapped option ('empty'), and when the
