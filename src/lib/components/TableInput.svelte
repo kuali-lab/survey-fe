@@ -80,7 +80,7 @@
   />
 {/snippet}
 
-<div class="table-q" bind:clientWidth={width}>
+<div class="table-q" class:grid-wrap={!compact} bind:clientWidth={width}>
   {#if !compact}
     <table class="grid">
       <caption class="sr-only">{i18n.plain(question, 'title')}</caption>
@@ -167,6 +167,8 @@
 
 <style>
   .table-q { width: 100%; min-width: 0; }
+  /* Banyak kolom pilihan di lebar tanggung bisa melebihi kartu; gulir di tabel, bukan halaman. */
+  .table-q.grid-wrap { overflow-x: auto; }
 
   .sr-only {
     position: absolute;

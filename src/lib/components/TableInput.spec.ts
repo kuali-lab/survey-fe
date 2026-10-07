@@ -60,7 +60,8 @@ describe('TableCellInput', () => {
     const { body } = render(TableCellInput, { props: { column, value: '2023', label: 'IPA — Tahun', onChange: noop } })
     expect(body).toContain('<select')
     expect(body).toMatch(/<option value="2023"[^>]*selected/)
-    expect(body).toContain('-- Pilih salah satu --')
+    // Placeholder pendek supaya muat di lebar kolom grid desktop.
+    expect(body).toMatch(/<option value=""[^>]*>Pilih<\/option>/)
   })
 })
 

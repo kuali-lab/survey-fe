@@ -81,7 +81,7 @@
     aria-describedby={ariaDescribedBy}
     onchange={(e) => onChange(e.currentTarget.value)}
   >
-    <option value="">{i18n.t('ddPlaceholder')}</option>
+    <option value="">{i18n.t('tableSelectPlaceholder')}</option>
     {#each column.options ?? [] as opt (opt.id)}
       <option value={opt.label}>{i18n.label(opt)}</option>
     {/each}
@@ -105,31 +105,37 @@
 {/if}
 
 <style>
-  /* Tampilan sama dengan .text-input di QuestionInput, dirapatkan untuk sel. */
+  /* Berbeda dari .text-input kartu: grid punya baris belang ber-latar --canvas-soft,
+     jadi sel butuh batas sendiri (tertiary-60: 3,25:1 di putih, 3,03:1 di belang). */
   .cell-input {
     width: 100%;
     min-width: 0;
     height: 44px;
-    border: 1px solid transparent;
+    border: 1px solid var(--tertiary-60);
     border-radius: var(--radius-input);
     padding: 0 10px;
     font-family: var(--font);
     font-size: 16px;
     color: var(--text-primary);
-    background: var(--canvas-soft);
-    transition: background 0.15s, border-color 0.15s;
+    background: var(--canvas);
+    transition: border-color 0.15s, box-shadow 0.15s;
   }
 
+  /* Cincin 2px lewat box-shadow agar ukuran sel tidak bergeser. */
   .cell-input:focus {
     outline: none;
-    background: var(--canvas);
-    border-color: var(--ink);
-    border-width: 2px;
+    border-color: var(--text-primary);
+    box-shadow: 0 0 0 1px var(--text-primary);
   }
 
   .cell-input[aria-invalid='true'] {
     border-color: var(--error);
-    border-width: 2px;
+    box-shadow: 0 0 0 1px var(--error);
+  }
+
+  select.cell-input {
+    min-width: 8rem;
+    text-overflow: ellipsis;
   }
 
   .cell-warn {

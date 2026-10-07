@@ -78,6 +78,7 @@ const id = {
 
   matrixProgress: '{n} dari {total} terjawab',
   tableNextRow: 'Baris berikutnya',
+  tableSelectPlaceholder: 'Pilih',
 
   ddPlaceholder: '-- Pilih salah satu --',
   ddSearch: 'Cari pilihan...',
@@ -161,6 +162,7 @@ const en: Record<MessageKey, string> = {
 
   matrixProgress: '{n} of {total} answered',
   tableNextRow: 'Next row',
+  tableSelectPlaceholder: 'Choose',
 
   ddPlaceholder: '-- Choose one --',
   ddSearch: 'Search options...',
