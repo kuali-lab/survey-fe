@@ -91,9 +91,9 @@ export function numberInputCompare(value: AnswerValue | undefined): number | nul
 }
 
 /**
- * Action: a wheel over a focused number input steps its value (it can even go
- * negative). Blur instead of preventDefault, so the same wheel keeps scrolling
- * the page. Arrow keys stay native: they already respect the min/max attributes.
+ * Action: roda mouse di atas input angka yang fokus mengubah nilainya (bisa
+ * sampai negatif). Blur, bukan preventDefault, supaya roda yang sama tetap
+ * menggulir halaman. Tombol panah dibiarkan bawaan: sudah menghormati min/max.
  */
 export function noWheelChange(node: HTMLInputElement) {
   const onWheel = () => {

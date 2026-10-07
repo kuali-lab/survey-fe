@@ -89,7 +89,6 @@
     <span class="text-input grow-input select-face" class:cell-dense={wrapValue} class:invalid aria-hidden="true">{chosen ? i18n.label(chosen) : i18n.t('tableSelectPlaceholder')}</span>
     <select
       value={text}
-      title={chosen ? i18n.label(chosen) : undefined}
       aria-label={label}
       aria-invalid={invalid || undefined}
       aria-describedby={ariaDescribedBy}
@@ -102,7 +101,8 @@
     </select>
   </div>
 {:else}
-  <!-- Enter = baris baru; runner mengabaikan tombol dari TEXTAREA, jadi tidak maju halaman. -->
+  <!-- Enter = baris baru (keputusan produk 8 Okt, beda dari short_text biasa yang menolak Enter);
+       runner mengabaikan tombol dari TEXTAREA, jadi tidak maju halaman. -->
   <textarea
     class="text-input grow-input"
     class:cell-dense={wrapValue}
@@ -123,6 +123,7 @@
 {/if}
 
 <style>
+  /* Batas isian ±1,05:1 terhadap putih sengaja sama dengan isian lain di survei. */
   .text-input { display: block; }
 
   .select-box { position: relative; }
@@ -148,9 +149,10 @@
 
   input.cell-dense { height: 32px; padding-block: 0; }
 
-  /* Sentuh (iPad): <16px memicu zoom saat fokus, dan target sentuh minimal 44px. */
+  /* Sentuh (iPad): <16px memicu zoom saat fokus, dan target sentuh minimal 44px.
+     Lantai dikalibrasi untuk 14px; 16/14 ≈ 1,15 supaya "Kurikulum" tak terbelah. */
   @media (pointer: coarse) {
-    .cell-dense { font-size: 16px; min-height: 44px; }
+    .cell-dense { font-size: 16px; min-height: 44px; min-width: calc(var(--cell-min, 0px) * 1.15); }
     input.cell-dense { height: 44px; }
   }
 
@@ -179,6 +181,8 @@
     opacity: 0;
     cursor: pointer;
     font-size: 16px;
+    /* Safari macOS mengabaikan height pada select berpenampilan bawaan. */
+    appearance: none;
   }
 
   /* Fokus milik select; muka meniru .text-input:focus (app.css). */
@@ -186,6 +190,12 @@
     background: var(--canvas);
     border-color: var(--ink);
     border-width: 2px;
+  }
+
+  /* High Contrast: warna batas dipaksa sistem, jadi fokus butuh outline sendiri. */
+  @media (forced-colors: active) {
+    .select-box:focus-within .select-face { outline: 2px solid Highlight; }
+    .select-face::after { border-color: CanvasText; }
   }
 
   .cell-warn {

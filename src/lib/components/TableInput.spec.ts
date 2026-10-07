@@ -80,14 +80,12 @@ describe('TableCellInput', () => {
     expect(body).toMatch(/<option value=""[^>]*>Pilih<\/option>/)
   })
 
-  it('dropdown: title berisi label terpilih (jaring pengaman bila terpotong); kosong tanpa title', () => {
+  it('dropdown: tanpa title (muka sudah menampilkan nilai utuh; title menggandakannya di pembaca layar)', () => {
     const column = col('Kurikulum', 'dropdown', {
       options: [{ id: 'a', label: 'Kurikulum Merdeka', sortOrder: 0 }, { id: 'b', label: 'Kurikulum 2013', sortOrder: 1 }],
     })
     const chosen = render(TableCellInput, { props: { column, value: 'Kurikulum Merdeka', label: 'IPA — Kurikulum', onChange: noop } })
-    expect(chosen.body).toMatch(/<select[^>]*title="Kurikulum Merdeka"/)
-    const empty = render(TableCellInput, { props: { column, value: undefined, label: 'IPA — Kurikulum', onChange: noop } })
-    expect(empty.body).not.toMatch(/<select[^>]*title=/)
+    expect(chosen.body).not.toContain('title=')
   })
 
   it('dropdown: label terpilih tampil utuh di muka bergaya .text-input (bisa turun baris), select transparan memegang a11y', () => {
