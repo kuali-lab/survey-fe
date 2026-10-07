@@ -113,7 +113,7 @@
     aria-invalid={invalid || undefined}
     aria-describedby={ariaDescribedBy}
     oninput={(e) => onChange(e.currentTarget.value)}
-    use:autoExpand
+    use:autoExpand={text}
   ></textarea>
 {/if}
 {#if warn}
