@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest'
 import type { AnswerValue, Question, TableAnswer } from './types.js'
 import {
   COMPACT_BREAKPOINT, activeRows, filledCount, firstOpenRow, groupRows, isCellFilled, isCompactTable,
-  isRowComplete, isTableTouched, requiredCount, setCell, tableRecap, validateTable,
+  isRowComplete, isTableTouched, pruneTableAnswer, requiredCount, setCell, tableRecap, validateTable,
 } from './table.js'
+import { scalarRuleError } from './utils.js'
 
 function col(id: string, type: Question['type'], required: boolean, extra: Partial<Question> = {}): Question {
   return {
@@ -162,6 +163,45 @@ describe('validateTable — wajib dan K108 (paritas 01 §6.1)', () => {
   })
 })
 
+describe('pruneTableAnswer (draf lama vs tabel yang sudah diubah)', () => {
+  const q: Question = {
+    ...table(),
+    fields: [
+      ...table().fields!,
+      col('jenis', 'dropdown', false, { options: [{ id: 'o1', label: 'Negeri', sortOrder: 0 }, { id: 'o2', label: 'Swasta', sortOrder: 1 }] }),
+    ],
+  }
+
+  it('jawaban valid tidak berubah', () => {
+    const a: TableAnswer = { '1': { murid: 0, judul: 'x', jenis: 'Negeri' }, '2': { btu: '2' } }
+    expect(pruneTableAnswer(q, a)).toEqual(a)
+  })
+
+  it('membuang baris dihapus/tak dikenal, kolom dihapus, dan label opsi yang sudah diganti', () => {
+    const stale = { '1': { murid: '3', lama: 'x', jenis: 'Negri' }, '3': { murid: '1' }, '99': { murid: '2' }, '2': { jenis: 'Swasta' } }
+    expect(pruneTableAnswer(q, stale)).toEqual({ '1': { murid: '3' }, '2': { jenis: 'Swasta' } })
+  })
+
+  it('baris yang jadi kosong dibuang; tabel yang jadi kosong = objek kosong', () => {
+    expect(pruneTableAnswer(q, { '1': { lama: 'x' }, '3': { murid: '1' } })).toEqual({})
+    expect(pruneTableAnswer(q, 'teks lama' as AnswerValue)).toEqual({})
+  })
+})
+
+describe('scalarRuleError sebagai penilai sel (penanda sel = sel di pesan galat)', () => {
+  const rules = (c: Question, v: AnswerValue) => scalarRuleError(c, v, (key, p) => `${key}:${p?.n}`)
+  const q: Question = { ...table(), fields: [col('murid', 'number', true, { maxValue: 100 }), col('judul', 'short_text', true, { maxLength: 3 })] }
+
+  it('galat rentang pada sel terisi menunjuk sel itu, bukan sel wajib kosong berikutnya', () => {
+    expect(validateTable(q, { '1': { murid: '150' } }, rules)).toMatchObject({ rowKey: '1', columnId: 'murid' })
+  })
+
+  it('galat panjang teks di baris 2 menunjuk baris 2', () => {
+    const issue = validateTable(q, { '1': { murid: '1', judul: 'ab' }, '2': { murid: '2', judul: 'abcd' } }, rules)
+    expect(issue).toMatchObject({ rowKey: '2', columnId: 'judul', message: 'IPA — judul: errMaxLength:3' })
+  })
+})
+
 describe('tableRecap', () => {
   it('n dari m sel terisi (m = baris aktif × kolom)', () => {
     expect(tableRecap(table(), { '1': { murid: 0, judul: 'x' }, '3': { murid: 1 } })).toBe('2 dari 6 sel terisi')
@@ -172,7 +212,7 @@ describe('tableRecap', () => {
 describe('isCompactTable', () => {
   it.each<[number, number, boolean]>([
     [0, 3, true], [COMPACT_BREAKPOINT, 3, true], [COMPACT_BREAKPOINT + 1, 3, false],
-    [720, 5, false], [720, 6, true], [900, 6, false],
+    [720, 5, false], [720, 6, true], [900, 6, true],
   ])('lebar %d, %d kolom → %s', (w, n, want) => {
     expect(isCompactTable(w, n)).toBe(want)
   })

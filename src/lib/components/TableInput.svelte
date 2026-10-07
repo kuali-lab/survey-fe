@@ -12,7 +12,7 @@
     activeRows, filledCount, firstOpenRow, groupRows, isCompactTable, isRowComplete, setCell,
     toTableAnswer, validateTable,
   } from '$lib/table.js'
-  import { questionErrorId } from '$lib/utils.js'
+  import { questionErrorId, scalarRuleError } from '$lib/utils.js'
   import { useI18n } from '$lib/i18n/context.js'
   import TableCellInput from './TableCellInput.svelte'
 
@@ -39,9 +39,8 @@
   let width = $state(0)
   const compact = $derived(isCompactTable(width, columns.length))
 
-  // ponytail: sel yang ditandai = sel wajib kosong pertama (validateCell kosong).
-  // Galat rentang tetap tampil sebagai pesan berisi baris + kolom, tanpa penanda sel.
-  const invalid = $derived(error ? validateTable(question, value, () => null) : null)
+  // Penilai sel sama dengan runner, jadi sel yang ditandai = sel di pesan galat.
+  const invalid = $derived(error ? validateTable(question, value, (c, v) => scalarRuleError(c, v, i18n.t)) : null)
 
   // Dibuka sekali saat tampil (baris pertama yang belum lengkap); sesudahnya milik responden.
   let openRow = $state<string | null>(untrack(() => firstOpenRow(question, value)))
@@ -69,13 +68,14 @@
   }
 </script>
 
-{#snippet cell(row: TableRow, col: Question)}
+{#snippet cell(row: TableRow, col: Question, hintId?: string)}
   <TableCellInput
     column={col}
     value={answer[keyOf(row)]?.[col.id]}
     label={cellLabel(row, col)}
     invalid={isInvalid(row, col)}
     describedBy={errorId}
+    {hintId}
     onChange={(v) => update(row, col, v)}
   />
 {/snippet}
@@ -133,8 +133,9 @@
                 {#if done}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>{:else}{rows.indexOf(row) + 1}{/if}
               </span>
               <span class="item-label">{i18n.label(row)}</span>
-              <span class="badge" aria-label={i18n.t('matrixProgress', { n: filled, total: columns.length })}>
-                {filled}/{columns.length}
+              <span class="badge">
+                <span aria-hidden="true">{filled}/{columns.length}</span>
+                <span class="sr-only">{i18n.t('matrixProgress', { n: filled, total: columns.length })}</span>
               </span>
               <span class="chevron" aria-hidden="true">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
@@ -143,12 +144,13 @@
             {#if open}
               <div id={panelId} class="fields" role="group" aria-label={i18n.label(row)} transition:slide={{ duration: reduceMotion ? 0 : 180 }}>
                 {#each columns as col (col.id)}
+                  {@const hintId = col.description ? `${panelId}-hint-${col.id}` : undefined}
                   <div class="field">
                     <span class="field-label" aria-hidden="true">
                       {i18n.plain(col, 'title')}{#if col.required}<span class="req">*</span>{/if}
                     </span>
-                    {#if col.description}<span class="col-hint">{i18n.plain(col, 'description')}</span>{/if}
-                    {@render cell(row, col)}
+                    {#if hintId}<span class="col-hint" id={hintId}>{i18n.plain(col, 'description')}</span>{/if}
+                    {@render cell(row, col, hintId)}
                   </div>
                 {/each}
                 {#if rows.indexOf(row) < rows.length - 1}
@@ -202,6 +204,7 @@
     color: var(--text-body);
     text-align: left;
     vertical-align: bottom;
+    overflow-wrap: anywhere;
   }
 
   .group-row th {

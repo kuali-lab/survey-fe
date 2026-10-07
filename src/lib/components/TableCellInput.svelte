@@ -14,6 +14,7 @@
     label,
     invalid = false,
     describedBy,
+    hintId,
     onChange,
   }: {
     column: Question
@@ -22,10 +23,13 @@
     label: string
     invalid?: boolean
     describedBy?: string
+    /** Id petunjuk kolom yang tampil di samping sel (accordion). */
+    hintId?: string
     onChange: (v: AnswerValue) => void
   } = $props()
 
   const i18n = useI18n()
+  const ariaDescribedBy = $derived([hintId, invalid ? describedBy : undefined].filter(Boolean).join(' ') || undefined)
   const text = $derived(typeof value === 'string' ? value : '')
   // Peringatan rentang angka saat mengetik; shakeKey memutar ulang animasi getar.
   let warn = $state<string | null>(null)
@@ -64,7 +68,7 @@
     value={numberInputText(value)}
     aria-label={label}
     aria-invalid={invalid || undefined}
-    aria-describedby={invalid ? describedBy : undefined}
+    aria-describedby={ariaDescribedBy}
     oninput={onNumberInput}
     onblur={onNumberBlur}
   />
@@ -74,7 +78,7 @@
     value={text}
     aria-label={label}
     aria-invalid={invalid || undefined}
-    aria-describedby={invalid ? describedBy : undefined}
+    aria-describedby={ariaDescribedBy}
     onchange={(e) => onChange(e.currentTarget.value)}
   >
     <option value="">{i18n.t('ddPlaceholder')}</option>
@@ -90,7 +94,7 @@
     value={text}
     aria-label={label}
     aria-invalid={invalid || undefined}
-    aria-describedby={invalid ? describedBy : undefined}
+    aria-describedby={ariaDescribedBy}
     oninput={(e) => onChange(e.currentTarget.value)}
   />
 {/if}

@@ -1,4 +1,5 @@
-import type { Question } from './types.js'
+import type { AnswerValue, Question } from './types.js'
+import type { MessageKey } from './i18n/messages.js'
 
 const STRUCTURAL = ['welcome_page', 'closing_page', 'question_group']
 
@@ -24,4 +25,34 @@ export function getQuestionNumber(question: Question, questions: Question[]): st
 /** Id elemen pesan galat pertanyaan; dirujuk `aria-describedby` sel yang tidak valid. */
 export function questionErrorId(questionId: string): string {
   return `q-error-${questionId}`
+}
+
+type Msg = (key: MessageKey, params?: Record<string, string | number>) => string
+
+/**
+ * Panjang teks dan rentang angka satu nilai skalar. Satu sumber untuk runner dan
+ * penanda sel TableInput, supaya sel yang ditandai selalu sel di pesan galat.
+ */
+export function scalarRuleError(q: Question, answer: AnswerValue, msg: Msg): string | null {
+  let strVal = ''
+  if (typeof answer === 'string') strVal = answer.trim()
+  else if (typeof answer === 'number') strVal = String(answer)
+
+  if (strVal !== '') {
+    const len = strVal.length
+    if (q.minLength && len < q.minLength) return msg('errMinLength', { n: q.minLength })
+    if (q.maxLength && len > q.maxLength) return msg('errMaxLength', { n: q.maxLength })
+  }
+
+  if (q.type === 'number') {
+    let answerNum: unknown = answer
+    if (typeof answer === 'string' && answer.trim() !== '') answerNum = Number(answer)
+    if (typeof answerNum === 'number' && !isNaN(answerNum)) {
+      const minVal = q.minValue !== undefined && q.minValue !== null ? Number(q.minValue) : null
+      const maxVal = q.maxValue !== undefined && q.maxValue !== null ? Number(q.maxValue) : null
+      if (minVal !== null && answerNum < minVal) return msg('errMinValue', { n: minVal })
+      if (maxVal !== null && answerNum > maxVal) return msg('errMaxValue', { n: maxVal })
+    }
+  }
+  return null
 }

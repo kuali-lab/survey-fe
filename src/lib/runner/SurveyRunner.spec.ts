@@ -1158,6 +1158,15 @@ describe('SurveyRunner — tipe tabel', () => {
     expect(runner.questionErrors.t).toBe('Lengkapi kolom «Jumlah murid» pada baris «IPA».')
   })
 
+  it('draf berkunci basi dipangkas saat dimuat; tabel yang jadi kosong hilang dari jawaban', () => {
+    const { runner } = makeTableRunner()
+    runner.loadFrom({ answers: { g: 'Ya', t: { '1': { murid: '3', lama: 'x' }, '7': { murid: '1' } } }, currentIndex: 1 })
+    expect(runner.answers.t).toEqual({ '1': { murid: '3' } })
+
+    runner.loadFrom({ answers: { g: 'Ya', t: { '7': { murid: '1' } } }, currentIndex: 1 })
+    expect('t' in runner.answers).toBe(false)
+  })
+
   it('label baris dan kolom di pesan mengikuti bahasa aktif', async () => {
     const { runner } = await onTablePage({ required: true, locale: 'en' })
     runner.handleAnswer('t', { '2': full })

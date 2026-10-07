@@ -11,7 +11,7 @@
  */
 
 import type { Survey, Question, Answers, AnswerValue, SurveySettings } from '$lib/types.js'
-import { getAnswerableQuestions } from '$lib/utils.js'
+import { getAnswerableQuestions, scalarRuleError } from '$lib/utils.js'
 import { findFiredRule } from '$lib/skipLogic.js'
 import { isValidPhoneFormat } from '$lib/phone.js'
 import { collectDependents, pruneDependentAnswers, visibleOptions } from '$lib/optionDependency.js'
@@ -21,7 +21,7 @@ import {
 } from '$lib/topOfMind.js'
 import { LEGACY_LOCALE, t, type MessageKey } from '$lib/i18n/messages.js'
 import { surveyLanguages } from '$lib/i18n/content.js'
-import { activeRows, isTableTouched, validateTable } from '$lib/table.js'
+import { activeRows, isTableTouched, pruneTableAnswer, validateTable } from '$lib/table.js'
 import { buildSurveySections, type SurveyPage } from './sections.js'
 
 export type { SurveyPage }
@@ -157,6 +157,8 @@ export class SurveyRunner {
     return t(this._getLocale(), key, params)
   }
 
+  private readonly msgFn = (key: MessageKey, params?: Record<string, string | number>) => this.msg(key, params)
+
   /** Update the onFinish callback. Used by the surveyor flow where each
    *  route (/interview vs implicit nav from elsewhere) wants a different
    *  next step but the runner instance is shared. */
@@ -286,11 +288,12 @@ export class SurveyRunner {
 
   // ---- Validation ----
   private validateOne(q: Question, answer: AnswerValue): string | null {
-    // Tabel: aturan wajib + K108 di table.ts; tiap sel terisi dinilai validateOne
-    // kolomnya, jadi rentang angka dan panjang teks memakai aturan yang sama.
+    // Tabel: aturan wajib + K108 di table.ts; sel terisi dinilai scalarRuleError,
+    // penilai yang sama dengan penanda sel di TableInput.
     if (q.type === 'table') {
       const primary = surveyLanguages(this.survey).primary
-      return validateTable(q, answer, (col, v) => this.validateOne(col, v), this._getLocale(), primary)?.message ?? null
+      const cellError = (col: Question, v: AnswerValue) => scalarRuleError(col, v, this.msgFn)
+      return validateTable(q, answer, cellError, this._getLocale(), primary)?.message ?? null
     }
 
     // Pilihan Bertingkat D-1: a required dependent the respondent cannot answer
@@ -381,28 +384,8 @@ export class SurveyRunner {
     const isEmpty = isEmptyAnswer(answer)
     if (!requiredHere && isEmpty && q.type !== 'file_upload') return null
 
-    if (!isEmpty) {
-      let strVal = ''
-      if (typeof answer === 'string') strVal = answer.trim()
-      else if (typeof answer === 'number') strVal = String(answer)
-      
-      if (strVal !== '') {
-        const len = strVal.length
-        if (q.minLength && len < q.minLength) return this.msg('errMinLength', { n: q.minLength })
-        if (q.maxLength && len > q.maxLength) return this.msg('errMaxLength', { n: q.maxLength })
-      }
-    }
-
-    if (q.type === 'number') {
-      let answerNum: unknown = answer
-      if (typeof answer === 'string' && answer.trim() !== '') answerNum = Number(answer)
-      if (typeof answerNum === 'number' && !isNaN(answerNum)) {
-        const minVal = q.minValue !== undefined && q.minValue !== null ? Number(q.minValue) : null
-        const maxVal = q.maxValue !== undefined && q.maxValue !== null ? Number(q.maxValue) : null
-        if (minVal !== null && answerNum < minVal) return this.msg('errMinValue', { n: minVal })
-        if (maxVal !== null && answerNum > maxVal) return this.msg('errMaxValue', { n: maxVal })
-      }
-    }
+    const scalarErr = scalarRuleError(q, answer, this.msgFn)
+    if (scalarErr) return scalarErr
 
     if (q.type === 'email' && typeof answer === 'string' && answer.trim() !== '') {
       if (!EMAIL_RE.test(answer.trim())) return this.msg('errEmail')
@@ -589,6 +572,13 @@ export class SurveyRunner {
     // visible under the drafted parent answers (cascading) and let the page
     // trim the server draft exactly like handleAnswer does.
     const { answers, cleared } = pruneDependentAnswers(state.answers ?? {}, this.questions)
+    // Draf tabel: kunci baris/kolom/label opsi yang sudah diubah ditolak BE, jadi dibuang.
+    for (const q of this.questions) {
+      if (q.type !== 'table' || !(q.id in answers)) continue
+      const pruned = pruneTableAnswer(q, answers[q.id])
+      if (Object.keys(pruned).length > 0) answers[q.id] = pruned
+      else delete answers[q.id]
+    }
     this.answers = answers
     const maxIdx = Math.max(0, this.surveyPages.length - 1)
     this.currentIndex = Math.min(state.currentIndex, maxIdx)

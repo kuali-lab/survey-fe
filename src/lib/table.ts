@@ -18,9 +18,12 @@ export type TableIssue = { message: string; rowKey: string | null; columnId: str
 /** Penilai satu sel terisi; runner mengisinya dengan `validateOne(kolom, nilai)`. */
 export type CellValidator = (column: Question, value: AnswerValue) => string | null
 
-// ponytail: ambang awal dari 02 §4.1; angka final ditetapkan saat live-verify.
+/**
+ * Konten survei maks 720px, jadi lebih dari 5 kolom tidak muat di lebar mana pun.
+ * ponytail: ambang awal; angka final ditetapkan saat live-verify.
+ */
 export function isCompactTable(width: number, columnCount: number): boolean {
-  return width <= COMPACT_BREAKPOINT || (columnCount > 5 && width < 900)
+  return width <= COMPACT_BREAKPOINT || columnCount > 5
 }
 
 export function activeRows(q: Question): TableRow[] {
@@ -65,6 +68,27 @@ export function setCell(answer: AnswerValue | undefined, rowKey: string, columnI
   if (Object.keys(row).length > 0) next[rowKey] = row
   else delete next[rowKey]
   return next
+}
+
+/**
+ * Draf lama vs tabel yang sudah diubah: sisakan baris aktif, kolom yang masih ada,
+ * dan label dropdown yang masih ada di opsi (BE menolak selain itu); baris kosong dibuang.
+ */
+export function pruneTableAnswer(q: Question, answer: AnswerValue | undefined): TableAnswer {
+  const a = toTableAnswer(answer)
+  const out: TableAnswer = {}
+  for (const row of activeRows(q)) {
+    const key = String(row.key)
+    const cells: TableAnswer[string] = {}
+    for (const col of q.fields ?? []) {
+      const v = cellOf(a, key, col.id)
+      if (!isCellFilled(v)) continue
+      if (col.type === 'dropdown' && !(col.options ?? []).some((o) => o.label === v)) continue
+      cells[col.id] = v as string | number
+    }
+    if (Object.keys(cells).length > 0) out[key] = cells
+  }
+  return out
 }
 
 export function filledCount(q: Question, answer: AnswerValue | undefined, rowKey: string): number {
