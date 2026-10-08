@@ -10,7 +10,7 @@
   import type { AnswerValue, Question, TableRow } from '$lib/types.js'
   import {
     ROW_HEAD_WEIGHT, activeRows, canBreakout, columnMinRem, columnWeight, filledCount, firstOpenRow, groupRows, isCompactTable, isRowComplete, requiredGridWidth, setCell,
-    toTableAnswer, validateTable,
+    toTableAnswer, validateTable, type RowGroup,
   } from '$lib/table.js'
   import { questionErrorId, scalarRuleError } from '$lib/utils.js'
   import { useI18n } from '$lib/i18n/context.js'
@@ -66,6 +66,7 @@
   const keyOf = (row: TableRow) => String(row.key)
   const cellLabel = (row: TableRow, col: Question) => `${i18n.label(row)} — ${i18n.plain(col, 'title')}`
   const isInvalid = (row: TableRow, col: Question) => invalid?.rowKey === keyOf(row) && invalid.columnId === col.id
+  const groupTitle = (g: RowGroup) => i18n.label({ label: g.group, translations: g.translations })
 
   function update(row: TableRow, col: Question, v: AnswerValue) {
     onChange(setCell(value, keyOf(row), col.id, v))
@@ -118,7 +119,7 @@
       {#each groups as g, gi (gi)}
         <tbody>
           {#if g.group}
-            <tr class="group-row"><th scope="rowgroup" colspan={columns.length + 1}>{g.group}</th></tr>
+            <tr class="group-row"><th scope="rowgroup" colspan={columns.length + 1}>{groupTitle(g)}</th></tr>
           {/if}
           {#each g.rows as row (row.key)}
             <tr class="grid-row">
@@ -135,7 +136,7 @@
   {:else}
     <div class="list" bind:this={listEl}>
       {#each groups as g, gi (gi)}
-        {#if g.group}<p class="group-head">{g.group}</p>{/if}
+        {#if g.group}<p class="group-head">{groupTitle(g)}</p>{/if}
         {#each g.rows as row (row.key)}
           {@const key = keyOf(row)}
           {@const open = openRow === key}

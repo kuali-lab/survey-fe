@@ -74,6 +74,14 @@ describe('needsLanguageStep — only for a survey that really has two languages'
     expect(hasAnyTranslation({ questions: viaColumnOption }, 'en')).toBe(true)
   })
 
+  it('counts a table that only translates its row group titles; blank group text does not count', () => {
+    const rows = (groupTranslations: Record<string, string>) =>
+      [q({ type: 'table', tableRows: [{ key: 1, label: 'Matematika', group: 'Wajib', groupTranslations }] })]
+    expect(hasAnyTranslation({ questions: rows({ en: 'Compulsory' }) }, 'en')).toBe(true)
+    expect(hasAnyTranslation({ questions: rows({ en: '  ' }) }, 'en')).toBe(false)
+    expect(hasAnyTranslation({ questions: rows({ ms: 'Wajib' }) }, 'en')).toBe(false)
+  })
+
   it('keeps the demo surveys honest: the bilingual one asks, the default one does not', async () => {
     const { buildMockSurvey } = await import('$lib/mockSurvey.js')
     expect(needsLanguageStep(buildMockSurvey('mock-bilingual'))).toBe(true)

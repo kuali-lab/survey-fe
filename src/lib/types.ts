@@ -67,6 +67,8 @@ export interface TableRow {
   label: string
   group?: string
   translations?: TranslatedText
+  /** Terjemahan `group`; BE mengisinya sama di setiap baris sekelompok. */
+  groupTranslations?: TranslatedText
   deleted?: boolean
 }
 

@@ -6,7 +6,7 @@
  * (01-flow-tipe-tabel.md §6.1): tabel wajib tanpa sel terisi ditolak; begitu satu
  * sel terisi, setiap sel kolom wajib di setiap baris aktif harus terisi.
  */
-import type { AnswerValue, Question, TableAnswer, TableRow } from './types.js'
+import type { AnswerValue, Question, TableAnswer, TableRow, TranslatedText } from './types.js'
 import { displayLabel, questionPlainText } from './i18n/content.js'
 import { LEGACY_LOCALE, t } from './i18n/messages.js'
 
@@ -89,14 +89,16 @@ export function activeRows(q: Question): TableRow[] {
   return (q.tableRows ?? []).filter((r) => !r.deleted)
 }
 
+export type RowGroup = { group: string; translations?: TranslatedText; rows: TableRow[] }
+
 /** Baris aktif berurutan per kelompok (K115); `group` kosong = tanpa baris judul. */
-export function groupRows(q: Question): { group: string; rows: TableRow[] }[] {
-  const out: { group: string; rows: TableRow[] }[] = []
+export function groupRows(q: Question): RowGroup[] {
+  const out: RowGroup[] = []
   for (const row of activeRows(q)) {
     const group = row.group ?? ''
     const last = out[out.length - 1]
     if (last && last.group === group) last.rows.push(row)
-    else out.push({ group, rows: [row] })
+    else out.push({ group, translations: row.groupTranslations, rows: [row] })
   }
   return out
 }

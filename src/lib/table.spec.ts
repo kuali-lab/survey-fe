@@ -5,6 +5,7 @@ import {
   isRowComplete, isTableTouched, pruneTableAnswer, requiredCount, requiredGridWidth, setCell, tableRecap, validateTable,
 } from './table.js'
 import { scalarRuleError } from './utils.js'
+import { displayLabel } from './i18n/content.js'
 
 function col(id: string, type: Question['type'], required: boolean, extra: Partial<Question> = {}): Question {
   return {
@@ -282,6 +283,21 @@ describe('groupRows (K115: baris judul kelompok)', () => {
       ['Kelas 1', [1, 2]], ['Kelas 2', [3]], ['', [4]],
     ])
     expect(groupRows(table()).map((g) => g.group)).toEqual([''])
+  })
+
+  it('judul kelompok tampil dalam bahasa aktif; kosong/tak ada terjemahan kembali ke kelompok utama', () => {
+    const q = {
+      ...table(),
+      tableRows: [
+        { key: 1, label: 'A', group: 'Wajib', groupTranslations: { en: 'Compulsory' } },
+        { key: 2, label: 'B', group: 'Wajib', groupTranslations: { en: 'Compulsory' } },
+        { key: 3, label: 'C', group: 'Pilihan', groupTranslations: { en: '   ' } },
+        { key: 4, label: 'D', group: 'Muatan lokal' },
+      ],
+    }
+    const titles = (locale: string) => groupRows(q).map((g) => displayLabel({ label: g.group, translations: g.translations }, locale, 'id'))
+    expect(titles('en')).toEqual(['Compulsory', 'Pilihan', 'Muatan lokal'])
+    expect(titles('id')).toEqual(['Wajib', 'Pilihan', 'Muatan lokal'])
   })
 })
 
