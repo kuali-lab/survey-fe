@@ -8,6 +8,14 @@
   export function toggleOption(current: string[], key: string): string[] {
     return current.includes(key) ? current.filter((v) => v !== key) : [...current, key];
   }
+
+  /**
+   * Mode floating: fokus pindah ke luar wrapper (Tab) menutup menu fixed supaya tak menutupi
+   * sel berikutnya. relatedTarget null (ketuk opsi di iOS, keyboard ditutup) dibiarkan.
+   */
+  export function focusLeftWrapper(wrapper: { contains(n: Node | null): boolean }, related: Node | null): boolean {
+    return related !== null && !wrapper.contains(related);
+  }
 </script>
 
 <script lang="ts">
@@ -310,7 +318,11 @@
 
 <svelte:window onclick={handleWindowClick} />
 
-<div class="dropdown-wrapper" onkeydown={handleKeydown}>
+<div
+  class="dropdown-wrapper"
+  onkeydown={handleKeydown}
+  onfocusout={(e) => { if (floating && isOpen && focusLeftWrapper(e.currentTarget, e.relatedTarget as Node | null)) isOpen = false; }}
+>
   <button
     bind:this={triggerEl}
     type="button"

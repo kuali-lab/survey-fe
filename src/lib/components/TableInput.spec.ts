@@ -156,6 +156,18 @@ describe('TableCellInput — gaya fokus pemicu SearchableDropdown (CSS, dijaga d
   })
 })
 
+describe('SearchableDropdown floating — Tab keluar menutup menu', () => {
+  it('fokus pindah ke luar wrapper → tutup; ke dalam wrapper atau ke ketiadaan (ketuk iOS, keyboard ditutup) → tetap', async () => {
+    const { focusLeftWrapper } = await import('./SearchableDropdown.svelte')
+    const inside = {} as Node
+    const outside = {} as Node
+    const wrapper = { contains: (n: Node | null) => n === inside }
+    expect(focusLeftWrapper(wrapper, outside)).toBe(true)
+    expect(focusLeftWrapper(wrapper, inside)).toBe(false)
+    expect(focusLeftWrapper(wrapper, null)).toBe(false)
+  })
+})
+
 describe('SearchableDropdown — pemanggil lama tak berubah', () => {
   it('tanpa prop baru: tanpa aria-label/aria-invalid/aria-expanded', async () => {
     const { default: SearchableDropdown } = await import('./SearchableDropdown.svelte')
