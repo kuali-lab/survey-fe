@@ -247,6 +247,16 @@ describe('noWheelChange — roda mouse tidak mengubah isian angka', () => {
     noWheelChange(node as unknown as HTMLInputElement).destroy()
     expect(listeners.has('wheel')).toBe(false)
   })
+
+  // SSR tidak merender action, jadi dijaga dari sumber: hanya input type="number" pertanyaan number.
+  it('QuestionInput: hanya input type="number" yang memakai noWheelChange', () => {
+    const src = readFileSync(fileURLToPath(new URL('./components/QuestionInput.svelte', import.meta.url)), 'utf8')
+    const inputs = src.match(/<input\b.*?\/>/gs) ?? []
+    const guarded = inputs.filter((tag) => tag.includes('use:noWheelChange'))
+    expect(guarded).toHaveLength(1)
+    expect(guarded[0]).toContain('type="number"')
+    expect(inputs.filter((tag) => tag.includes('type="number"'))).toHaveLength(1)
+  })
 })
 
 describe('applyNumberInput — kolom dengan min 0 tidak menerima minus', () => {

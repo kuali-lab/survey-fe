@@ -17,7 +17,7 @@
   } from '$lib/optionDependency.js'
   import { getRegionName, resolveRegionName } from '$lib/regionNames.js'
   import { SEARCH_DEBOUNCE_MS, filterBySearch, effectiveMinChars, debounce, shouldShowSearchBar } from '$lib/optionSearch.js'
-  import { applyNumberInput, numberInputText, numberInputCompare } from '$lib/numberInput.js'
+  import { applyNumberInput, noWheelChange, numberInputText, numberInputCompare } from '$lib/numberInput.js'
   import { autoExpand } from '$lib/growTextarea.js'
   import { fade, fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
@@ -762,6 +762,7 @@
       numberWarn = null
       onBlur?.()
     }}
+    use:noWheelChange
   />
   {#if numberWarn}
     {#key shakeKey}
