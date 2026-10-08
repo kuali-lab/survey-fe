@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { AnswerValue, Question, TableAnswer } from './types.js'
 import {
-  COMPACT_BREAKPOINT, activeRows, canBreakout, columnMinRem, columnWeight, filledCount, firstOpenRow, groupRows, isCellFilled, isCompactTable,
+  COMPACT_BREAKPOINT, activeRows, canBreakout, columnMinRem, effectiveImageLayout, columnWeight, filledCount, firstOpenRow, groupRows, isCellFilled, isCompactTable,
   isRowComplete, isTableTouched, pruneTableAnswer, requiredCount, requiredGridWidth, setCell, tableRecap, validateTable,
 } from './table.js'
 import { scalarRuleError } from './utils.js'
@@ -328,15 +328,25 @@ describe('columnMinRem (lebar minimum kolom grid, mode padat 14px)', () => {
   })
 })
 
+describe('effectiveImageLayout', () => {
+  const q = (type: Question['type'], imageLayout: string | null) => ({ ...table(), type, imageUrl: 'a.png', imageLayout })
+
+  it.each([['left'], ['right']])('tabel dengan gambar %s: gambar pindah ke atas supaya tabel selebar kolom', (layout) => {
+    expect(effectiveImageLayout(q('table', layout))).toBe('top')
+  })
+
+  it.each<[Question['type'], string | null]>([
+    ['short_text', 'left'], ['matrix', 'right'], ['number', null], ['table', null], ['table', 'top'], ['table', 'center'],
+  ])('%s dengan layout %s: tidak berubah', (type, layout) => {
+    expect(effectiveImageLayout(q(type, layout))).toBe(layout)
+  })
+})
+
 describe('canBreakout', () => {
   const q = (imageUrl: string | null, imageLayout: string | null) => ({ ...table(), imageUrl, imageLayout })
 
-  it.each([['left'], ['right']])('gambar inline %s: tidak melebar (pusat kolom bergeser dari pusat viewport)', (layout) => {
-    expect(canBreakout(q('a.png', layout))).toBe(false)
-  })
-
-  it.each<[string | null, string | null]>([[null, null], ['a.png', null], ['a.png', 'top'], [null, 'left']])(
-    'tanpa gambar inline (url %s, layout %s): boleh melebar',
+  it.each<[string | null, string | null]>([[null, null], ['a.png', null], ['a.png', 'top'], [null, 'left'], ['a.png', 'left'], ['a.png', 'right']])(
+    'tabel (url %s, layout %s): boleh melebar, gambar inline tabel tampil di atas',
     (url, layout) => {
       expect(canBreakout(q(url, layout))).toBe(true)
     },

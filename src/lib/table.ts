@@ -41,12 +41,22 @@ export function isCompactTable(width: number, columns: Question[], wasCompact = 
   return width < requiredGridWidth(columns) - (wasCompact ? 0 : GRID_HYSTERESIS_PX)
 }
 
+const isInlineLayout = (layout: string | null) => layout === 'left' || layout === 'right'
+
+/**
+ * Tata letak gambar yang dirender QuestionCard. Tabel menaruh gambar kiri/kanan di atas:
+ * di samping gambar kolom isian tinggal ±516px, tabel selalu jadi accordion.
+ */
+export function effectiveImageLayout(q: Question): string | null {
+  return q.type === 'table' && isInlineLayout(q.imageLayout) ? 'top' : q.imageLayout
+}
+
 /**
  * Grid boleh melebar keluar kolom konten (breakout, lihat TableInput) hanya bila
- * kolomnya di tengah viewport; gambar inline kiri/kanan (QuestionCard) menggesernya.
+ * kolomnya di tengah viewport; gambar di samping (QuestionCard) menggesernya.
  */
 export function canBreakout(q: Question): boolean {
-  return !(q.imageUrl && (q.imageLayout === 'left' || q.imageLayout === 'right'))
+  return !(q.imageUrl && isInlineLayout(effectiveImageLayout(q)))
 }
 
 /** Bobot kolom judul baris di grid; satuan sama dengan `columnWeight`. */

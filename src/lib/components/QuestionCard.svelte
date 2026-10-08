@@ -6,6 +6,7 @@
   import QuestionField from './QuestionField.svelte'
   import { useI18n } from '$lib/i18n/context.js'
   import { questionErrorId } from '$lib/utils.js'
+  import { effectiveImageLayout } from '$lib/table.js'
 
   let {
     question,
@@ -42,6 +43,7 @@
   const title = $derived(i18n.text(question, 'title'))
   const description = $derived(i18n.text(question, 'description'))
   const titlePlain = $derived(i18n.plain(question, 'title'))
+  const imageLayout = $derived(effectiveImageLayout(question))
 </script>
 
 <div class="card">
@@ -66,8 +68,8 @@
   {/if}
 
   {#if question.imageUrl}
-    {#if question.imageLayout === 'left' || question.imageLayout === 'right'}
-      <div class="card-inline-wrap card-inline-{question.imageLayout}">
+    {#if imageLayout === 'left' || imageLayout === 'right'}
+      <div class="card-inline-wrap card-inline-{imageLayout}">
         <div class="inline-img-wrap">
           <img src={question.imageUrl} alt={titlePlain} class="inline-img" />
         </div>
@@ -87,7 +89,7 @@
         </div>
       </div>
     {:else}
-      <div class="image-wrap">
+      <div class="image-wrap" class:image-fit={question.type === 'table'}>
         <img src={question.imageUrl} alt={titlePlain} />
       </div>
       <div class="input-wrap">
@@ -230,6 +232,10 @@
     display: block;
   }
 
+  /* Gambar utuh (letterbox), tidak terpotong max-height wadah; height:100% di atas tak berlaku
+     karena tinggi wadah auto. Hanya tabel, tipe lain dibiarkan seperti semula. */
+  .image-fit img { max-height: 280px; }
+
   .input-wrap {
     margin-top: 6px;
   }
@@ -304,5 +310,6 @@
     .image-wrap {
       max-height: 320px;
     }
+    .image-fit img { max-height: 320px; }
   }
 </style>

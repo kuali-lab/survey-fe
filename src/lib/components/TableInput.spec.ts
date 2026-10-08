@@ -121,9 +121,9 @@ describe('TableInput — markup awal (accordion)', () => {
     expect(body).toMatch(/<div class="table-span[^"]*" aria-hidden="true"><\/div>/)
   })
 
-  it.each([['left'], ['right']])('gambar inline %s: tanpa pengukur breakout', (imageLayout) => {
+  it.each([['left'], ['right']])('gambar inline %s: pengukur breakout tetap ada (gambar tabel tampil di atas)', (imageLayout) => {
     const { body } = render(TableInput, { props: { question: { ...table, imageUrl: 'a.png', imageLayout }, value: null, onChange: noop } })
-    expect(body).not.toContain('table-span')
+    expect(body).toContain('table-span')
   })
 
   it('badge n/m sel terisi, judul kelompok, keterangan kolom, dan tombol baris berikutnya hanya bila ada', () => {
