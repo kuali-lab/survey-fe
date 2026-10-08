@@ -239,7 +239,7 @@
     line-height: 1.3;
     color: var(--text-primary);
     text-align: left;
-    vertical-align: bottom;
+    vertical-align: top;
     overflow-wrap: anywhere;
   }
 
