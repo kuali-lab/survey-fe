@@ -64,6 +64,24 @@ describe('needsLanguageStep — only for a survey that really has two languages'
     expect(hasAnyTranslation({ questions: viaRow }, 'en')).toBe(true)
   })
 
+  it('counts a translated table row and a translated table column option', () => {
+    const viaTableRow = [q({ type: 'table', tableRows: [{ key: 1, label: 'Matematika', translations: { en: 'Mathematics' } }] })]
+    const viaColumnOption = [q({
+      type: 'table',
+      fields: [q({ id: 'c', type: 'dropdown', options: [{ id: 'o', label: 'Ya', sortOrder: 0, translations: { en: 'Yes' } }] })],
+    })]
+    expect(hasAnyTranslation({ questions: viaTableRow }, 'en')).toBe(true)
+    expect(hasAnyTranslation({ questions: viaColumnOption }, 'en')).toBe(true)
+  })
+
+  it('counts a table that only translates its row group titles; blank group text does not count', () => {
+    const rows = (groupTranslations: Record<string, string>) =>
+      [q({ type: 'table', tableRows: [{ key: 1, label: 'Matematika', group: 'Wajib', groupTranslations }] })]
+    expect(hasAnyTranslation({ questions: rows({ en: 'Compulsory' }) }, 'en')).toBe(true)
+    expect(hasAnyTranslation({ questions: rows({ en: '  ' }) }, 'en')).toBe(false)
+    expect(hasAnyTranslation({ questions: rows({ ms: 'Wajib' }) }, 'en')).toBe(false)
+  })
+
   it('keeps the demo surveys honest: the bilingual one asks, the default one does not', async () => {
     const { buildMockSurvey } = await import('$lib/mockSurvey.js')
     expect(needsLanguageStep(buildMockSurvey('mock-bilingual'))).toBe(true)

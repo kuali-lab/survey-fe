@@ -56,9 +56,12 @@ export function hasAnyTranslation(survey: Pick<Survey, 'questions'> | null | und
       const own = f.translations?.[lang]
       if (own && Object.values(own).some((text) => !isBlank(text))) return true
     }
-    for (const item of [...(q.options ?? []), ...(q.matrixRows ?? []), ...(q.matrixCols ?? [])]) {
+    // Tabel: baris membawa terjemahan sendiri, kolom dropdown membawa opsinya.
+    const columnOptions = (q.fields ?? []).flatMap((f) => f.options ?? [])
+    for (const item of [...(q.options ?? []), ...(q.matrixRows ?? []), ...(q.matrixCols ?? []), ...(q.tableRows ?? []), ...columnOptions]) {
       if (!isBlank(item.translations?.[lang])) return true
     }
+    if ((q.tableRows ?? []).some((r) => !isBlank(r.groupTranslations?.[lang]))) return true
   }
   return false
 }

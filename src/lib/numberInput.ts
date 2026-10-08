@@ -89,3 +89,18 @@ export function numberInputCompare(value: AnswerValue | undefined): number | nul
   }
   return null
 }
+
+/**
+ * Action: roda mouse di atas input angka yang fokus mengubah nilainya (bisa
+ * sampai negatif). Blur, bukan preventDefault, supaya roda yang sama tetap
+ * menggulir halaman. Tombol panah dibiarkan bawaan: sudah menghormati min/max.
+ */
+export function noWheelChange(node: HTMLInputElement) {
+  const onWheel = () => {
+    if (node.ownerDocument.activeElement === node) node.blur()
+  }
+  node.addEventListener('wheel', onWheel, { passive: true })
+  return {
+    destroy() { node.removeEventListener('wheel', onWheel) }
+  }
+}

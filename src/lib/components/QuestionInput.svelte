@@ -17,7 +17,8 @@
   } from '$lib/optionDependency.js'
   import { getRegionName, resolveRegionName } from '$lib/regionNames.js'
   import { SEARCH_DEBOUNCE_MS, filterBySearch, effectiveMinChars, debounce, shouldShowSearchBar } from '$lib/optionSearch.js'
-  import { applyNumberInput, numberInputText, numberInputCompare } from '$lib/numberInput.js'
+  import { applyNumberInput, noWheelChange, numberInputText, numberInputCompare } from '$lib/numberInput.js'
+  import { autoExpand } from '$lib/growTextarea.js'
   import { fade, fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import { useI18n } from '$lib/i18n/context.js'
@@ -464,20 +465,6 @@
     return /\.(jpe?g|png|gif|webp|svg|avif|bmp)(\?|#|$)/i.test(url)
   }
 
-  // Action: keep a textarea sized to its content. Adjusts on mount (so
-  // restored values from localStorage don't clip) and on every input.
-  function autoExpand(node: HTMLTextAreaElement) {
-    const adjust = () => {
-      node.style.height = 'auto'
-      node.style.height = node.scrollHeight + 'px'
-    }
-    adjust()
-    node.addEventListener('input', adjust)
-    return {
-      destroy() { node.removeEventListener('input', adjust) }
-    }
-  }
-
   // ── Top of Mind: one list, two stages (see $lib/topOfMind.ts) ─────────────
   // Looks like a plain checkbox question. The FIRST tap is recorded as the
   // top-of-mind pick: that row flips to the top (animate:flip), stays checked,
@@ -775,6 +762,7 @@
       numberWarn = null
       onBlur?.()
     }}
+    use:noWheelChange
   />
   {#if numberWarn}
     {#key shakeKey}
@@ -1293,43 +1281,8 @@
 {/if}
 
 <style>
-  /* ── Text inputs ── */
-  .text-input {
-    width: 100%;
-    height: 52px;
-    border: 1px solid transparent;
-    border-radius: var(--radius-input);
-    padding: 0 16px;
-    font-family: var(--font);
-    font-size: 16px;
-    color: var(--text-primary);
-    background: var(--canvas-soft);
-    transition: background 0.15s, border-color 0.15s;
-    appearance: none;
-    -webkit-appearance: none;
-  }
-
-  .text-input::placeholder { color: var(--text-muted); }
-
-  /* Varian tumbuh: tinggi minimal sama dengan kotak biasa, sisanya mengikuti isi. */
-  .grow-input {
-    height: auto;
-    min-height: 52px;
-    padding: 14px 16px;
-    line-height: 1.4;
-    resize: none;
-    overflow: hidden;
-    overflow-wrap: anywhere;
-  }
-
-  .text-input:focus {
-    outline: none;
-    background: var(--canvas);
-    border-color: var(--ink);
-    border-width: 2px;
-  }
-
-  /* flatpickr builds its visible "alt" input via JS, outside Svelte's scoped
+  /* .text-input dan .grow-input ada di app.css (dipakai juga sel tabel).
+     flatpickr builds its visible "alt" input via JS, outside Svelte's scoped
      CSS — so the .text-input rule above can't reach it. Mirror the same look
      here via :global so the date field matches every other input. */
   .date-field {

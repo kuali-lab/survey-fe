@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Question, AnswerValue, Answers } from '$lib/types.js'
   import QuestionInput from './QuestionInput.svelte'
+  import TableInput from './TableInput.svelte'
   import { useI18n } from '$lib/i18n/context.js'
   import {
     canAddCard,
@@ -39,7 +40,9 @@
     // menyala, dan mode satu-soal-per-halaman Top of Mind patah tanpa satu pun
     // galat. Komponen ini lahir sesudah `paged` ada di `dev`, jadi git
     // menggabungkan keduanya bersih — celahnya hanya terlihat dari svelte-check.
-    paged = false
+    paged = false,
+    // Galat runner untuk pertanyaan ini; hanya Tabel yang memakainya (menandai sel).
+    error = null
   }: {
     question: Question
     value: AnswerValue
@@ -50,6 +53,7 @@
     questions?: Question[]
     pratinjau?: boolean
     paged?: boolean
+    error?: string | null
   } = $props()
 
   const i18n = useI18n()
@@ -159,6 +163,8 @@
       <p class="repeat-limit">{i18n.t('repeatLimit', { n: batasKartu })}</p>
     {/if}
   </div>
+{:else if question.type === 'table'}
+  <TableInput {question} {value} {onChange} {error} />
 {:else if berulang}
   <div class="repeat-group">
     {#each rows as row, i (i)}

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Question, Answers, AnswerValue, QuestionOption, ContactInfo } from '$lib/types.js'
   import { isTopOfMindAnswer, topOfMindRest } from '$lib/topOfMind.js'
+  import { tableRecap } from '$lib/table.js'
 
   type Props = {
     questions: Question[]
@@ -72,6 +73,8 @@
         }
         return String(a)
       }
+      case 'table':
+        return tableRecap(q, a)
       case 'contact_info': {
         if (isContactInfo(a)) {
           const parts = [

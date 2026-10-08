@@ -5,6 +5,8 @@
   // pertanyaan yang tidak berulang ia meneruskan apa adanya.
   import QuestionField from './QuestionField.svelte'
   import { useI18n } from '$lib/i18n/context.js'
+  import { questionErrorId } from '$lib/utils.js'
+  import { effectiveImageLayout } from '$lib/table.js'
 
   let {
     question,
@@ -41,6 +43,7 @@
   const title = $derived(i18n.text(question, 'title'))
   const description = $derived(i18n.text(question, 'description'))
   const titlePlain = $derived(i18n.plain(question, 'title'))
+  const imageLayout = $derived(effectiveImageLayout(question))
 </script>
 
 <div class="card">
@@ -65,8 +68,8 @@
   {/if}
 
   {#if question.imageUrl}
-    {#if question.imageLayout === 'left' || question.imageLayout === 'right'}
-      <div class="card-inline-wrap card-inline-{question.imageLayout}">
+    {#if imageLayout === 'left' || imageLayout === 'right'}
+      <div class="card-inline-wrap card-inline-{imageLayout}">
         <div class="inline-img-wrap">
           <img src={question.imageUrl} alt={titlePlain} class="inline-img" />
         </div>
@@ -81,11 +84,12 @@
             {questions}
             {pratinjau}
             {paged}
+            error={validationError}
           />
         </div>
       </div>
     {:else}
-      <div class="image-wrap">
+      <div class="image-wrap" class:image-fit={question.type === 'table'}>
         <img src={question.imageUrl} alt={titlePlain} />
       </div>
       <div class="input-wrap">
@@ -98,6 +102,7 @@
           {questions}
           {pratinjau}
           {paged}
+          error={validationError}
         />
       </div>
     {/if}
@@ -112,12 +117,13 @@
         {questions}
         {pratinjau}
         {paged}
+        error={validationError}
       />
     </div>
   {/if}
 
   {#if validationError}
-    <div class="error" role="alert">
+    <div class="error" id={questionErrorId(question.id)} role="alert">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
         <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
         <path d="M12 8v5M12 16v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -226,6 +232,10 @@
     display: block;
   }
 
+  /* Gambar utuh (letterbox), tidak terpotong max-height wadah; height:100% di atas tak berlaku
+     karena tinggi wadah auto. Hanya tabel, tipe lain dibiarkan seperti semula. */
+  .image-fit img { max-height: 280px; }
+
   .input-wrap {
     margin-top: 6px;
   }
@@ -300,5 +310,6 @@
     .image-wrap {
       max-height: 320px;
     }
+    .image-fit img { max-height: 320px; }
   }
 </style>
