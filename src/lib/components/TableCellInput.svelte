@@ -92,7 +92,7 @@
       onChange={(v: string | string[]) => onChange(typeof v === 'string' ? v : '')}
       placeholder={i18n.t('tableSelectPlaceholder')}
       floating
-      ariaLabel={chosen ? `${label}: ${i18n.label(chosen)}` : label}
+      ariaLabel={`${label}: ${chosen ? i18n.label(chosen) : text || i18n.t('tableSelectPlaceholder')}`}
       {invalid}
       ariaDescribedBy={ariaDescribedBy}
     />

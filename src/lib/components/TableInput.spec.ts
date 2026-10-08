@@ -121,12 +121,15 @@ describe('TableCellInput — dropdown >15 opsi memakai SearchableDropdown', () =
 
   it('nama aksesibel "Baris — Kolom" (ditambah nilai terpilih), sel salah: garis merah + describedby ke pesan, aria-expanded', () => {
     const empty = render16({ value: undefined, describedBy: 'q-error-t' })
-    expect(empty).toContain('aria-label="IPA — Kab"')
+    // Label-in-Name: teks terlihat "Pilih" ikut di nama aksesibel.
+    expect(empty).toContain('aria-label="IPA — Kab: Pilih"')
     expect(empty).not.toMatch(/dropdown-trigger[^"]*invalid/)
     expect(empty).not.toContain('aria-describedby')
     expect(empty).toContain('aria-expanded="false"')
     const chosen = render16({ value: 'Opsi 3', invalid: true, describedBy: 'q-error-t' })
     expect(chosen).toContain('aria-label="IPA — Kab: Opsi 3"')
+    // Nilai tersimpan yang tak cocok opsi mana pun diumumkan apa adanya (pemicu juga menampilkannya).
+    expect(render16({ value: 'Kab lama' })).toContain('aria-label="IPA — Kab: Kab lama"')
     expect(chosen).toMatch(/class="dropdown-trigger[^"]*invalid/)
     expect(chosen).toContain('aria-describedby="q-error-t"')
   })
