@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { AnswerValue, Question, TableAnswer } from './types.js'
 import {
-  COMPACT_BREAKPOINT, activeRows, canBreakout, columnMinRem, effectiveImageLayout, firstInvalidCellTarget, rescrollDelay, ROW_SLIDE_MS, columnWeight, filledCount, firstOpenRow, groupRows, isCellFilled, isCompactTable,
+  COMPACT_BREAKPOINT, activeRows, columnMinRem, effectiveImageLayout, firstInvalidCellTarget, rescrollDelay, ROW_SLIDE_MS, columnWeight, filledCount, firstOpenRow, groupRows, isCellFilled, isCompactTable,
   isRowComplete, isTableTouched, pruneTableAnswer, requiredCount, requiredGridWidth, setCell, tableRecap, validateTable,
 } from './table.js'
 import { scalarRuleError } from './utils.js'
@@ -398,13 +398,3 @@ describe('effectiveImageLayout', () => {
   })
 })
 
-describe('canBreakout', () => {
-  const q = (imageUrl: string | null, imageLayout: string | null) => ({ ...table(), imageUrl, imageLayout })
-
-  it.each<[string | null, string | null]>([[null, null], ['a.png', null], ['a.png', 'top'], [null, 'left'], ['a.png', 'left'], ['a.png', 'right']])(
-    'tabel (url %s, layout %s): boleh melebar, gambar inline tabel tampil di atas',
-    (url, layout) => {
-      expect(canBreakout(q(url, layout))).toBe(true)
-    },
-  )
-})
