@@ -117,6 +117,7 @@
       </thead>
       {#each groups as g, gi (gi)}
         <tbody>
+          {#if gi > 0}<tr class="group-gap" aria-hidden="true"><td colspan={columns.length + 1}></td></tr>{/if}
           {#if g.group}
             <tr class="group-row"><th scope="rowgroup" colspan={columns.length + 1}>{groupTitle(g)}</th></tr>
           {/if}
@@ -225,12 +226,16 @@
   /* ── Grid: pola .grid MatrixInput ── */
   .grid { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 20px; }
 
-  /* Header kolom: abu lembut + tebal supaya terpisah dari isi (kelompok = kuning lembut di bawah). */
+  /* Header kolom: kuning; kelompok oranye supaya tidak menimpa header. */
   .corner,
   .col-head {
-    border-bottom: 2px solid var(--tertiary-30);
-    background: var(--canvas-soft);
+    border-bottom: 2px solid var(--primary);
+    background: var(--primary-20);
   }
+
+  .col-head { border-left: 1px solid var(--primary-30); }
+
+  .group-gap td { height: 16px; padding: 0; }
 
   .col-head {
     padding: 10px 4px;
@@ -248,10 +253,9 @@
     font-size: 15px;
     font-weight: 700;
     text-align: left;
-    color: var(--text-primary);
-    background: var(--primary-10);
-    border-left: 3px solid var(--primary);
-    border-bottom: 1px solid var(--primary-30);
+    color: var(--accent-orange-strong);
+    background: var(--accent-orange-tint);
+    border-left: 3px solid var(--accent-orange);
   }
 
   /* Garis antarbaris, bukan baris belang: isian abu (.text-input) hilang di latar abu. */
@@ -278,11 +282,13 @@
     padding: 8px 10px;
     font-size: 15px;
     font-weight: 700;
-    color: var(--text-primary);
-    background: var(--primary-10);
-    border-left: 3px solid var(--primary);
+    color: var(--accent-orange-strong);
+    background: var(--accent-orange-tint);
+    border-left: 3px solid var(--accent-orange);
     border-radius: 4px;
   }
+
+  .group-head:not(:first-child) { margin-top: 16px; }
 
   .item {
     border: 1px solid var(--hairline);
