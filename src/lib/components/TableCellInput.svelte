@@ -9,6 +9,7 @@
   import { applyNumberInput, noWheelChange, numberInputCompare, numberInputText } from '$lib/numberInput.js'
   import { autoExpand } from '$lib/growTextarea.js'
   import { useI18n } from '$lib/i18n/context.js'
+  import { shouldShowSearchBar } from '$lib/optionSearch.js'
   import SearchableDropdown from './SearchableDropdown.svelte'
 
   let {
@@ -91,6 +92,7 @@
       onChange={(v: string | string[]) => onChange(typeof v === 'string' ? v : '')}
       placeholder={i18n.t('tableSelectPlaceholder')}
       floating
+      showSearchBox={shouldShowSearchBar(column)}
       ariaLabel={`${label}: ${chosen ? i18n.label(chosen) : text || i18n.t('tableSelectPlaceholder')}`}
       {invalid}
       ariaDescribedBy={ariaDescribedBy}
