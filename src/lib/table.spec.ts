@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { AnswerValue, Question, TableAnswer } from './types.js'
 import {
-  COMPACT_BREAKPOINT, activeRows, canBreakout, columnMinRem, effectiveImageLayout, firstInvalidCellTarget, columnWeight, filledCount, firstOpenRow, groupRows, isCellFilled, isCompactTable,
+  COMPACT_BREAKPOINT, activeRows, canBreakout, columnMinRem, effectiveImageLayout, firstInvalidCellTarget, rescrollDelay, ROW_SLIDE_MS, columnWeight, filledCount, firstOpenRow, groupRows, isCellFilled, isCompactTable,
   isRowComplete, isTableTouched, pruneTableAnswer, requiredCount, requiredGridWidth, setCell, tableRecap, validateTable,
 } from './table.js'
 import { scalarRuleError } from './utils.js'
@@ -371,6 +371,16 @@ describe('firstInvalidCellTarget (gulir ke sel salah, M-5)', () => {
     answers = { t: {} }
     expect(firstInvalidCellTarget([table(true)], { t: 'wajib' }, issueOf)).toBeNull()
     expect(firstInvalidCellTarget([table(true)], {}, issueOf)).toBeNull()
+  })
+})
+
+describe('rescrollDelay (accordion: baris lain menutup sesudah gulir pertama)', () => {
+  it('animasi aktif: gulir ulang sesudah slide baris selesai', () => {
+    expect(rescrollDelay(false)).toBeGreaterThan(ROW_SLIDE_MS)
+  })
+
+  it('prefers-reduced-motion: slide 0ms, tak perlu gulir ulang', () => {
+    expect(rescrollDelay(true)).toBeNull()
   })
 })
 

@@ -21,7 +21,7 @@ import {
 } from '$lib/topOfMind.js'
 import { LEGACY_LOCALE, t, type MessageKey } from '$lib/i18n/messages.js'
 import { surveyLanguages } from '$lib/i18n/content.js'
-import { activeRows, firstInvalidCellTarget, isTableTouched, pruneTableAnswer, validateTable, type TableIssue } from '$lib/table.js'
+import { activeRows, firstInvalidCellTarget, isTableTouched, pruneTableAnswer, rescrollDelay, validateTable, type TableIssue } from '$lib/table.js'
 import { buildSurveySections, type SurveyPage } from './sections.js'
 
 export type { SurveyPage }
@@ -416,11 +416,17 @@ export class SurveyRunner {
     if (!isValid) {
       // Tabel: gulir ke sel salah (TableInput sudah membuka barisnya di accordion), lalu fokus.
       const target = firstInvalidCellTarget(this.currentPage.questions, errors, (q) => this.tableIssue(q, this.answers[q.id]))
-      setTimeout(() => {
+      const scrollToError = () => {
         const cell = target ? document.querySelector<HTMLElement>(target.cell) : null
         const firstErrorEl = cell ?? (target && document.querySelector(target.row)) ?? document.querySelector('.error')
         if (firstErrorEl) firstErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        cell?.querySelector<HTMLElement>('input, textarea, select, button')?.focus({ preventScroll: true })
+        return cell
+      }
+      setTimeout(() => {
+        scrollToError()?.querySelector<HTMLElement>('input, textarea, select, button')?.focus({ preventScroll: true })
+        // Accordion: baris terbuka di atas target menutup (slide) sesudah tujuan gulir dihitung.
+        const again = target ? rescrollDelay(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false) : null
+        if (again !== null) setTimeout(scrollToError, again)
       }, 50)
     }
     return isValid

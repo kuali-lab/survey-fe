@@ -9,7 +9,7 @@
   import { slide } from 'svelte/transition'
   import type { AnswerValue, Question, TableRow } from '$lib/types.js'
   import {
-    ROW_HEAD_WEIGHT, activeRows, canBreakout, cellKey, columnMinRem, columnWeight, filledCount, firstOpenRow, groupRows, isCompactTable, isRowComplete, requiredGridWidth, setCell,
+    ROW_HEAD_WEIGHT, ROW_SLIDE_MS, activeRows, canBreakout, cellKey, columnMinRem, columnWeight, filledCount, firstOpenRow, groupRows, isCompactTable, isRowComplete, requiredGridWidth, setCell,
     toTableAnswer, validateTable, type RowGroup,
   } from '$lib/table.js'
   import { questionErrorId, scalarRuleError } from '$lib/utils.js'
@@ -164,7 +164,7 @@
               </span>
             </button>
             {#if open}
-              <div id={panelId} class="fields" role="group" aria-label={i18n.label(row)} transition:slide={{ duration: reduceMotion ? 0 : 180 }}>
+              <div id={panelId} class="fields" role="group" aria-label={i18n.label(row)} transition:slide={{ duration: reduceMotion ? 0 : ROW_SLIDE_MS }}>
                 {#each columns as col (col.id)}
                   {@const hintId = col.description ? `${panelId}-hint-${col.id}` : undefined}
                   <div class="field" data-cell={cellKey(key, col.id)}>

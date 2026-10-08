@@ -213,6 +213,14 @@ export function validateTable(
   return null
 }
 
+/** Durasi slide buka/tutup baris accordion (TableInput). */
+export const ROW_SLIDE_MS = 180
+
+/** Tunda gulir ulang ke sel salah: baris lain yang menutup menggeser posisinya. Null = tanpa animasi. */
+export function rescrollDelay(reduceMotion: boolean): number | null {
+  return reduceMotion ? null : ROW_SLIDE_MS + 20
+}
+
 /** Nilai `data-cell` yang dipasang TableInput pada sel; dicari runner saat validasi gagal. */
 export const cellKey = (rowKey: string, columnId: string) => `${rowKey}:${columnId}`
 
