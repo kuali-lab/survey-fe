@@ -43,6 +43,26 @@ describe('floatingMenuPosition', () => {
     expect(floatingMenuPosition(trigger(900), vp)).toBeNull()
   })
 
+  it('keyboard ponsel menutupi pemicu (di bawah viewport visual): menu tetap terbuka, ditambat di dalam 0..480', () => {
+    const vv = { top: 0, bottom: 480, width: 375, height: 800 }
+    const p = floatingMenuPosition(trigger(600, 16, 343, 44), vv)!
+    expect(p).not.toBeNull()
+    expect(p.top).toBeNull()
+    const menuBottom = vv.height - p.bottom!
+    expect(menuBottom).toBeLessThanOrEqual(480 - 8)
+    expect(menuBottom - p.maxHeight).toBeGreaterThanOrEqual(0 + 8)
+  })
+
+  it('pemicu di atas viewport visual yang tergeser ke bawah: menu ditambat di bawah tepi atas visual', () => {
+    const p = floatingMenuPosition(trigger(100), { top: 300, bottom: 700, width: 375, height: 800 })!
+    expect(p.top).toBe(300 + 8)
+    expect(p.top! + p.maxHeight).toBeLessThanOrEqual(700 - 8)
+  })
+
+  it('pemicu keluar viewport tata letak tetap null walau viewport visual lebih kecil', () => {
+    expect(floatingMenuPosition(trigger(820), { top: 0, bottom: 480, width: 375, height: 800 })).toBeNull()
+  })
+
   it('viewport visual tergeser (keyboard ponsel): ruang dihitung dari tepi viewport visual', () => {
     const p = floatingMenuPosition(trigger(500), { top: 300, bottom: 700, width: 375, height: 1000 })!
     expect(p.top).toBeNull()

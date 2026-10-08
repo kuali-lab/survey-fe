@@ -234,19 +234,23 @@
   let triggerEl: HTMLButtonElement | undefined = $state();
   let menuPos = $state<MenuPosition | null>(null);
 
-  // Ikuti pemicu saat halaman bergulir/viewport berubah (keyboard ponsel mengubah ukuran,
-  // jadi menutup di sini akan langsung menutup menu saat kotak cari difokus).
+  // Ikuti pemicu saat halaman bergulir/viewport berubah. Keyboard ponsel yang menutupi pemicu
+  // tidak menutup menu (floatingMenuPosition hanya null bila pemicu keluar viewport tata letak).
+  // clientWidth/clientHeight = containing block `fixed`; innerHeight berubah saat pinch-zoom iOS.
   function placeMenu() {
     if (!triggerEl) return;
+    const root = document.documentElement;
     const vv = window.visualViewport;
     const vp = {
       top: vv?.offsetTop ?? 0,
-      bottom: vv ? vv.offsetTop + vv.height : window.innerHeight,
-      width: document.documentElement.clientWidth,
-      height: window.innerHeight,
+      bottom: vv ? vv.offsetTop + vv.height : root.clientHeight,
+      width: root.clientWidth,
+      height: root.clientHeight,
     };
-    menuPos = floatingMenuPosition(triggerEl.getBoundingClientRect(), vp);
-    if (!menuPos) isOpen = false;
+    const p = floatingMenuPosition(triggerEl.getBoundingClientRect(), vp);
+    // menuPos lama dipertahankan supaya fade-out tidak melompat ke posisi absolute bawaan.
+    if (!p) { isOpen = false; return; }
+    menuPos = p;
   }
 
   $effect(() => {
@@ -274,6 +278,7 @@
   async function toggleOpen() {
     if (filterBlocked) return;
     if (floating && !isOpen) {
+      menuPos = null;
       placeMenu();
       if (!menuPos) return;
     }
