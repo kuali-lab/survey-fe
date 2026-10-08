@@ -19,12 +19,14 @@
   import { MIN_SEARCH_CHARS, SEARCH_DEBOUNCE_MS, filterBySearch, effectiveMinChars, debounce } from '$lib/optionSearch.js';
   import { useI18n } from '$lib/i18n/context.js';
   import type { TranslatedText } from '$lib/types.js';
+  import { floatingMenuPosition, floatingMenuStyle, type MenuPosition } from '$lib/floatingMenu.js';
 
   let {
     options = [], value = '', onChange, placeholder = '', hasAsyncOptions = false, questionId = '', slug = '',
     filterActive = false, filter = null, filterHint = '', filterEmptyMessage = '',
     disabled = false, notice = '', multiple = false, atLimit = false, hideUntilSearch = false,
     showSearchBox = true,
+    floating = false, ariaLabel = undefined, invalid = false, ariaDescribedBy = undefined,
   } = $props<{
     // `label` = the VALUE emitted through onChange (primary language). `translations`
     // only affects the text that is displayed and searched.
@@ -70,6 +72,13 @@
     // shouldShowSearchBar, termasuk override untuk dropdown async/hideUntilSearch.
     // Default true supaya pemanggil lain (kalau ada) tetap seperti semula.
     showSearchBox?: boolean;
+    // Sel tabel (TableCellInput): menu position fixed dari rect pemicu (lihat floatingMenu.ts)
+    // supaya tak terpotong wadah gulir, Esc mengembalikan fokus ke pemicu. Bawaan false = perilaku lama.
+    floating?: boolean;
+    ariaLabel?: string;
+    // Hanya kelas `invalid` (aria-invalid tak berlaku untuk role button); pesan galat lewat ariaDescribedBy.
+    invalid?: boolean;
+    ariaDescribedBy?: string;
   }>();
 
   // Disabled until every source answer is present. The catalog filter only
@@ -222,8 +231,52 @@
     searchQuery = '';
   }
 
+  let triggerEl: HTMLButtonElement | undefined = $state();
+  let menuPos = $state<MenuPosition | null>(null);
+
+  // Ikuti pemicu saat halaman bergulir/viewport berubah (keyboard ponsel mengubah ukuran,
+  // jadi menutup di sini akan langsung menutup menu saat kotak cari difokus).
+  function placeMenu() {
+    if (!triggerEl) return;
+    const vv = window.visualViewport;
+    const vp = {
+      top: vv?.offsetTop ?? 0,
+      bottom: vv ? vv.offsetTop + vv.height : window.innerHeight,
+      width: document.documentElement.clientWidth,
+      height: window.innerHeight,
+    };
+    menuPos = floatingMenuPosition(triggerEl.getBoundingClientRect(), vp);
+    if (!menuPos) isOpen = false;
+  }
+
+  $effect(() => {
+    if (!floating || !isOpen) return;
+    let frame = 0;
+    const schedule = (e: Event) => {
+      if (e.type === 'scroll' && dropdownMenu?.contains(e.target as Node)) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(placeMenu);
+    };
+    const opts = { capture: true, passive: true };
+    window.addEventListener('scroll', schedule, opts);
+    window.addEventListener('resize', schedule);
+    window.visualViewport?.addEventListener('resize', schedule);
+    window.visualViewport?.addEventListener('scroll', schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', schedule, opts);
+      window.removeEventListener('resize', schedule);
+      window.visualViewport?.removeEventListener('resize', schedule);
+      window.visualViewport?.removeEventListener('scroll', schedule);
+    };
+  });
+
   async function toggleOpen() {
     if (filterBlocked) return;
+    if (floating && !isOpen) {
+      placeMenu();
+      if (!menuPos) return;
+    }
     isOpen = !isOpen;
     if (isOpen) {
       searchQuery = '';
@@ -235,13 +288,16 @@
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
+      if (floating && isOpen) triggerEl?.focus();
       isOpen = false;
     }
   }
 
   // Handle click outside
   function handleWindowClick(e: MouseEvent) {
-    if (isOpen && dropdownMenu && !dropdownMenu.contains(e.target as Node) && !(e.target as Element).closest('.dropdown-trigger')) {
+    // floating: hanya pemicu sendiri; sel tabel lain yang diklik menutup menu ini.
+    const onTrigger = floating ? triggerEl?.contains(e.target as Node) : (e.target as Element).closest('.dropdown-trigger');
+    if (isOpen && dropdownMenu && !dropdownMenu.contains(e.target as Node) && !onTrigger) {
       isOpen = false;
     }
   }
@@ -251,11 +307,16 @@
 
 <div class="dropdown-wrapper" onkeydown={handleKeydown}>
   <button
+    bind:this={triggerEl}
     type="button"
     class="dropdown-trigger"
     class:disabled={filterBlocked}
+    class:invalid
     disabled={filterBlocked}
     aria-disabled={filterBlocked}
+    aria-label={ariaLabel}
+    aria-describedby={ariaDescribedBy}
+    aria-expanded={floating ? isOpen : undefined}
     onclick={toggleOpen}
   >
     <span class="truncate">{selectedText || placeholder || i18n.t('ddPlaceholder')}</span>
@@ -265,7 +326,7 @@
   </button>
 
   {#if isOpen}
-    <div class="dropdown-menu" bind:this={dropdownMenu} transition:fade={{ duration: 100 }}>
+    <div class="dropdown-menu" style={floating && menuPos ? floatingMenuStyle(menuPos) : undefined} bind:this={dropdownMenu} transition:fade={{ duration: 100 }}>
       {#if showSearchBox}
       <div class="search-box">
         <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -440,7 +501,7 @@
   }
   .search-box input::placeholder { color: var(--text-muted); }
   .options-container {
-    max-height: 240px;
+    max-height: var(--dd-list-max, 240px);
     overflow-y: auto;
     position: relative;
   }

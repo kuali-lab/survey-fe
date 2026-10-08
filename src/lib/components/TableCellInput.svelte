@@ -9,6 +9,7 @@
   import { applyNumberInput, noWheelChange, numberInputCompare, numberInputText } from '$lib/numberInput.js'
   import { autoExpand } from '$lib/growTextarea.js'
   import { useI18n } from '$lib/i18n/context.js'
+  import SearchableDropdown from './SearchableDropdown.svelte'
 
   let {
     column,
@@ -37,6 +38,8 @@
   const ariaDescribedBy = $derived([hintId, invalid ? describedBy : undefined].filter(Boolean).join(' ') || undefined)
   const text = $derived(typeof value === 'string' ? value : '')
   const chosen = $derived(column.options?.find((o) => o.label === text))
+  // >15 opsi: daftar bawaan ponsel/desktop tanpa pencarian terlalu panjang untuk dipindai.
+  const searchable = $derived((column.options?.length ?? 0) > 15)
   // Peringatan rentang angka saat mengetik; shakeKey memutar ulang animasi getar.
   let warn = $state<string | null>(null)
   let shakeKey = $state(0)
@@ -80,11 +83,24 @@
     onblur={onNumberBlur}
     use:noWheelChange
   />
+{:else if column.type === 'dropdown' && searchable}
+  <!-- Menu floating (fixed) supaya tak terpotong .grid-wrap; pemicu dibungkus utuh, lihat gaya .cell-dd. -->
+  <div class="cell-dd" class:dense={wrapValue}>
+    <SearchableDropdown
+      options={column.options ?? []}
+      value={text}
+      onChange={(v: string | string[]) => onChange(typeof v === 'string' ? v : '')}
+      placeholder={i18n.t('tableSelectPlaceholder')}
+      floating
+      ariaLabel={chosen ? `${label}: ${i18n.label(chosen)}` : label}
+      {invalid}
+      ariaDescribedBy={ariaDescribedBy}
+    />
+  </div>
 {:else if column.type === 'dropdown'}
-  <!-- Select bawaan tak bisa turun baris dan SearchableDropdown memotong label
-       (elipsis) serta menu absolutnya terpotong wadah gulir tabel. Muka bergaya
-       .text-input menampilkan label utuh; select transparan di atasnya memegang
-       klik, keyboard, dan pembaca layar. -->
+  <!-- ≤15 opsi. Select bawaan tak bisa turun baris; muka bergaya .text-input
+       menampilkan label utuh, select transparan di atasnya memegang klik,
+       keyboard, dan pembaca layar. -->
   <div class="select-box">
     <span class="text-input grow-input select-face" class:cell-dense={wrapValue} class:invalid aria-hidden="true">{chosen ? i18n.label(chosen) : i18n.t('tableSelectPlaceholder')}</span>
     <select
@@ -196,6 +212,25 @@
   @media (forced-colors: active) {
     .select-box:focus-within .select-face { outline: 2px solid Highlight; }
     .select-face::after { border-color: CanvasText; }
+  }
+
+  /* SearchableDropdown di sel: tanpa margin bawah, nilai terpilih turun baris (bukan elipsis),
+     ukuran mengikuti .grow-input / .cell-dense. :global karena kelasnya milik komponen anak. */
+  .cell-dd :global(.dropdown-wrapper) { margin-bottom: 0; }
+  .cell-dd :global(.dropdown-trigger) {
+    height: auto;
+    min-height: 52px;
+    padding: 14px 16px;
+    line-height: 1.4;
+    text-align: left;
+  }
+  .cell-dd :global(.dropdown-trigger > .truncate) { white-space: normal; overflow-wrap: anywhere; }
+  .cell-dd :global(.dropdown-trigger.invalid) { border-color: var(--error); }
+  .cell-dd.dense { min-width: var(--cell-min, 0); }
+  .cell-dd.dense :global(.dropdown-trigger) { min-height: 32px; padding: 5px 6px; gap: 4px; font-size: 14px; line-height: 20px; }
+  @media (pointer: coarse) {
+    .cell-dd.dense { min-width: calc(var(--cell-min, 0px) * 1.15); }
+    .cell-dd.dense :global(.dropdown-trigger) { min-height: 44px; font-size: 16px; }
   }
 
   .cell-warn {

@@ -102,6 +102,52 @@ describe('TableCellInput', () => {
   })
 })
 
+describe('TableCellInput — dropdown >15 opsi memakai SearchableDropdown', () => {
+  const options = (n: number, label = (i: number) => `Opsi ${i}`) =>
+    Array.from({ length: n }, (_, i) => ({ id: String(i), label: label(i), sortOrder: i }))
+  const render16 = (props: Record<string, unknown>) =>
+    render(TableCellInput, { props: { column: col('Kab', 'dropdown', { options: options(16) }), value: undefined, label: 'IPA — Kab', onChange: noop, ...props } }).body
+
+  it('15 opsi: tetap select bawaan; 16 opsi: pemicu SearchableDropdown tanpa select', () => {
+    const fifteen = render(TableCellInput, { props: { column: col('Kab', 'dropdown', { options: options(15) }), value: undefined, label: 'IPA — Kab', onChange: noop } }).body
+    expect(fifteen).toContain('<select')
+    const sixteen = render16({ value: undefined })
+    expect(sixteen).not.toContain('<select')
+    expect(sixteen).toMatch(/<button[^>]*class="dropdown-trigger/)
+    expect(sixteen).toContain('>Pilih<')
+  })
+
+  it('nama aksesibel "Baris — Kolom" (ditambah nilai terpilih), sel salah: garis merah + describedby ke pesan, aria-expanded', () => {
+    const empty = render16({ value: undefined, describedBy: 'q-error-t' })
+    expect(empty).toContain('aria-label="IPA — Kab"')
+    expect(empty).not.toMatch(/dropdown-trigger[^"]*invalid/)
+    expect(empty).not.toContain('aria-describedby')
+    expect(empty).toContain('aria-expanded="false"')
+    const chosen = render16({ value: 'Opsi 3', invalid: true, describedBy: 'q-error-t' })
+    expect(chosen).toContain('aria-label="IPA — Kab: Opsi 3"')
+    expect(chosen).toMatch(/class="dropdown-trigger[^"]*invalid/)
+    expect(chosen).toContain('aria-describedby="q-error-t"')
+  })
+
+  it('nilai terpilih panjang tampil utuh di pemicu (dibungkus, bukan dipotong data)', () => {
+    const long = 'Kabupaten dengan nama yang sangat panjang sekali untuk menguji turun baris'
+    const body = render(TableCellInput, {
+      props: { column: col('Kab', 'dropdown', { options: options(16, (i) => (i === 0 ? long : `Opsi ${i}`)) }), value: long, label: 'A — B', wrapValue: true, onChange: noop },
+    }).body
+    expect(body).toContain(`>${long}</span>`)
+    expect(body).toMatch(/class="cell-dd[^"]*dense/)
+  })
+})
+
+describe('SearchableDropdown — pemanggil lama tak berubah', () => {
+  it('tanpa prop baru: tanpa aria-label/aria-invalid/aria-expanded', async () => {
+    const { default: SearchableDropdown } = await import('./SearchableDropdown.svelte')
+    const { body } = render(SearchableDropdown, { props: { options: [{ label: 'A' }], value: 'A', onChange: noop } })
+    expect(body).toContain('class="dropdown-trigger')
+    expect(body).not.toMatch(/aria-label|aria-expanded|aria-describedby|invalid/)
+  })
+})
+
 describe('TableInput — markup awal (accordion)', () => {
   it('satu baris terbuka (baris pertama belum lengkap), kepala bertombol aria-expanded + aria-controls', () => {
     const { body } = render(TableInput, { props: { question: table, value: { '1': { Murid: '3', Judul: 'a' } }, onChange: noop } })

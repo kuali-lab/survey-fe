@@ -77,7 +77,7 @@
     openRow = next ? keyOf(next) : null
     if (!next) return
     await tick()
-    listEl?.querySelector<HTMLElement>(`[data-row="${keyOf(next)}"] .fields :is(input, textarea, select)`)?.focus()
+    listEl?.querySelector<HTMLElement>(`[data-row="${keyOf(next)}"] .fields :is(input, textarea, select, button)`)?.focus()
   }
 </script>
 
