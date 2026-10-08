@@ -9,7 +9,7 @@
   import { slide } from 'svelte/transition'
   import type { AnswerValue, Question, TableRow } from '$lib/types.js'
   import {
-    ROW_HEAD_WEIGHT, activeRows, canBreakout, columnMinRem, columnWeight, filledCount, firstOpenRow, groupRows, isCompactTable, isRowComplete, requiredGridWidth, setCell,
+    ROW_HEAD_WEIGHT, activeRows, canBreakout, cellKey, columnMinRem, columnWeight, filledCount, firstOpenRow, groupRows, isCompactTable, isRowComplete, requiredGridWidth, setCell,
     toTableAnswer, validateTable, type RowGroup,
   } from '$lib/table.js'
   import { questionErrorId, scalarRuleError } from '$lib/utils.js'
@@ -94,7 +94,7 @@
   />
 {/snippet}
 
-<div class="table-q" bind:clientWidth={contentWidth}>
+<div class="table-q" data-table={question.id} bind:clientWidth={contentWidth}>
   <!-- Pengukur: selebar wadah breakout, apa pun tampilan yang aktif. -->
   {#if breakout}<div class="table-span" aria-hidden="true" bind:clientWidth={spanWidth}></div>{/if}
   {#if !compact}
@@ -122,10 +122,10 @@
             <tr class="group-row"><th scope="rowgroup" colspan={columns.length + 1}>{groupTitle(g)}</th></tr>
           {/if}
           {#each g.rows as row (row.key)}
-            <tr class="grid-row">
+            <tr class="grid-row" data-row={keyOf(row)}>
               <th class="row-head" scope="row">{i18n.label(row)}</th>
               {#each columns as col (col.id)}
-                <td class="cell" style:--cell-min="{columnMinRem(col)}rem">{@render cell(row, col)}</td>
+                <td class="cell" data-cell={cellKey(keyOf(row), col.id)} style:--cell-min="{columnMinRem(col)}rem">{@render cell(row, col)}</td>
               {/each}
             </tr>
           {/each}
@@ -167,7 +167,7 @@
               <div id={panelId} class="fields" role="group" aria-label={i18n.label(row)} transition:slide={{ duration: reduceMotion ? 0 : 180 }}>
                 {#each columns as col (col.id)}
                   {@const hintId = col.description ? `${panelId}-hint-${col.id}` : undefined}
-                  <div class="field">
+                  <div class="field" data-cell={cellKey(key, col.id)}>
                     <span class="field-label" aria-hidden="true">
                       {i18n.plain(col, 'title')}{#if col.required}<span class="req">*</span>{/if}
                     </span>

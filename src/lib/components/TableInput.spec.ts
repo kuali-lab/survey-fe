@@ -142,4 +142,12 @@ describe('TableInput — markup awal (accordion)', () => {
     expect(body).toMatch(/aria-label="IPA — Murid"[^>]*aria-invalid="true"|aria-invalid="true"[^>]*aria-label="IPA — Murid"/)
     expect(body.match(/aria-invalid="true"/g)).toHaveLength(1)
   })
+
+  it('target gulir runner: tabel ber-data-table, baris ber-data-row, sel ber-data-cell "baris:kolom"', () => {
+    const { body } = render(TableInput, { props: { question: table, value: null, onChange: noop } })
+    expect(body).toMatch(/class="table-q[^"]*"[^>]*data-table="t"|data-table="t"[^>]*class="table-q/)
+    expect(body).toContain('data-row="1"')
+    expect(body).toContain('data-row="2"')
+    for (const c of ['Murid', 'BTU', 'Judul']) expect(body).toContain(`data-cell="1:${c}"`)
+  })
 })

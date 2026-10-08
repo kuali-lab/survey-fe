@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { AnswerValue, Question, TableAnswer } from './types.js'
 import {
-  COMPACT_BREAKPOINT, activeRows, canBreakout, columnMinRem, effectiveImageLayout, columnWeight, filledCount, firstOpenRow, groupRows, isCellFilled, isCompactTable,
+  COMPACT_BREAKPOINT, activeRows, canBreakout, columnMinRem, effectiveImageLayout, firstInvalidCellTarget, columnWeight, filledCount, firstOpenRow, groupRows, isCellFilled, isCompactTable,
   isRowComplete, isTableTouched, pruneTableAnswer, requiredCount, requiredGridWidth, setCell, tableRecap, validateTable,
 } from './table.js'
 import { scalarRuleError } from './utils.js'
@@ -341,6 +341,36 @@ describe('columnMinRem (lebar minimum kolom grid, mode padat 14px)', () => {
     const long = dropdown('x'.repeat(200))
     expect(columnMinRem(long)).toBe(columnMinRem(dropdown()))
     expect(columnWeight(long)).toBeGreaterThan(columnWeight(dropdown()))
+  })
+})
+
+describe('firstInvalidCellTarget (gulir ke sel salah, M-5)', () => {
+  const text = (id: string): Question => col(id, 'short_text', true)
+  const issueOf = (q: Question) => validateTable(q, answers[q.id], noCellErrors)
+  let answers: Record<string, AnswerValue> = {}
+
+  it('tabel pertama yang salah: selektor sel lalu baris, dibatasi ke tabelnya', () => {
+    answers = { t: { '1': { murid: '3', judul: 'a' }, '2': { judul: 'b' } } }
+    expect(firstInvalidCellTarget([table()], { t: 'x' }, issueOf)).toEqual({
+      cell: '[data-table="t"] [data-cell="2:murid"]',
+      row: '[data-table="t"] [data-row="2"]',
+    })
+  })
+
+  it('pertanyaan salah pertama bukan tabel → null (runner memakai .error seperti biasa)', () => {
+    answers = { t: { '2': { judul: 'b' } } }
+    expect(firstInvalidCellTarget([text('a'), table()], { a: 'wajib', t: 'x' }, issueOf)).toBeNull()
+  })
+
+  it('urutan halaman menang: tabel di atas pertanyaan lain yang juga salah', () => {
+    answers = { t: { '2': { judul: 'b' } } }
+    expect(firstInvalidCellTarget([table(), text('a')], { a: 'wajib', t: 'x' }, issueOf)?.cell).toBe('[data-table="t"] [data-cell="1:murid"]')
+  })
+
+  it('tabel wajib belum disentuh (tanpa baris) atau tanpa galat → null', () => {
+    answers = { t: {} }
+    expect(firstInvalidCellTarget([table(true)], { t: 'wajib' }, issueOf)).toBeNull()
+    expect(firstInvalidCellTarget([table(true)], {}, issueOf)).toBeNull()
   })
 })
 

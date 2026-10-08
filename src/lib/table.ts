@@ -213,6 +213,26 @@ export function validateTable(
   return null
 }
 
+/** Nilai `data-cell` yang dipasang TableInput pada sel; dicari runner saat validasi gagal. */
+export const cellKey = (rowKey: string, columnId: string) => `${rowKey}:${columnId}`
+
+/**
+ * Bila pertanyaan salah pertama di halaman adalah tabel dengan sel bermasalah:
+ * selektor sel (fokus) dan barisnya (cadangan bila sel belum dirender). Null = gulir ke `.error`.
+ */
+export function firstInvalidCellTarget(
+  questions: Question[],
+  errors: Record<string, string>,
+  issueOf: (q: Question) => TableIssue | null,
+): { cell: string; row: string } | null {
+  const q = questions.find((x) => errors[x.id])
+  if (q?.type !== 'table') return null
+  const issue = issueOf(q)
+  if (!issue?.rowKey || !issue.columnId) return null
+  const scope = `[data-table="${q.id}"]`
+  return { cell: `${scope} [data-cell="${cellKey(issue.rowKey, issue.columnId)}"]`, row: `${scope} [data-row="${issue.rowKey}"]` }
+}
+
 /** Ringkasan rekap surveyor: sel terisi dari seluruh sel baris aktif × kolom. */
 export function tableRecap(q: Question, answer: AnswerValue | undefined): string {
   const rows = activeRows(q)

@@ -21,7 +21,7 @@ import {
 } from '$lib/topOfMind.js'
 import { LEGACY_LOCALE, t, type MessageKey } from '$lib/i18n/messages.js'
 import { surveyLanguages } from '$lib/i18n/content.js'
-import { activeRows, isTableTouched, pruneTableAnswer, validateTable } from '$lib/table.js'
+import { activeRows, firstInvalidCellTarget, isTableTouched, pruneTableAnswer, validateTable, type TableIssue } from '$lib/table.js'
 import { buildSurveySections, type SurveyPage } from './sections.js'
 
 export type { SurveyPage }
@@ -290,11 +290,7 @@ export class SurveyRunner {
   private validateOne(q: Question, answer: AnswerValue): string | null {
     // Tabel: aturan wajib + K108 di table.ts; sel terisi dinilai scalarRuleError,
     // penilai yang sama dengan penanda sel di TableInput.
-    if (q.type === 'table') {
-      const primary = surveyLanguages(this.survey).primary
-      const cellError = (col: Question, v: AnswerValue) => scalarRuleError(col, v, this.msgFn)
-      return validateTable(q, answer, cellError, this._getLocale(), primary)?.message ?? null
-    }
+    if (q.type === 'table') return this.tableIssue(q, answer)?.message ?? null
 
     // Pilihan Bertingkat D-1: a required dependent the respondent cannot answer
     // is treated as satisfied, so it never traps them. That is the case when the
@@ -402,6 +398,12 @@ export class SurveyRunner {
     return null
   }
 
+  private tableIssue(q: Question, answer: AnswerValue): TableIssue | null {
+    const primary = surveyLanguages(this.survey).primary
+    const cellError = (col: Question, v: AnswerValue) => scalarRuleError(col, v, this.msgFn)
+    return validateTable(q, answer, cellError, this._getLocale(), primary)
+  }
+
   private validateCurrentPage(): boolean {
     if (!this.currentPage) return true
     const errors: Record<string, string> = {}
@@ -412,9 +414,13 @@ export class SurveyRunner {
     this.questionErrors = errors
     const isValid = Object.keys(errors).length === 0
     if (!isValid) {
+      // Tabel: gulir ke sel salah (TableInput sudah membuka barisnya di accordion), lalu fokus.
+      const target = firstInvalidCellTarget(this.currentPage.questions, errors, (q) => this.tableIssue(q, this.answers[q.id]))
       setTimeout(() => {
-        const firstErrorEl = document.querySelector('.error')
+        const cell = target ? document.querySelector<HTMLElement>(target.cell) : null
+        const firstErrorEl = cell ?? (target && document.querySelector(target.row)) ?? document.querySelector('.error')
         if (firstErrorEl) firstErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        cell?.querySelector<HTMLElement>('input, textarea, select, button')?.focus({ preventScroll: true })
       }, 50)
     }
     return isValid
