@@ -225,30 +225,33 @@
   /* ── Grid: pola .grid MatrixInput ── */
   .grid { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 20px; }
 
+  /* Header kolom: abu lembut + tebal supaya terpisah dari isi (kelompok = kuning lembut di bawah). */
   .corner,
   .col-head {
-    border-bottom: 1px solid var(--hairline);
-    background: var(--canvas);
+    border-bottom: 2px solid var(--tertiary-30);
+    background: var(--canvas-soft);
   }
 
   .col-head {
     padding: 6px 3px;
-    font-weight: 500;
+    font-weight: 600;
     font-size: 13px;
     line-height: 1.3;
-    color: var(--text-body);
+    color: var(--text-primary);
     text-align: left;
     vertical-align: bottom;
     overflow-wrap: anywhere;
   }
 
   .group-row th {
-    padding: 12px 4px 6px;
+    padding: 8px 8px 8px 10px;
     font-size: 13px;
     font-weight: 600;
     text-align: left;
     color: var(--text-primary);
-    border-bottom: 1px solid var(--hairline);
+    background: var(--primary-10);
+    border-left: 3px solid var(--primary);
+    border-bottom: 1px solid var(--primary-30);
   }
 
   /* Garis antarbaris, bukan baris belang: isian abu (.text-input) hilang di latar abu. */
@@ -272,9 +275,13 @@
 
   .group-head {
     margin: 8px 0 0;
+    padding: 6px 10px;
     font-size: 13px;
     font-weight: 600;
-    color: var(--text-body);
+    color: var(--text-primary);
+    background: var(--primary-10);
+    border-left: 3px solid var(--primary);
+    border-radius: 4px;
   }
 
   .item {
@@ -286,7 +293,7 @@
     transition: border-color 0.15s, background 0.15s;
   }
 
-  .item.open { border-color: var(--text-primary); }
+  .item.open { border-color: var(--primary-30); background: var(--primary-10); }
   .item.answered:not(.open) { background: var(--canvas-soft); border-color: var(--canvas-soft); }
 
   .item-head {

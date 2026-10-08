@@ -38,8 +38,6 @@
   const ariaDescribedBy = $derived([hintId, invalid ? describedBy : undefined].filter(Boolean).join(' ') || undefined)
   const text = $derived(typeof value === 'string' ? value : '')
   const chosen = $derived(column.options?.find((o) => o.label === text))
-  // >15 opsi: daftar bawaan ponsel/desktop tanpa pencarian terlalu panjang untuk dipindai.
-  const searchable = $derived((column.options?.length ?? 0) > 15)
   // Peringatan rentang angka saat mengetik; shakeKey memutar ulang animasi getar.
   let warn = $state<string | null>(null)
   let shakeKey = $state(0)
@@ -83,8 +81,9 @@
     onblur={onNumberBlur}
     use:noWheelChange
   />
-{:else if column.type === 'dropdown' && searchable}
-  <!-- Menu floating (fixed) supaya tak terpotong .grid-wrap; pemicu dibungkus utuh, lihat gaya .cell-dd. -->
+{:else if column.type === 'dropdown'}
+  <!-- Semua kolom pilihan memakai SearchableDropdown seperti pertanyaan dropdown biasa. Menu floating (fixed)
+       supaya tak terpotong .grid-wrap; pemicu membungkus nilai utuh, lihat gaya .cell-dd. -->
   <div class="cell-dd" class:dense={wrapValue}>
     <SearchableDropdown
       options={column.options ?? []}
@@ -96,25 +95,6 @@
       {invalid}
       ariaDescribedBy={ariaDescribedBy}
     />
-  </div>
-{:else if column.type === 'dropdown'}
-  <!-- ≤15 opsi. Select bawaan tak bisa turun baris; muka bergaya .text-input
-       menampilkan label utuh, select transparan di atasnya memegang klik,
-       keyboard, dan pembaca layar. -->
-  <div class="select-box">
-    <span class="text-input grow-input select-face" class:cell-dense={wrapValue} class:invalid aria-hidden="true">{chosen ? i18n.label(chosen) : i18n.t('tableSelectPlaceholder')}</span>
-    <select
-      value={text}
-      aria-label={label}
-      aria-invalid={invalid || undefined}
-      aria-describedby={ariaDescribedBy}
-      onchange={(e) => onChange(e.currentTarget.value)}
-    >
-      <option value="">{i18n.t('tableSelectPlaceholder')}</option>
-      {#each column.options ?? [] as opt (opt.id)}
-        <option value={opt.label}>{i18n.label(opt)}</option>
-      {/each}
-    </select>
   </div>
 {:else}
   <!-- Enter = baris baru (keputusan produk 8 Okt, beda dari short_text biasa yang menolak Enter);
@@ -142,15 +122,7 @@
   /* Batas isian ±1,05:1 terhadap putih sengaja sama dengan isian lain di survei. */
   .text-input { display: block; }
 
-  .select-box { position: relative; }
-
-  .text-input[aria-invalid='true'],
-  .select-face.invalid {
-    border-color: var(--error);
-  }
-
-  /* Ruang panah; ukuran lain dari .grow-input (app.css), .cell-dense di bawah menimpanya. */
-  .select-face { padding-right: 36px; }
+  .text-input[aria-invalid='true'] { border-color: var(--error); }
 
   /* Grid desktop: 14px, kontrol ±32px. --cell-min dari columnMinRem (table.ts);
      padding 6px dan batas fokus 2px ikut dihitung di sana. */
@@ -170,48 +142,6 @@
   @media (pointer: coarse) {
     .cell-dense { font-size: 16px; min-height: 44px; min-width: calc(var(--cell-min, 0px) * 1.15); }
     input.cell-dense { height: 44px; }
-  }
-
-  .select-face.cell-dense { padding-right: 22px; }
-
-  .select-face::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    right: 16px;
-    width: 6px;
-    height: 6px;
-    margin-top: -5px;
-    border-right: 2px solid var(--text-body);
-    border-bottom: 2px solid var(--text-body);
-    transform: rotate(45deg);
-  }
-
-  .select-face.cell-dense::after { right: 9px; }
-
-  .select-box select {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    opacity: 0;
-    cursor: pointer;
-    font-size: 16px;
-    /* Safari macOS mengabaikan height pada select berpenampilan bawaan. */
-    appearance: none;
-  }
-
-  /* Fokus milik select; muka meniru .text-input:focus (app.css). */
-  .select-box:focus-within .select-face {
-    background: var(--canvas);
-    border-color: var(--ink);
-    border-width: 2px;
-  }
-
-  /* High Contrast: warna batas dipaksa sistem, jadi fokus butuh outline sendiri. */
-  @media (forced-colors: active) {
-    .select-box:focus-within .select-face { outline: 2px solid Highlight; }
-    .select-face::after { border-color: CanvasText; }
   }
 
   /* SearchableDropdown di sel: tanpa margin bawah, nilai terpilih turun baris (bukan elipsis),

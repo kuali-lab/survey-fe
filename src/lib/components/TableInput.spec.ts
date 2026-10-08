@@ -62,7 +62,6 @@ describe('TableCellInput', () => {
   it.each<[string, Question]>([
     ['angka', col('n', 'number')],
     ['teks', col('j', 'short_text')],
-    ['dropdown', col('d', 'dropdown', { options: [{ id: 'a', label: 'Ya', sortOrder: 0 }] })],
   ])('%s: ukuran padat hanya di grid (wrapValue), accordion memakai ukuran input biasa', (_, column) => {
     const grid = render(TableCellInput, { props: { column, value: undefined, label: 'A — B', wrapValue: true, onChange: noop } })
     expect(grid.body).toMatch(/class="text-input[^"]*cell-dense/)
@@ -71,15 +70,18 @@ describe('TableCellInput', () => {
     expect(list.body).not.toContain('cell-dense')
   })
 
-  it('dropdown: <select> bawaan, opsi bernilai label bahasa utama', () => {
+  it('dropdown: ukuran padat hanya di grid; pemicu SearchableDropdown (bukan select bawaan), placeholder pendek', () => {
     const column = col('Tahun', 'dropdown', {
       options: [{ id: 'a', label: '2022', sortOrder: 0 }, { id: 'b', label: '2023', sortOrder: 1 }],
     })
-    const { body } = render(TableCellInput, { props: { column, value: '2023', label: 'IPA — Tahun', onChange: noop } })
-    expect(body).toContain('<select')
-    expect(body).toMatch(/<option value="2023"[^>]*selected/)
-    // Placeholder pendek supaya muat di lebar kolom grid desktop.
-    expect(body).toMatch(/<option value=""[^>]*>Pilih<\/option>/)
+    const grid = render(TableCellInput, { props: { column, value: undefined, label: 'IPA — Tahun', wrapValue: true, onChange: noop } }).body
+    expect(grid).toMatch(/class="cell-dd[^"]*dense/)
+    expect(grid).toMatch(/<button[^>]*class="dropdown-trigger/)
+    expect(grid).not.toContain('<select')
+    expect(grid).toContain('>Pilih<')
+    const list = render(TableCellInput, { props: { column, value: undefined, label: 'IPA — Tahun', onChange: noop } }).body
+    expect(list).toMatch(/class="cell-dd[ "]/)
+    expect(list).not.toMatch(/class="cell-dd[^"]*dense/)
   })
 
   it('dropdown: tanpa title (muka sudah menampilkan nilai utuh; title menggandakannya di pembaca layar)', () => {
@@ -89,34 +91,21 @@ describe('TableCellInput', () => {
     const chosen = render(TableCellInput, { props: { column, value: 'Kurikulum Merdeka', label: 'IPA — Kurikulum', onChange: noop } })
     expect(chosen.body).not.toContain('title=')
   })
-
-  it('dropdown: label terpilih tampil utuh di muka bergaya .text-input (bisa turun baris), select transparan memegang a11y', () => {
-    const column = col('Tahun', 'dropdown', {
-      options: [{ id: 'a', label: '2022 atau sebelumnya', sortOrder: 0 }],
-    })
-    for (const wrapValue of [true, false]) {
-      const chosen = render(TableCellInput, { props: { column, value: '2022 atau sebelumnya', label: 'IPA — Tahun', wrapValue, onChange: noop } })
-      expect(chosen.body).toMatch(/class="text-input grow-input select-face[^"]*"[^>]*aria-hidden="true"[^>]*>2022 atau sebelumnya</)
-      expect(chosen.body).toContain('aria-label="IPA — Tahun"')
-      const empty = render(TableCellInput, { props: { column, value: undefined, label: 'IPA — Tahun', wrapValue, onChange: noop } })
-      expect(empty.body).toMatch(/class="text-input grow-input select-face[^"]*"[^>]*>Pilih</)
-    }
-  })
 })
 
-describe('TableCellInput — dropdown >15 opsi memakai SearchableDropdown', () => {
+describe('TableCellInput — semua kolom dropdown memakai SearchableDropdown', () => {
   const options = (n: number, label = (i: number) => `Opsi ${i}`) =>
     Array.from({ length: n }, (_, i) => ({ id: String(i), label: label(i), sortOrder: i }))
   const render16 = (props: Record<string, unknown>) =>
     render(TableCellInput, { props: { column: col('Kab', 'dropdown', { options: options(16) }), value: undefined, label: 'IPA — Kab', onChange: noop, ...props } }).body
 
-  it('15 opsi: tetap select bawaan; 16 opsi: pemicu SearchableDropdown tanpa select', () => {
-    const fifteen = render(TableCellInput, { props: { column: col('Kab', 'dropdown', { options: options(15) }), value: undefined, label: 'IPA — Kab', onChange: noop } }).body
-    expect(fifteen).toContain('<select')
-    const sixteen = render16({ value: undefined })
-    expect(sixteen).not.toContain('<select')
-    expect(sixteen).toMatch(/<button[^>]*class="dropdown-trigger/)
-    expect(sixteen).toContain('>Pilih<')
+  it('berapa pun jumlah opsi: pemicu SearchableDropdown, tanpa select bawaan', () => {
+    for (const n of [2, 15, 16]) {
+      const body = render(TableCellInput, { props: { column: col('Kab', 'dropdown', { options: options(n) }), value: undefined, label: 'IPA — Kab', onChange: noop } }).body
+      expect(body).not.toContain('<select')
+      expect(body).toMatch(/<button[^>]*class="dropdown-trigger/)
+      expect(body).toContain('>Pilih<')
+    }
   })
 
   it('nama aksesibel "Baris — Kolom" (ditambah nilai terpilih), sel salah: garis merah + describedby ke pesan, aria-expanded', () => {
