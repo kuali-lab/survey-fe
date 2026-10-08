@@ -226,6 +226,11 @@
   }
   .cell-dd :global(.dropdown-trigger > .truncate) { white-space: normal; overflow-wrap: anywhere; }
   .cell-dd :global(.dropdown-trigger.invalid) { border-color: var(--error); }
+  /* Sesudah .invalid (spesifisitas sama): fokus tetap terlihat pada sel salah. */
+  .cell-dd :global(.dropdown-trigger:focus-visible) { border-color: var(--ink); border-width: 2px; }
+  @media (forced-colors: active) {
+    .cell-dd :global(.dropdown-trigger:focus-visible) { outline: 2px solid Highlight; }
+  }
   .cell-dd.dense { min-width: var(--cell-min, 0); }
   .cell-dd.dense :global(.dropdown-trigger) { min-height: 32px; padding: 5px 6px; gap: 4px; font-size: 14px; line-height: 20px; }
   @media (pointer: coarse) {

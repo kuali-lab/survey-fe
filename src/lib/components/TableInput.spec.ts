@@ -3,6 +3,8 @@ import { render } from 'svelte/server'
 import type { Question } from '$lib/types.js'
 import TableInput from './TableInput.svelte'
 import TableCellInput from './TableCellInput.svelte'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 // Render SSR: lebar pembungkus belum terukur (0), jadi markup awal selalu accordion
 // (mobile-first, tanpa kilasan grid di ponsel). Grid desktop dibuktikan di live-verify.
@@ -136,6 +138,21 @@ describe('TableCellInput — dropdown >15 opsi memakai SearchableDropdown', () =
     }).body
     expect(body).toContain(`>${long}</span>`)
     expect(body).toMatch(/class="cell-dd[^"]*dense/)
+  })
+})
+
+describe('TableCellInput — gaya fokus pemicu SearchableDropdown (CSS, dijaga dari sumber)', () => {
+  const css = readFileSync(fileURLToPath(new URL('./TableCellInput.svelte', import.meta.url)), 'utf8')
+  const invalidAt = css.indexOf(':global(.dropdown-trigger.invalid)')
+  const focus = '.cell-dd :global(.dropdown-trigger:focus-visible) { border-color: var(--ink); border-width: 2px; }'
+
+  it('fokus menang atas garis merah sel salah (spesifisitas sama, ditulis sesudahnya)', () => {
+    expect(invalidAt).toBeGreaterThan(-1)
+    expect(css.indexOf(focus)).toBeGreaterThan(invalidAt)
+  })
+
+  it('forced-colors: pemicu terfokus diberi outline Highlight', () => {
+    expect(css).toMatch(/@media \(forced-colors: active\) \{[^}]*\.cell-dd :global\(\.dropdown-trigger:focus-visible\) \{ outline: 2px solid Highlight; \}/)
   })
 })
 
