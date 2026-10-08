@@ -233,9 +233,9 @@
   }
 
   .col-head {
-    padding: 6px 3px;
-    font-weight: 600;
-    font-size: 13px;
+    padding: 10px 4px;
+    font-weight: 700;
+    font-size: 15px;
     line-height: 1.3;
     color: var(--text-primary);
     text-align: left;
@@ -244,9 +244,9 @@
   }
 
   .group-row th {
-    padding: 8px 8px 8px 10px;
-    font-size: 13px;
-    font-weight: 600;
+    padding: 10px 8px 10px 10px;
+    font-size: 15px;
+    font-weight: 700;
     text-align: left;
     color: var(--text-primary);
     background: var(--primary-10);
@@ -275,9 +275,9 @@
 
   .group-head {
     margin: 8px 0 0;
-    padding: 6px 10px;
-    font-size: 13px;
-    font-weight: 600;
+    padding: 8px 10px;
+    font-size: 15px;
+    font-weight: 700;
     color: var(--text-primary);
     background: var(--primary-10);
     border-left: 3px solid var(--primary);

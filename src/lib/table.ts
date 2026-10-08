@@ -62,7 +62,7 @@ export function columnWeight(col: Question): number {
   if (col.type === 'number') return 7
   if (col.type !== 'dropdown') return 9
   const longest = Math.max(0, ...(col.options ?? []).map((o) => o.label.length))
-  return Math.min(Math.max(longest + 7, 12), 28)
+  return Math.min(Math.max(longest + 2, 8), 16)
 }
 
 /**

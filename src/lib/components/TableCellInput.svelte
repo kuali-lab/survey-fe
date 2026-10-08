@@ -153,6 +153,7 @@
     padding: 14px 16px;
     line-height: 1.4;
     text-align: left;
+    justify-content: flex-start;
   }
   .cell-dd :global(.dropdown-trigger > .truncate) { white-space: normal; overflow-wrap: anywhere; }
   .cell-dd :global(.dropdown-trigger.invalid) { border-color: var(--error); }
