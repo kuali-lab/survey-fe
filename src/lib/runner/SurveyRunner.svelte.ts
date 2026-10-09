@@ -12,7 +12,7 @@
 
 import type { Survey, Question, Answers, AnswerValue, SurveySettings } from '$lib/types.js'
 import { getAnswerableQuestions, scalarRuleError } from '$lib/utils.js'
-import { findFiredRule } from '$lib/skipLogic.js'
+import { findFiredRule, walkVisited } from '$lib/skipLogic.js'
 import { isValidPhoneFormat } from '$lib/phone.js'
 import { collectDependents, pruneDependentAnswers, visibleOptions } from '$lib/optionDependency.js'
 import {
@@ -171,7 +171,16 @@ export class SurveyRunner {
   private settings = $derived<SurveySettings>(this.survey?.settings ?? DEFAULT_SETTINGS)
   questions = $derived(this.survey?.questions ?? [])
   private skipRules = $derived(this.survey?.skipRules ?? [])
+  private skipRoutes = $derived(this.survey?.skipRoutes ?? [])
   answerableQuestions = $derived(getAnswerableQuestions(this.questions))
+
+  // Rute berurutan: posisi berikutnya diturunkan dari jawaban saat ini lewat walk yang
+  // sama dengan backend, jadi Sebelumnya, draf, dan perubahan jawaban tak butuh state tambahan.
+  private routeWalk = $derived(
+    this.skipRoutes.length > 0
+      ? walkVisited(this.answerableQuestions, this.questions, this.skipRules, this.skipRoutes, this.answers)
+      : [],
+  )
 
   // Skip logic requires per-page evaluation, so any active skip rule forces
   // one_per_page. Everything that branches on display mode — pagination, the
@@ -182,7 +191,7 @@ export class SurveyRunner {
   // own screen, which only exists one per page (the backend forces the same in
   // the public payload; this covers cached survey copies and preview drafts).
   effectiveDisplayMode = $derived<'scroll' | 'one_per_page'>(
-    this.skipRules.length > 0 || this.questions.some((q) => isTopOfMindQuestion(q))
+    this.skipRules.length > 0 || this.skipRoutes.length > 0 || this.questions.some((q) => isTopOfMindQuestion(q))
       ? 'one_per_page'
       : (this.settings.displayMode || 'one_per_page'),
   )
@@ -275,6 +284,8 @@ export class SurveyRunner {
       }
       return Math.round((answered / total) * 100)
     }
+    const k = this.routeStepIndex()
+    if (k >= 0) return Math.round(((k + 1) / this.routeWalk.length) * 100)
     return this.surveyPages.length > 0
       ? Math.round(((this.currentIndex + 1) / this.surveyPages.length) * 100)
       : 0
@@ -455,7 +466,20 @@ export class SurveyRunner {
     // Push current page to navigation history before moving forward.
     this.navHistory.push(this.currentIndex)
 
-    const rule = this.firedRule()
+    const k = this.routeStepIndex()
+    // Dalam rute, logika biasa tidak dievaluasi; di luarnya hanya go_back (aksi klien) yang masih milik runner.
+    const rule = k >= 0 && this.routeWalk[k].routed ? null : this.firedRule()
+    if (k >= 0 && rule?.action !== 'go_back') {
+      const nextId = this.routeWalk[k + 1]?.id
+      const idx = nextId ? this.surveyPages.findIndex((p) => p.questions.some((x) => x.id === nextId)) : -1
+      if (idx < 0) {
+        await this._onFinish()
+        return
+      }
+      this.currentIndex = idx
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
     const next = rule ? (rule.action === 'end_survey' ? 'END' : rule.targetQuestionId) : null
 
     if (next === 'END') {
@@ -547,6 +571,12 @@ export class SurveyRunner {
       this.questionErrors = nextErrors
     }
     if (cleared.length > 0) this._onDependentsCleared?.(cleared)
+  }
+
+  // Indeks halaman saat ini pada jalur rute, atau -1 bila tanpa rute / di luar jalur.
+  private routeStepIndex(): number {
+    const id = this.currentPage?.questions[0]?.id
+    return id ? this.routeWalk.findIndex((s) => s.id === id) : -1
   }
 
   // First satisfied skip rule across the current page's questions (priority order).
