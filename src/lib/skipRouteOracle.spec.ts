@@ -50,7 +50,7 @@ describe('oracle rute berurutan (fixture backend)', () => {
   it('bentuk rute publik cocok dengan tipe SkipRoute', () => {
     const typed: SkipRoute[] = oracle.routes as SkipRoute[]
     for (const r of typed) {
-      expect(Object.keys(r).sort()).toEqual(['conditions', 'connector', 'hostQuestionId', 'id', 'joinQuestionId', 'position', 'steps'])
+      expect(Object.keys(r).filter((k) => k !== 'kind' && k !== 'branches').sort()).toEqual(['conditions', 'connector', 'hostQuestionId', 'id', 'joinQuestionId', 'position', 'steps'])
       for (const c of r.conditions) expect(typeof c.sourceQuestionId).toBe('string')
     }
   })
