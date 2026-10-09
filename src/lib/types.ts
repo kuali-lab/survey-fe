@@ -222,6 +222,9 @@ export interface SkipRule {
   id: string
   questionId: string
   sourceQuestionId: string
+  /** Keduanya terisi hanya bila sumbernya sel tabel (`sourceQuestionId` = pertanyaan tabel). */
+  sourceRowKey?: string
+  sourceColumnId?: string
   operator: 'equals' | 'not_equals' | 'empty' | 'not_empty' | 'contains' | 'not_contains' | 'greater_than' | 'less_than' | 'greater_than_equals' | 'less_than_equals' | 'before' | 'after'
   value: string
   action: 'skip_to' | 'end_survey' | 'go_back'

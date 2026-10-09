@@ -170,3 +170,55 @@ describe('go_back action', () => {
     expect(findFiredRule(...args, [skip], new Set(['gb1']))?.action).toBe('skip_to')
   })
 })
+
+describe('findFiredRule: sumber sel tabel', () => {
+  const tableQ = { ...numberQuestion('t1'), type: 'table' as const }
+  const cellRule = (id: string, operator: SkipRule['operator'], value: string, logicGroup = 'AND:0', col = 'c1'): SkipRule => ({
+    ...rule(operator, value),
+    id,
+    sourceQuestionId: 't1',
+    sourceRowKey: 'r1',
+    sourceColumnId: col,
+    logicGroup,
+  })
+  const qs = [tableQ, Q_SRC, Q_HOST, Q_TARGET]
+  const fires = (rules: SkipRule[], answers: Answers) => findFiredRule('q2', answers, qs, rules) !== null
+
+  it('angka greater_than', () => {
+    expect(fires([cellRule('a', 'greater_than', '5')], { t1: { r1: { c1: 9 } } })).toBe(true)
+    expect(fires([cellRule('a', 'greater_than', '5')], { t1: { r1: { c1: '3' } } })).toBe(false)
+  })
+  it('teks contains', () => {
+    expect(fires([cellRule('a', 'contains', 'bud')], { t1: { r1: { c1: 'Pak budi' } } })).toBe(true)
+  })
+  it('dropdown equals / not_equals (label)', () => {
+    const a: Answers = { t1: { r1: { c1: 'SMA' } } }
+    expect(fires([cellRule('a', 'equals', 'SMA')], a)).toBe(true)
+    expect(fires([cellRule('a', 'not_equals', 'SMA')], a)).toBe(false)
+  })
+  it('sel kosong, baris tak ada, tabel belum dijawab: empty true', () => {
+    expect(fires([cellRule('a', 'empty', '')], { t1: { r1: { c2: 1 } } })).toBe(true)
+    expect(fires([cellRule('a', 'empty', '')], { t1: { rX: { c1: 1 } } })).toBe(true)
+    expect(fires([cellRule('a', 'empty', '')], {})).toBe(true)
+    expect(fires([cellRule('a', 'not_empty', '')], {})).toBe(false)
+  })
+  it('OR campur sumber biasa dan sel', () => {
+    const rules = [
+      { ...rule('equals', '1'), id: 'x', logicGroup: 'OR:0' },
+      cellRule('y', 'equals', 'SMA', 'OR:0'),
+    ]
+    expect(fires(rules, { q1: 0, t1: { r1: { c1: 'SMA' } } })).toBe(true)
+    expect(fires(rules, { q1: 0, t1: { r1: { c1: 'SD' } } })).toBe(false)
+  })
+  it('AND campur sumber biasa dan sel', () => {
+    const rules = [
+      { ...rule('equals', '1'), id: 'x' },
+      cellRule('y', 'equals', 'SMA'),
+    ]
+    expect(fires(rules, { q1: 1, t1: { r1: { c1: 'SMA' } } })).toBe(true)
+    expect(fires(rules, { q1: 1, t1: { r1: { c1: 'SD' } } })).toBe(false)
+  })
+  it('aturan tanpa field baru tetap membaca jawaban utuh', () => {
+    expect(fires([{ ...rule('equals', '4') }], { q1: 4 })).toBe(true)
+  })
+})

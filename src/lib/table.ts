@@ -106,7 +106,7 @@ export function toTableAnswer(v: AnswerValue | undefined): TableAnswer {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as TableAnswer) : {}
 }
 
-function cellOf(answer: TableAnswer, rowKey: string, columnId: string): AnswerValue | undefined {
+export function cellOf(answer: TableAnswer, rowKey: string, columnId: string): AnswerValue | undefined {
   return answer[rowKey]?.[columnId]
 }
 
