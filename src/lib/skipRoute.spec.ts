@@ -72,3 +72,52 @@ describe('walkVisited — oracle rute berurutan', () => {
     expect(steps.map((s) => s.routed)).toEqual([true, true, true, false])
   })
 })
+
+describe('walkVisited — rute per_option', () => {
+  const QS = [mk('U2', 1, 'checkbox'), mk('U3', 2), mk('U4', 3), mk('U5', 4), mk('U6', 5), mk('U7', 6)]
+  const opts = ['Marketing', 'CS', 'Kasir', 'ARO']
+  const route = (over: Partial<SkipRoute> = {}): SkipRoute => ({
+    id: 'p', kind: 'per_option', hostQuestionId: 'U2', position: 1, connector: 'AND', conditions: [], steps: [],
+    branches: [
+      { optionValue: 'Marketing', steps: ['U3'] },
+      { optionValue: 'CS', steps: ['U4'] },
+      { optionValue: 'Kasir', steps: ['U5'] },
+      { optionValue: 'ARO', steps: ['U6'] },
+    ],
+    joinQuestionId: 'U7', ...over,
+  })
+  const w = (r: SkipRoute, answers: Record<string, unknown>, qs = QS) =>
+    walkVisited(qs, qs, [], [r], answers as never).map((s) => s.id)
+
+  for (let m = 0; m < 16; m++) {
+    const sel = opts.filter((_, i) => m & (1 << i))
+    const branch = ['U3', 'U4', 'U5', 'U6'].filter((_, i) => sel.includes(opts[i]))
+    it(`{${sel.join(',')}}`, () => expect(w(route(), { U2: sel })).toEqual(['U2', ...branch, 'U7']))
+  }
+
+  it('urutan klik tidak menentukan urutan kunjungan', () => {
+    expect(w(route(), { U2: ['ARO', 'Marketing'] })).toEqual(['U2', 'U3', 'U6', 'U7'])
+  })
+  it('opsi dipilih tanpa cabang diabaikan', () => {
+    expect(w(route({ branches: [{ optionValue: 'CS', steps: ['U4'] }] }), { U2: ['Marketing', 'CS'] })).toEqual(['U2', 'U4', 'U7'])
+  })
+  it('dua cabang berbagi langkah: dedupe', () => {
+    const r = route({ branches: [{ optionValue: 'Marketing', steps: ['U3', 'U4'] }, { optionValue: 'CS', steps: ['U4', 'U5'] }] })
+    expect(w(r, { U2: ['Marketing', 'CS'] })).toEqual(['U2', 'U3', 'U4', 'U5', 'U7'])
+  })
+  it('cabang dengan lebih dari satu langkah', () => {
+    expect(w(route({ branches: [{ optionValue: 'Kasir', steps: ['U3', 'U5', 'U6'] }] }), { U2: ['Kasir'] })).toEqual(['U2', 'U3', 'U5', 'U6', 'U7'])
+  })
+  it('pilihan tunggal memakai equals', () => {
+    const qs = [mk('U2', 1, 'single_choice'), ...QS.slice(1)]
+    expect(w(route(), { U2: 'CS' }, qs)).toEqual(['U2', 'U4', 'U7'])
+    expect(w(route(), { U2: 'Lain' }, qs)).toEqual(['U2', 'U7'])
+  })
+  it('belum dijawab: antrean kosong, langsung join', () => {
+    expect(w(route(), {})).toEqual(['U2', 'U7'])
+  })
+  it('rute per_option menang atas logika biasa host', () => {
+    const rule = { id: 'x', questionId: 'U2', sourceQuestionId: 'U2', operator: 'contains', value: 'CS', action: 'skip_to', targetQuestionId: 'U6', logicGroup: 'AND:0' } as SkipRule
+    expect(walkVisited(QS, QS, [rule], [route()], { U2: ['CS'] } as never).map((s) => s.id)).toEqual(['U2', 'U4', 'U7'])
+  })
+})

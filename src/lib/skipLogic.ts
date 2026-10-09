@@ -187,17 +187,23 @@ export function walkVisited(
       dest = head ?? route.join
       route = head === undefined ? null : { remaining: rest, join: route.join }
     } else {
-      const hit = skipRoutes
-        .filter((r) => r.hostQuestionId === q.id)
-        .sort((a, b) => a.position - b.position)
-        .find((r) => {
-          const met = (c: SkipCondition) => conditionMet(c, answers, questions)
-          return r.connector === 'OR' ? r.conditions.some(met) : r.conditions.every(met)
-        })
-      if (hit) {
+      const met = (c: SkipCondition) => conditionMet(c, answers, questions)
+      const steps = (r: SkipRoute): string[] | null => {
+        if (r.kind !== 'per_option') return (r.connector === 'OR' ? r.conditions.some(met) : r.conditions.every(met)) ? r.steps : null
+        // per_option selalu cocok; antrean = cabang terpilih, tanpa duplikat, menurut urutan pertanyaan.
+        const op = questions.find((x) => x.id === r.hostQuestionId)?.type === 'checkbox' ? 'contains' : 'equals'
+        const picked = (r.branches ?? [])
+          .filter((b) => met({ sourceQuestionId: r.hostQuestionId, operator: op, value: b.optionValue }))
+          .flatMap((b) => b.steps)
+        return [...new Set(picked)].sort((a, b) => (pos.get(a) ?? 0) - (pos.get(b) ?? 0))
+      }
+      for (const r of skipRoutes.filter((r) => r.hostQuestionId === q.id).sort((a, b) => a.position - b.position)) {
+        const st = steps(r)
+        if (!st) continue
         routed = true
-        dest = hit.steps[0] ?? null
-        route = { remaining: hit.steps.slice(1), join: hit.joinQuestionId ?? null }
+        dest = st[0] ?? r.joinQuestionId ?? null
+        route = { remaining: st.slice(1), join: r.joinQuestionId ?? null }
+        break
       }
     }
     if (!routed) {

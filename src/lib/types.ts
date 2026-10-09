@@ -241,12 +241,16 @@ export type SkipCondition = Pick<SkipRule, 'sourceQuestionId' | 'sourceRowKey' |
 /** Rute berurutan: bila kondisi di host terpenuhi, kunjungi `steps` lalu `joinQuestionId`. */
 export interface SkipRoute {
   id: string
+  /** Absen = 'sequence'. 'per_option': langkah diambil dari cabang opsi host yang dipilih. */
+  kind?: 'sequence' | 'per_option'
   hostQuestionId: string
   /** Prioritas; kecil = dievaluasi lebih dulu. */
   position: number
   connector: 'AND' | 'OR'
   conditions: SkipCondition[]
   steps: string[]
+  /** Hanya untuk `per_option`; `joinQuestionId` wajib di mode ini. */
+  branches?: { optionValue: string; steps: string[] }[]
   /** Null/absen = lanjut berurutan setelah langkah terakhir. */
   joinQuestionId?: string | null
 }
