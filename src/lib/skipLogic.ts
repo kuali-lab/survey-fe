@@ -1,5 +1,6 @@
 import type { Question, SkipRule, Answers } from './types.js'
 import { isTopOfMindAnswer } from './topOfMind.js'
+import { cellOf, toTableAnswer } from './table.js'
 
 function matchesOperator(
   answer: unknown,
@@ -73,7 +74,10 @@ export function findFiredRule(
 
   const checkRule = (r: SkipRule) => {
     const srcType = questions.find(q => q.id === r.sourceQuestionId)?.type
-    let answer: unknown = answers[r.sourceQuestionId]
+    // Sel tabel: nilai sel (dropdown tersimpan sebagai label opsi), kosong bila baris/kolom tak ada.
+    let answer: unknown = r.sourceRowKey && r.sourceColumnId
+      ? cellOf(toTableAnswer(answers[r.sourceQuestionId]), r.sourceRowKey, r.sourceColumnId)
+      : answers[r.sourceQuestionId]
     let value = r.value ?? ''
     // Top of Mind: rules see the FULL selection, exactly like a plain checkbox.
     if (isTopOfMindAnswer(answer)) answer = answer.selected
