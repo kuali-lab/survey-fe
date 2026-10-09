@@ -1311,3 +1311,51 @@ describe('SurveyRunner — rute berurutan', () => {
     expect(routeRunner([]).r.effectiveDisplayMode).toBe('scroll')
   })
 })
+
+describe('SurveyRunner — rute per_option', () => {
+  const opt = (v: string, i: number) => ({ id: v, label: v, value: v, sortOrder: i })
+  const route: SkipRoute = {
+    id: 'p', kind: 'per_option', hostQuestionId: 'U2', position: 1, connector: 'AND', conditions: [], steps: [],
+    branches: [['Marketing', 'U3'], ['CS', 'U4'], ['Kasir', 'U5'], ['ARO', 'U6']].map(([optionValue, s]) => ({ optionValue, steps: [s] })),
+    joinQuestionId: 'U7',
+  }
+  function perOptionRunner() {
+    const survey: Survey = {
+      ...makeSurvey('one_per_page'),
+      skipRoutes: [route],
+      questions: [
+        q({ id: 'U2', type: 'checkbox', sortOrder: 1, options: ['Marketing', 'CS', 'Kasir', 'ARO'].map(opt) }),
+        ...['U3', 'U4', 'U5', 'U6', 'U7'].map((id, i) => q({ id, type: 'short_text', sortOrder: i + 2 })),
+      ],
+    }
+    return new SurveyRunner({ getSurvey: () => survey, onFinish: vi.fn() })
+  }
+  const at = (r: SurveyRunner) => r.currentPage?.questions[0].id
+  const walk = async (r: SurveyRunner, n: number) => {
+    const v = [at(r)]
+    for (let i = 0; i < n; i++) { await r.handleNext(); v.push(at(r)) }
+    return v
+  }
+
+  it('Marketing+CS+ARO: U2, U3, U4, U6, U7', async () => {
+    const r = perOptionRunner()
+    r.handleAnswer('U2', ['Marketing', 'CS', 'ARO'])
+    expect(await walk(r, 4)).toEqual(['U2', 'U3', 'U4', 'U6', 'U7'])
+  })
+
+  it('tanpa pilihan: U2 langsung U7', async () => {
+    const r = perOptionRunner()
+    r.handleAnswer('U2', [])
+    expect(await walk(r, 1)).toEqual(['U2', 'U7'])
+  })
+
+  it('Back lalu ubah pilihan mengubah jalur', async () => {
+    const r = perOptionRunner()
+    r.handleAnswer('U2', ['Marketing', 'CS', 'ARO'])
+    await r.handleNext(); await r.handleNext()
+    r.handleBack(); r.handleBack()
+    expect(at(r)).toBe('U2')
+    r.handleAnswer('U2', ['Kasir'])
+    expect(await walk(r, 2)).toEqual(['U2', 'U5', 'U7'])
+  })
+})
