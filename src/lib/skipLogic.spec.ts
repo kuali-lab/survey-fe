@@ -222,3 +222,91 @@ describe('findFiredRule: sumber sel tabel', () => {
     expect(fires([{ ...rule('equals', '4') }], { q1: 4 })).toBe(true)
   })
 })
+
+describe('operator always (Selalu)', () => {
+  it('cocok walau sumber tak dijawab, kosong, atau null', () => {
+    const r = rule('always', '')
+    for (const answers of [{}, { q1: '' }, { q1: [] }, { q1: null }] as Answers[]) {
+      expect(evaluateNext('q2', answers, QUESTIONS, [r])).toBe('q3')
+    }
+  })
+
+  it('grup pertama yang lolos menang: always di bawah aturan lain hanya jadi penutup', () => {
+    const first = { ...rule('equals', 'x'), id: 'a', targetQuestionId: 'q1', logicGroup: 'AND:0' }
+    const last = { ...rule('always', ''), id: 'b', logicGroup: 'AND:1' }
+    expect(evaluateNext('q2', { q1: 'x' }, QUESTIONS, [last, first])).toBe('q1')
+    expect(evaluateNext('q2', { q1: 'y' }, QUESTIONS, [last, first])).toBe('q3')
+  })
+
+  it('operator tak dikenal tidak melompat', () => {
+    const unknown = rule('mirip_selalu' as SkipRule['operator'], '')
+    expect(evaluateNext('q2', { q1: 'x' }, QUESTIONS, [unknown])).toBeNull()
+    expect(evaluateNext('q2', {}, QUESTIONS, [unknown])).toBeNull()
+  })
+})
+
+// Paritas lintas-repo dengan BE skip_eval_test.go: tabel ekspektasi IDENTIK di kedua repo.
+// Q_p checkbox {kasir, marketing, C, D}; U3..U6 lalu Q6 berurutan setelah Q_p.
+describe('paritas: antrean checkbox berantai dengan always', () => {
+  const OPTS = ['kasir', 'marketing', 'C', 'D'] as const
+  const BRANCH: Record<string, string> = { kasir: 'U3', marketing: 'U4', C: 'U5', D: 'U6' }
+  const ORDER = ['Qp', 'U3', 'U4', 'U5', 'U6', 'Q6']
+  const qs = ORDER.map((id) => ({ ...numberQuestion(id), type: id === 'Qp' ? ('checkbox' as const) : ('number' as const) }))
+
+  let n = 0
+  const mk = (questionId: string, operator: SkipRule['operator'], value: string, target: string, logicGroup: string): SkipRule => ({
+    id: `p${n++}`, questionId, sourceQuestionId: 'Qp', operator, value, action: 'skip_to', targetQuestionId: target, logicGroup,
+  })
+  const rules: SkipRule[] = []
+  OPTS.forEach((o, i) => rules.push(mk('Qp', 'contains', o, BRANCH[o], `AND:${i}`)))
+  OPTS.forEach((o) => rules.push(mk('Qp', 'not_contains', o, 'Q6', 'AND:4')))
+  ;(['U3', 'U4', 'U5'] as const).forEach((host, h) => {
+    OPTS.slice(h + 1).forEach((o, i) => rules.push(mk(host, 'contains', o, BRANCH[o], `AND:${i}`)))
+    rules.push(mk(host, 'always', '', 'Q6', 'AND:9'))
+  })
+  rules.push(mk('U6', 'always', '', 'Q6', 'AND:0'))
+
+  // Jalur yang dikunjungi dari Qp, mengikuti evaluateNext (null = maju berurutan).
+  const walk = (chosen: string[]): string[] => {
+    const answers: Answers = { Qp: chosen }
+    const path = ['Qp']
+    let cur = 'Qp'
+    while (cur !== 'Q6') {
+      const next = evaluateNext(cur, answers, qs, rules)
+      cur = next && next !== 'END' ? next : ORDER[ORDER.indexOf(cur) + 1]
+      path.push(cur)
+    }
+    return path
+  }
+
+  // Tabel ekspektasi: indeks = bitmask (bit0 kasir, bit1 marketing, bit2 C, bit3 D).
+  const EXPECTED: string[][] = [
+    ['Qp', 'Q6'],
+    ['Qp', 'U3', 'Q6'],
+    ['Qp', 'U4', 'Q6'],
+    ['Qp', 'U3', 'U4', 'Q6'],
+    ['Qp', 'U5', 'Q6'],
+    ['Qp', 'U3', 'U5', 'Q6'],
+    ['Qp', 'U4', 'U5', 'Q6'],
+    ['Qp', 'U3', 'U4', 'U5', 'Q6'],
+    ['Qp', 'U6', 'Q6'],
+    ['Qp', 'U3', 'U6', 'Q6'],
+    ['Qp', 'U4', 'U6', 'Q6'],
+    ['Qp', 'U3', 'U4', 'U6', 'Q6'],
+    ['Qp', 'U5', 'U6', 'Q6'],
+    ['Qp', 'U3', 'U5', 'U6', 'Q6'],
+    ['Qp', 'U4', 'U5', 'U6', 'Q6'],
+    ['Qp', 'U3', 'U4', 'U5', 'U6', 'Q6'],
+  ]
+
+  for (let mask = 0; mask < 16; mask++) {
+    const chosen = OPTS.filter((_, i) => mask & (1 << i))
+    it(`himpunan {${chosen.join(', ')}}`, () => {
+      expect(walk([...chosen])).toEqual(EXPECTED[mask])
+    })
+  }
+
+  it('findFiredRule di U6 mengembalikan aturan always', () => {
+    expect(findFiredRule('U6', { Qp: ['kasir'] }, qs, rules)?.operator).toBe('always')
+  })
+})
