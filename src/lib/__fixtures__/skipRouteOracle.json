@@ -1,0 +1,617 @@
+{
+ "questions": [
+  {
+   "id": "qp",
+   "type": "checkbox",
+   "sortOrder": 1,
+   "options": [
+    "Kasir",
+    "Marketing",
+    "C",
+    "D"
+   ]
+  },
+  {
+   "id": "u3",
+   "type": "short_text",
+   "sortOrder": 2
+  },
+  {
+   "id": "u4",
+   "type": "short_text",
+   "sortOrder": 3
+  },
+  {
+   "id": "u5",
+   "type": "short_text",
+   "sortOrder": 4
+  },
+  {
+   "id": "u6",
+   "type": "short_text",
+   "sortOrder": 5
+  },
+  {
+   "id": "q6",
+   "type": "short_text",
+   "sortOrder": 6
+  }
+ ],
+ "routes": [
+  {
+   "id": "r1",
+   "hostQuestionId": "qp",
+   "position": 1,
+   "connector": "AND",
+   "conditions": [
+    {
+     "sourceQuestionId": "qp",
+     "operator": "contains",
+     "value": "C"
+    },
+    {
+     "sourceQuestionId": "qp",
+     "operator": "contains",
+     "value": "D"
+    }
+   ],
+   "steps": [
+    "u4",
+    "u5"
+   ],
+   "joinQuestionId": "q6"
+  },
+  {
+   "id": "r2",
+   "hostQuestionId": "qp",
+   "position": 2,
+   "connector": "AND",
+   "conditions": [
+    {
+     "sourceQuestionId": "qp",
+     "operator": "contains",
+     "value": "Kasir"
+    }
+   ],
+   "steps": [
+    "u3"
+   ],
+   "joinQuestionId": "q6"
+  }
+ ],
+ "subsets": [
+  {
+   "answer": [],
+   "visited": [
+    "qp",
+    "u3",
+    "u4",
+    "u5",
+    "u6",
+    "q6"
+   ]
+  },
+  {
+   "answer": [
+    "Kasir"
+   ],
+   "visited": [
+    "qp",
+    "u3",
+    "q6"
+   ]
+  },
+  {
+   "answer": [
+    "Marketing"
+   ],
+   "visited": [
+    "qp",
+    "u3",
+    "u4",
+    "u5",
+    "u6",
+    "q6"
+   ]
+  },
+  {
+   "answer": [
+    "C"
+   ],
+   "visited": [
+    "qp",
+    "u3",
+    "u4",
+    "u5",
+    "u6",
+    "q6"
+   ]
+  },
+  {
+   "answer": [
+    "D"
+   ],
+   "visited": [
+    "qp",
+    "u3",
+    "u4",
+    "u5",
+    "u6",
+    "q6"
+   ]
+  },
+  {
+   "answer": [
+    "Kasir",
+    "Marketing"
+   ],
+   "visited": [
+    "qp",
+    "u3",
+    "q6"
+   ]
+  },
+  {
+   "answer": [
+    "Kasir",
+    "C"
+   ],
+   "visited": [
+    "qp",
+    "u3",
+    "q6"
+   ]
+  },
+  {
+   "answer": [
+    "Kasir",
+    "D"
+   ],
+   "visited": [
+    "qp",
+    "u3",
+    "q6"
+   ]
+  },
+  {
+   "answer": [
+    "Marketing",
+    "C"
+   ],
+   "visited": [
+    "qp",
+    "u3",
+    "u4",
+    "u5",
+    "u6",
+    "q6"
+   ]
+  },
+  {
+   "answer": [
+    "Marketing",
+    "D"
+   ],
+   "visited": [
+    "qp",
+    "u3",
+    "u4",
+    "u5",
+    "u6",
+    "q6"
+   ]
+  },
+  {
+   "answer": [
+    "C",
+    "D"
+   ],
+   "visited": [
+    "qp",
+    "u4",
+    "u5",
+    "q6"
+   ]
+  },
+  {
+   "answer": [
+    "Kasir",
+    "Marketing",
+    "C"
+   ],
+   "visited": [
+    "qp",
+    "u3",
+    "q6"
+   ]
+  },
+  {
+   "answer": [
+    "Kasir",
+    "Marketing",
+    "D"
+   ],
+   "visited": [
+    "qp",
+    "u3",
+    "q6"
+   ]
+  },
+  {
+   "answer": [
+    "Kasir",
+    "C",
+    "D"
+   ],
+   "visited": [
+    "qp",
+    "u4",
+    "u5",
+    "q6"
+   ]
+  },
+  {
+   "answer": [
+    "Marketing",
+    "C",
+    "D"
+   ],
+   "visited": [
+    "qp",
+    "u4",
+    "u5",
+    "q6"
+   ]
+  },
+  {
+   "answer": [
+    "Kasir",
+    "Marketing",
+    "C",
+    "D"
+   ],
+   "visited": [
+    "qp",
+    "u4",
+    "u5",
+    "q6"
+   ]
+  }
+ ],
+ "additional": [
+  {
+   "name": "always",
+   "routes": [
+    {
+     "id": "ra",
+     "hostQuestionId": "qp",
+     "position": 1,
+     "connector": "AND",
+     "conditions": [
+      {
+       "sourceQuestionId": "qp",
+       "operator": "always"
+      }
+     ],
+     "steps": [
+      "u5"
+     ],
+     "joinQuestionId": "q6"
+    }
+   ],
+   "rules": [],
+   "answers": {},
+   "visited": [
+    "qp",
+    "u5",
+    "q6"
+   ]
+  },
+  {
+   "name": "join null, langkah terakhir u4",
+   "routes": [
+    {
+     "id": "ra",
+     "hostQuestionId": "qp",
+     "position": 1,
+     "connector": "AND",
+     "conditions": [
+      {
+       "sourceQuestionId": "qp",
+       "operator": "always"
+      }
+     ],
+     "steps": [
+      "u4",
+      "u5"
+     ],
+     "joinQuestionId": null
+    }
+   ],
+   "rules": [],
+   "answers": {},
+   "visited": [
+    "qp",
+    "u4",
+    "u5",
+    "u6",
+    "q6"
+   ]
+  },
+  {
+   "name": "logika biasa langkah tidak dievaluasi dalam rute",
+   "routes": [
+    {
+     "id": "ra",
+     "hostQuestionId": "qp",
+     "position": 1,
+     "connector": "AND",
+     "conditions": [
+      {
+       "sourceQuestionId": "qp",
+       "operator": "always"
+      }
+     ],
+     "steps": [
+      "u4",
+      "u5"
+     ],
+     "joinQuestionId": "q6"
+    }
+   ],
+   "rules": [
+    {
+     "id": "e4",
+     "questionId": "u4",
+     "sourceQuestionId": "u4",
+     "operator": "always",
+     "action": "end_survey",
+     "logicGroup": "AND:0"
+    }
+   ],
+   "answers": {},
+   "visited": [
+    "qp",
+    "u4",
+    "u5",
+    "q6"
+   ]
+  },
+  {
+   "name": "tanpa rute logika u4 berlaku",
+   "routes": [],
+   "rules": [
+    {
+     "id": "e4",
+     "questionId": "u4",
+     "sourceQuestionId": "u4",
+     "operator": "always",
+     "action": "end_survey",
+     "logicGroup": "AND:0"
+    }
+   ],
+   "answers": {},
+   "visited": [
+    "qp",
+    "u3",
+    "u4"
+   ]
+  },
+  {
+   "name": "rute mendahului logika biasa host",
+   "routes": [
+    {
+     "id": "ra",
+     "hostQuestionId": "qp",
+     "position": 1,
+     "connector": "AND",
+     "conditions": [
+      {
+       "sourceQuestionId": "qp",
+       "operator": "always"
+      }
+     ],
+     "steps": [
+      "u3"
+     ],
+     "joinQuestionId": "q6"
+    }
+   ],
+   "rules": [
+    {
+     "id": "s1",
+     "questionId": "qp",
+     "sourceQuestionId": "qp",
+     "operator": "always",
+     "action": "skip_to",
+     "targetQuestionId": "u6",
+     "logicGroup": "AND:0"
+    }
+   ],
+   "answers": {},
+   "visited": [
+    "qp",
+    "u3",
+    "q6"
+   ]
+  },
+  {
+   "name": "rute tak cocok, logika host berlaku",
+   "routes": [
+    {
+     "id": "rn",
+     "hostQuestionId": "qp",
+     "position": 1,
+     "connector": "AND",
+     "conditions": [
+      {
+       "sourceQuestionId": "qp",
+       "operator": "contains",
+       "value": "Z"
+      }
+     ],
+     "steps": [
+      "u3"
+     ],
+     "joinQuestionId": "q6"
+    }
+   ],
+   "rules": [
+    {
+     "id": "s1",
+     "questionId": "qp",
+     "sourceQuestionId": "qp",
+     "operator": "always",
+     "action": "skip_to",
+     "targetQuestionId": "u6",
+     "logicGroup": "AND:0"
+    }
+   ],
+   "answers": {
+    "qp": [
+     "C"
+    ]
+   },
+   "visited": [
+    "qp",
+    "u6",
+    "q6"
+   ]
+  },
+  {
+   "name": "konektor OR",
+   "routes": [
+    {
+     "id": "ror",
+     "hostQuestionId": "qp",
+     "position": 1,
+     "connector": "OR",
+     "conditions": [
+      {
+       "sourceQuestionId": "qp",
+       "operator": "contains",
+       "value": "C"
+      },
+      {
+       "sourceQuestionId": "qp",
+       "operator": "contains",
+       "value": "D"
+      }
+     ],
+     "steps": [
+      "u5"
+     ],
+     "joinQuestionId": "q6"
+    }
+   ],
+   "rules": [],
+   "answers": {
+    "qp": [
+     "D"
+    ]
+   },
+   "visited": [
+    "qp",
+    "u5",
+    "q6"
+   ]
+  },
+  {
+   "name": "rute host lain tidak aktif dalam rute",
+   "routes": [
+    {
+     "id": "ra",
+     "hostQuestionId": "qp",
+     "position": 1,
+     "connector": "AND",
+     "conditions": [
+      {
+       "sourceQuestionId": "qp",
+       "operator": "always"
+      }
+     ],
+     "steps": [
+      "u3",
+      "u4"
+     ],
+     "joinQuestionId": "q6"
+    },
+    {
+     "id": "rb",
+     "hostQuestionId": "u3",
+     "position": 1,
+     "connector": "AND",
+     "conditions": [
+      {
+       "sourceQuestionId": "u3",
+       "operator": "always"
+      }
+     ],
+     "steps": [
+      "u6"
+     ],
+     "joinQuestionId": null
+    }
+   ],
+   "rules": [],
+   "answers": {},
+   "visited": [
+    "qp",
+    "u3",
+    "u4",
+    "q6"
+   ]
+  },
+  {
+   "name": "rute rusak (langkah tak ada) diabaikan",
+   "routes": [
+    {
+     "id": "rx",
+     "hostQuestionId": "qp",
+     "position": 1,
+     "connector": "AND",
+     "conditions": [
+      {
+       "sourceQuestionId": "qp",
+       "operator": "always"
+      }
+     ],
+     "steps": [
+      "hilang"
+     ],
+     "joinQuestionId": "q6"
+    }
+   ],
+   "rules": [],
+   "answers": {},
+   "visited": [
+    "qp",
+    "u3",
+    "u4",
+    "u5",
+    "u6",
+    "q6"
+   ]
+  },
+  {
+   "name": "tanpa rute = urutan biasa",
+   "routes": [],
+   "rules": [],
+   "answers": {
+    "qp": [
+     "Kasir",
+     "C",
+     "D"
+    ]
+   },
+   "visited": [
+    "qp",
+    "u3",
+    "u4",
+    "u5",
+    "u6",
+    "q6"
+   ]
+  }
+ ]
+}
