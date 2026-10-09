@@ -1,6 +1,6 @@
 import type { Question, SkipRule, Answers } from './types.js'
 import { isTopOfMindAnswer } from './topOfMind.js'
-import { cellOf, toTableAnswer } from './table.js'
+import { cellOf, isTableTouched, toTableAnswer } from './table.js'
 
 function matchesOperator(
   answer: unknown,
@@ -76,6 +76,11 @@ export function findFiredRule(
     // `always` tak membaca jawaban sumber: cocok walau sumber belum dijawab/kosong.
     if (r.operator === 'always') return true
     const srcType = questions.find(q => q.id === r.sourceQuestionId)?.type
+    // Seluruh tabel (baris & kolom kosong): "terisi" = minimal satu sel berisi.
+    if (srcType === 'table' && !r.sourceRowKey && !r.sourceColumnId && (r.operator === 'empty' || r.operator === 'not_empty')) {
+      const touched = isTableTouched(answers[r.sourceQuestionId])
+      return r.operator === 'not_empty' ? touched : !touched
+    }
     // Sel tabel: nilai sel (dropdown tersimpan sebagai label opsi), kosong bila baris/kolom tak ada.
     let answer: unknown = r.sourceRowKey && r.sourceColumnId
       ? cellOf(toTableAnswer(answers[r.sourceQuestionId]), r.sourceRowKey, r.sourceColumnId)

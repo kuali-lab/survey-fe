@@ -1167,6 +1167,22 @@ describe('SurveyRunner — tipe tabel', () => {
     expect('t' in runner.answers).toBe(false)
   })
 
+  it('seluruh tabel: terisi → logika menyala (selesai), tidak terisi → lanjut biasa (K128)', async () => {
+    const whole: SkipRule = {
+      id: 'w1', questionId: 't', sourceQuestionId: 't', operator: 'not_empty', value: '',
+      action: 'end_survey', logicGroup: 'AND:0',
+    }
+    const filled = await onTablePage({ skipRules: [whole] })
+    filled.runner.handleAnswer('t', { '1': { ...full, btu: 0 }, '2': full })
+    await filled.runner.handleNext()
+    expect(filled.onFinish).toHaveBeenCalledOnce()
+
+    const blank = await onTablePage({ skipRules: [whole] })
+    await blank.runner.handleNext()
+    expect(blank.onFinish).not.toHaveBeenCalled()
+    expect(blank.runner.currentIndex).toBe(2)
+  })
+
   it('label baris dan kolom di pesan mengikuti bahasa aktif', async () => {
     const { runner } = await onTablePage({ required: true, locale: 'en' })
     runner.handleAnswer('t', { '2': full })
