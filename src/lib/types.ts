@@ -225,7 +225,8 @@ export interface SkipRule {
   /** Keduanya terisi hanya bila sumbernya sel tabel (`sourceQuestionId` = pertanyaan tabel). */
   sourceRowKey?: string
   sourceColumnId?: string
-  operator: 'equals' | 'not_equals' | 'empty' | 'not_empty' | 'contains' | 'not_contains' | 'greater_than' | 'less_than' | 'greater_than_equals' | 'less_than_equals' | 'before' | 'after'
+  operator: 'equals' | 'not_equals' | 'empty' | 'not_empty' | 'contains' | 'not_contains' | 'greater_than' | 'less_than' | 'greater_than_equals' | 'less_than_equals' | 'before' | 'after' | 'always'
+  /** Kosong untuk `always` (kondisi tanpa syarat). */
   value: string
   action: 'skip_to' | 'end_survey' | 'go_back'
   targetQuestionId: string

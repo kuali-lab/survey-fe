@@ -1174,3 +1174,50 @@ describe('SurveyRunner — tipe tabel', () => {
     expect(runner.questionErrors.t).toBe('Fill in the «Pupils» column in the «Mathematics» row.')
   })
 })
+
+describe('SurveyRunner — rantai logika always (antrean checkbox)', () => {
+  const opt = (label: string, i: number) => ({ id: `o-${label}`, label, value: label, sortOrder: i })
+  const rule = (id: string, questionId: string, operator: SkipRule['operator'], value: string, target: string, logicGroup: string): SkipRule => ({
+    id, questionId, sourceQuestionId: 'Qp', operator, value, action: 'skip_to', targetQuestionId: target, logicGroup,
+  })
+  const survey: Survey = {
+    id: 'chain', title: 'Rantai',
+    settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
+    skipRules: [
+      rule('a', 'Qp', 'contains', 'kasir', 'U3', 'AND:0'),
+      rule('b', 'Qp', 'contains', 'marketing', 'U4', 'AND:1'),
+      rule('c', 'Qp', 'not_contains', 'kasir', 'Q6', 'AND:2'),
+      rule('d', 'Qp', 'not_contains', 'marketing', 'Q6', 'AND:2'),
+      rule('e', 'U3', 'contains', 'marketing', 'U4', 'AND:0'),
+      rule('f', 'U3', 'always', '', 'Q6', 'AND:1'),
+      rule('g', 'U4', 'always', '', 'Q6', 'AND:0'),
+    ],
+    closeMessage: null, closeImageUrl: null,
+    questions: [
+      q({ id: 'Qp', type: 'checkbox', sortOrder: 1, options: [opt('kasir', 0), opt('marketing', 1)] }),
+      q({ id: 'U3', type: 'short_text', sortOrder: 2 }),
+      q({ id: 'U4', type: 'short_text', sortOrder: 3 }),
+      q({ id: 'U5', type: 'short_text', sortOrder: 4 }),
+      q({ id: 'Q6', type: 'short_text', sortOrder: 5 }),
+    ],
+  }
+  const pageOf = (r: SurveyRunner) => r.surveyPages[r.currentIndex].questions[0].id
+
+  it('menelusuri U3 -> U4 -> Q6 (melewati U5) dan Sebelumnya mengulang jalur yang sama', async () => {
+    const r = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
+    r.handleAnswer('Qp', ['kasir', 'marketing'])
+    const visited = [pageOf(r)]
+    for (let i = 0; i < 3; i++) { await r.handleNext(); visited.push(pageOf(r)) }
+    expect(visited).toEqual(['Qp', 'U3', 'U4', 'Q6'])
+    const back: string[] = []
+    for (let i = 0; i < 3; i++) { r.handleBack(); back.push(pageOf(r)) }
+    expect(back).toEqual(['U4', 'U3', 'Qp'])
+  })
+
+  it('tidak ada pilihan: Qp langsung ke Q6', async () => {
+    const r = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
+    r.handleAnswer('Qp', [])
+    await r.handleNext()
+    expect(pageOf(r)).toBe('Q6')
+  })
+})

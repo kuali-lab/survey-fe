@@ -73,6 +73,8 @@ export function findFiredRule(
   if (rules.length === 0) return null
 
   const checkRule = (r: SkipRule) => {
+    // `always` tak membaca jawaban sumber: cocok walau sumber belum dijawab/kosong.
+    if (r.operator === 'always') return true
     const srcType = questions.find(q => q.id === r.sourceQuestionId)?.type
     // Sel tabel: nilai sel (dropdown tersimpan sebagai label opsi), kosong bila baris/kolom tak ada.
     let answer: unknown = r.sourceRowKey && r.sourceColumnId
