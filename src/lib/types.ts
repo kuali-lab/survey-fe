@@ -233,6 +233,24 @@ export interface SkipRule {
   logicGroup: string
 }
 
+/** Kondisi rute: bentuk yang sama dengan kondisi SkipRule, nilai opsional (mis. `always`). */
+export type SkipCondition = Pick<SkipRule, 'sourceQuestionId' | 'sourceRowKey' | 'sourceColumnId' | 'operator'> & {
+  value?: string
+}
+
+/** Rute berurutan: bila kondisi di host terpenuhi, kunjungi `steps` lalu `joinQuestionId`. */
+export interface SkipRoute {
+  id: string
+  hostQuestionId: string
+  /** Prioritas; kecil = dievaluasi lebih dulu. */
+  position: number
+  connector: 'AND' | 'OR'
+  conditions: SkipCondition[]
+  steps: string[]
+  /** Null/absen = lanjut berurutan setelah langkah terakhir. */
+  joinQuestionId?: string | null
+}
+
 export interface SurveySettings {
   showProgress: boolean
   showBranding: boolean
@@ -290,6 +308,8 @@ export interface Survey {
   settings: SurveySettings
   questions: Question[]
   skipRules: SkipRule[]
+  /** Absen = survei tanpa rute (muatan lama). */
+  skipRoutes?: SkipRoute[]
   /** Absen = survei satu bahasa (perilaku lama). */
   languages?: SurveyLanguages
   closeMessage: string | null
