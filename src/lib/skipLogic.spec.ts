@@ -224,34 +224,40 @@ describe('findFiredRule: sumber sel tabel', () => {
 })
 
 describe('findFiredRule: seluruh tabel terisi (K128)', () => {
-  const tableQ = { ...numberQuestion('t1'), type: 'table' as const }
+  const tableQ = {
+    ...numberQuestion('t1'), type: 'table' as const,
+    tableRows: [{ key: 1, label: 'A' }, { key: 2, label: 'B' }, { key: 3, label: 'C', deleted: true }],
+  }
   const matrixQ = { ...numberQuestion('m1'), type: 'matrix' as const }
   const qs = [tableQ, matrixQ, Q_HOST, Q_TARGET]
   const whole = (operator: SkipRule['operator'], src = 't1'): SkipRule => ({ ...rule(operator, ''), sourceQuestionId: src })
   const fires = (r: SkipRule, answers: Answers) => findFiredRule('q2', answers, qs, [r]) !== null
 
   it('satu sel berisi: terisi true, kosong false', () => {
-    const a: Answers = { t1: { r1: { c1: 'x' }, r2: {} } }
+    const a: Answers = { t1: { '1': { c1: 'x' }, '2': {} } }
     expect(fires(whole('not_empty'), a)).toBe(true)
     expect(fires(whole('empty'), a)).toBe(false)
   })
   it('angka 0 (number atau teks) berisi', () => {
-    expect(fires(whole('not_empty'), { t1: { r1: { c1: 0 } } })).toBe(true)
-    expect(fires(whole('not_empty'), { t1: { r1: { c1: '0' } } })).toBe(true)
+    expect(fires(whole('not_empty'), { t1: { '1': { c1: 0 } } })).toBe(true)
+    expect(fires(whole('not_empty'), { t1: { '1': { c1: '0' } } })).toBe(true)
   })
   it('tabel kosong, semua sel string kosong/spasi, atau belum dijawab: tidak terisi', () => {
-    for (const a of [{ t1: {} }, { t1: { r1: { c1: '', c2: '  ' } } }, {}] as Answers[]) {
+    for (const a of [{ t1: {} }, { t1: { '1': { c1: '', c2: '  ' } } }, {}] as Answers[]) {
       expect(fires(whole('not_empty'), a)).toBe(false)
       expect(fires(whole('empty'), a)).toBe(true)
     }
   })
-  it('baris di luar struktur dihitung apa adanya dari jawaban', () => {
-    expect(fires(whole('not_empty'), { t1: { rZZ: { c9: 'x' } } })).toBe(true)
+  it('baris di luar struktur atau deleted tidak dihitung (paritas BE)', () => {
+    for (const row of ['9', '3']) {
+      expect(fires(whole('not_empty'), { t1: { [row]: { c1: 'x' } } })).toBe(false)
+      expect(fires(whole('empty'), { t1: { [row]: { c1: 'x' } } })).toBe(true)
+    }
   })
   it('mode sel tertentu tetap membaca satu sel', () => {
-    const cell = { ...whole('not_empty'), sourceRowKey: 'r1', sourceColumnId: 'c1' }
-    expect(fires(cell, { t1: { r2: { c1: 'x' } } })).toBe(false)
-    expect(fires(cell, { t1: { r1: { c1: 'x' } } })).toBe(true)
+    const cell = { ...whole('not_empty'), sourceRowKey: '1', sourceColumnId: 'c1' }
+    expect(fires(cell, { t1: { '2': { c1: 'x' } } })).toBe(false)
+    expect(fires(cell, { t1: { '1': { c1: 'x' } } })).toBe(true)
   })
   it('sumber non-tabel (matrix) tidak bergeser', () => {
     expect(fires(whole('not_empty', 'm1'), { m1: { a: 'b' } as never })).toBe(true)
