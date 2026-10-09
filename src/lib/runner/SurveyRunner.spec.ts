@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
-import type { AnswerValue, Question, SkipRule, Survey } from '$lib/types.js'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
+import type { AnswerValue, Question, SkipRoute, SkipRule, Survey } from '$lib/types.js'
 import { SurveyRunner } from './SurveyRunner.svelte.js'
 
 /**
@@ -1010,5 +1010,352 @@ describe('SurveyRunner — optional matrix must be complete once touched', () =>
     r.handleAnswer('m', { 'Baris A': 'Setuju' })
     await r.handleNext()
     expect(r.questionErrors.m).toBe('Mohon lengkapi semua baris.')
+  })
+})
+
+// ── Tipe Tabel (01-flow-tipe-tabel.md §6.1, §6.4): validasi per sel lewat validateOne ──
+describe('SurveyRunner — tipe tabel', () => {
+  // Halaman tidak valid menjadwalkan scroll ke `.error` lewat setTimeout + document;
+  // timer palsu membuangnya supaya tidak jadi galat tak tertangani di Node.
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  type TableSurveyOpts = {
+    required?: boolean
+    displayMode?: 'scroll' | 'one_per_page'
+    skipRules?: SkipRule[]
+    locale?: string
+  }
+
+  function makeTableRunner(opts: TableSurveyOpts = {}) {
+    const onFinish = vi.fn()
+    const survey: Survey = {
+      id: 'sv-table', title: 'PSKP',
+      settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: opts.displayMode ?? 'one_per_page' },
+      languages: { primary: 'id', secondary: 'en' },
+      skipRules: opts.skipRules ?? [], closeMessage: null, closeImageUrl: null,
+      questions: [
+        q({
+          id: 'g', type: 'single_choice', sortOrder: 1,
+          options: [{ id: 'y', label: 'Ya', sortOrder: 0 }, { id: 'n', label: 'Tidak', sortOrder: 1 }],
+        }),
+        q({
+          id: 't', type: 'table', sortOrder: 2, required: opts.required ?? false,
+          tableRows: [{ key: 1, label: 'Matematika', translations: { en: 'Mathematics' } }, { key: 2, label: 'IPA' }],
+          fields: [
+            q({ id: 'murid', type: 'number', sortOrder: 0, title: 'Jumlah murid', required: true, minValue: 0, maxValue: 100, translations: { en: { title: 'Pupils' } } }),
+            q({ id: 'btu', type: 'number', sortOrder: 1, title: 'Jumlah BTU', minValue: 0 }),
+            q({ id: 'judul', type: 'short_text', sortOrder: 2, title: 'Judul', required: true }),
+          ],
+        }),
+        q({ id: 'akhir', type: 'short_text', sortOrder: 3 }),
+      ],
+    }
+    const runner = new SurveyRunner({
+      getSurvey: () => survey, onFinish,
+      ...(opts.locale ? { getLocale: () => opts.locale! } : {}),
+    })
+    return { runner, onFinish }
+  }
+
+  /** one_per_page: halaman 0 = g, halaman 1 = tabel. */
+  async function onTablePage(opts: TableSurveyOpts = {}) {
+    const made = makeTableRunner(opts)
+    made.runner.handleAnswer('g', 'Ya')
+    await made.runner.handleNext()
+    expect(made.runner.currentIndex).toBe(1)
+    return made
+  }
+
+  const full = { murid: '30', judul: 'Buku' }
+
+  it('tabel wajib kosong total tidak bisa Lanjut, memakai pesan wajib existing', async () => {
+    const { runner } = await onTablePage({ required: true })
+    await runner.handleNext()
+    expect(runner.currentIndex).toBe(1)
+    expect(runner.questionErrors.t).toBe('Pertanyaan ini wajib diisi.')
+  })
+
+  it('sel wajib kosong memblokir dan pesannya menyebut baris + kolom', async () => {
+    const { runner } = await onTablePage({ required: true })
+    runner.handleAnswer('t', { '1': { murid: '3' }, '2': full })
+    await runner.handleNext()
+    expect(runner.currentIndex).toBe(1)
+    expect(runner.questionErrors.t).toBe('Lengkapi kolom «Judul» pada baris «Matematika».')
+  })
+
+  it('angka di luar rentang memakai pesan existing, diberi nama baris dan kolom', async () => {
+    const { runner } = await onTablePage({ required: true })
+    runner.handleAnswer('t', { '1': { murid: '150', judul: 'a' }, '2': full })
+    await runner.handleNext()
+    expect(runner.questionErrors.t).toBe('Matematika — Jumlah murid: Nilai maksimal adalah 100.')
+  })
+
+  it('tabel lengkap dengan BTU 0 lolos ke halaman berikutnya', async () => {
+    const { runner } = await onTablePage({ required: true })
+    runner.handleAnswer('t', { '1': { ...full, btu: '0' }, '2': { ...full, btu: 0 } })
+    await runner.handleNext()
+    expect(runner.questionErrors.t).toBeUndefined()
+    expect(runner.currentIndex).toBe(2)
+  })
+
+  it('tabel opsional tanpa sentuhan lolos; tersentuh sebagian memblokir (K108)', async () => {
+    const untouched = await onTablePage()
+    await untouched.runner.handleNext()
+    expect(untouched.runner.currentIndex).toBe(2)
+
+    const touched = await onTablePage()
+    touched.runner.handleAnswer('t', { '2': { btu: '1' } })
+    await touched.runner.handleNext()
+    expect(touched.runner.currentIndex).toBe(1)
+    expect(touched.runner.questionErrors.t).toBe('Lengkapi kolom «Jumlah murid» pada baris «Matematika».')
+  })
+
+  it('tabel wajib yang dilompati skip logic tidak memblokir', async () => {
+    const skip: SkipRule = {
+      id: 'r1', questionId: 'g', sourceQuestionId: 'g', operator: 'equals', value: 'Tidak',
+      action: 'skip_to', targetQuestionId: 'akhir', logicGroup: '',
+    }
+    const { runner, onFinish } = makeTableRunner({ required: true, skipRules: [skip] })
+    runner.handleAnswer('g', 'Tidak')
+    await runner.handleNext()
+    expect(runner.currentIndex).toBe(2)
+    await runner.handleNext()
+    expect(onFinish).toHaveBeenCalledOnce()
+    expect(runner.questionErrors.t).toBeUndefined()
+  })
+
+  it('mode scroll: tabel wajib kosong memblokir kirim', async () => {
+    const { runner, onFinish } = makeTableRunner({ required: true, displayMode: 'scroll' })
+    await runner.handleNext()
+    expect(onFinish).not.toHaveBeenCalled()
+    expect(runner.questionErrors.t).toBe('Pertanyaan ini wajib diisi.')
+  })
+
+  it('mode scroll: tabel tersentuh ikut dihitung progres', () => {
+    const { runner } = makeTableRunner({ displayMode: 'scroll' })
+    expect(runner.progress).toBe(0)
+    runner.handleAnswer('t', { '1': { btu: 0 } })
+    expect(runner.progress).toBe(33)
+  })
+
+  it('state tabel bertahan saat Lanjut lalu Sebelumnya (one_per_page)', async () => {
+    const { runner } = await onTablePage({ required: true })
+    const filled = { '1': { ...full, btu: 0 }, '2': full }
+    runner.handleAnswer('t', filled)
+    await runner.handleNext()
+    runner.handleBack()
+    expect(runner.currentIndex).toBe(1)
+    expect(runner.answers.t).toEqual(filled)
+  })
+
+  it('draf tabel bolak-balik JSON (localStorage/server) tetap utuh dan tervalidasi sama', async () => {
+    const { runner } = makeTableRunner({ required: true })
+    const draft = JSON.parse(JSON.stringify({ answers: { g: 'Ya', t: { '1': { murid: '0', judul: 'a' } } }, currentIndex: 1 }))
+    runner.loadFrom(draft)
+    expect(runner.answers.t).toEqual({ '1': { murid: '0', judul: 'a' } })
+    await runner.handleNext()
+    expect(runner.questionErrors.t).toBe('Lengkapi kolom «Jumlah murid» pada baris «IPA».')
+  })
+
+  it('draf berkunci basi dipangkas saat dimuat; tabel yang jadi kosong hilang dari jawaban', () => {
+    const { runner } = makeTableRunner()
+    runner.loadFrom({ answers: { g: 'Ya', t: { '1': { murid: '3', lama: 'x' }, '7': { murid: '1' } } }, currentIndex: 1 })
+    expect(runner.answers.t).toEqual({ '1': { murid: '3' } })
+
+    runner.loadFrom({ answers: { g: 'Ya', t: { '7': { murid: '1' } } }, currentIndex: 1 })
+    expect('t' in runner.answers).toBe(false)
+  })
+
+  it('seluruh tabel: terisi → logika menyala (selesai), tidak terisi → lanjut biasa (K128)', async () => {
+    const whole: SkipRule = {
+      id: 'w1', questionId: 't', sourceQuestionId: 't', operator: 'not_empty', value: '',
+      action: 'end_survey', logicGroup: 'AND:0',
+    }
+    const filled = await onTablePage({ skipRules: [whole] })
+    filled.runner.handleAnswer('t', { '1': { ...full, btu: 0 }, '2': full })
+    await filled.runner.handleNext()
+    expect(filled.onFinish).toHaveBeenCalledOnce()
+
+    const blank = await onTablePage({ skipRules: [whole] })
+    await blank.runner.handleNext()
+    expect(blank.onFinish).not.toHaveBeenCalled()
+    expect(blank.runner.currentIndex).toBe(2)
+  })
+
+  it('label baris dan kolom di pesan mengikuti bahasa aktif', async () => {
+    const { runner } = await onTablePage({ required: true, locale: 'en' })
+    runner.handleAnswer('t', { '2': full })
+    await runner.handleNext()
+    expect(runner.questionErrors.t).toBe('Fill in the «Pupils» column in the «Mathematics» row.')
+  })
+})
+
+describe('SurveyRunner — rantai logika always (antrean checkbox)', () => {
+  const opt = (label: string, i: number) => ({ id: `o-${label}`, label, value: label, sortOrder: i })
+  const rule = (id: string, questionId: string, operator: SkipRule['operator'], value: string, target: string, logicGroup: string): SkipRule => ({
+    id, questionId, sourceQuestionId: 'Qp', operator, value, action: 'skip_to', targetQuestionId: target, logicGroup,
+  })
+  const survey: Survey = {
+    id: 'chain', title: 'Rantai',
+    settings: { showProgress: true, showBranding: true, showNavArrows: true, showNumbers: true, displayMode: 'one_per_page' },
+    skipRules: [
+      rule('a', 'Qp', 'contains', 'kasir', 'U3', 'AND:0'),
+      rule('b', 'Qp', 'contains', 'marketing', 'U4', 'AND:1'),
+      rule('c', 'Qp', 'not_contains', 'kasir', 'Q6', 'AND:2'),
+      rule('d', 'Qp', 'not_contains', 'marketing', 'Q6', 'AND:2'),
+      rule('e', 'U3', 'contains', 'marketing', 'U4', 'AND:0'),
+      rule('f', 'U3', 'always', '', 'Q6', 'AND:1'),
+      rule('g', 'U4', 'always', '', 'Q6', 'AND:0'),
+    ],
+    closeMessage: null, closeImageUrl: null,
+    questions: [
+      q({ id: 'Qp', type: 'checkbox', sortOrder: 1, options: [opt('kasir', 0), opt('marketing', 1)] }),
+      q({ id: 'U3', type: 'short_text', sortOrder: 2 }),
+      q({ id: 'U4', type: 'short_text', sortOrder: 3 }),
+      q({ id: 'U5', type: 'short_text', sortOrder: 4 }),
+      q({ id: 'Q6', type: 'short_text', sortOrder: 5 }),
+    ],
+  }
+  const pageOf = (r: SurveyRunner) => r.surveyPages[r.currentIndex].questions[0].id
+
+  it('menelusuri U3 -> U4 -> Q6 (melewati U5) dan Sebelumnya mengulang jalur yang sama', async () => {
+    const r = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
+    r.handleAnswer('Qp', ['kasir', 'marketing'])
+    const visited = [pageOf(r)]
+    for (let i = 0; i < 3; i++) { await r.handleNext(); visited.push(pageOf(r)) }
+    expect(visited).toEqual(['Qp', 'U3', 'U4', 'Q6'])
+    const back: string[] = []
+    for (let i = 0; i < 3; i++) { r.handleBack(); back.push(pageOf(r)) }
+    expect(back).toEqual(['U4', 'U3', 'Qp'])
+  })
+
+  it('tidak ada pilihan: Qp langsung ke Q6', async () => {
+    const r = new SurveyRunner({ getSurvey: () => survey, onFinish: () => {} })
+    r.handleAnswer('Qp', [])
+    await r.handleNext()
+    expect(pageOf(r)).toBe('Q6')
+  })
+})
+
+describe('SurveyRunner — rute berurutan', () => {
+  const cond = (v: string) => ({ sourceQuestionId: 'Qp', operator: 'contains' as const, value: v })
+  const routes: SkipRoute[] = [
+    { id: 'r1', hostQuestionId: 'Qp', position: 1, connector: 'AND', conditions: [cond('C'), cond('D')], steps: ['U4', 'U5'], joinQuestionId: 'Q6' },
+    { id: 'r2', hostQuestionId: 'Qp', position: 2, connector: 'AND', conditions: [cond('Kasir')], steps: ['U3'], joinQuestionId: 'Q6' },
+  ]
+  const opt = (v: string, i: number) => ({ id: v, label: v, value: v, sortOrder: i })
+
+  function routeRunner(skipRoutes: SkipRoute[] | undefined, onFinish = vi.fn()) {
+    const survey: Survey = {
+      ...makeSurvey('scroll'),
+      skipRoutes,
+      questions: [
+        q({ id: 'Qp', type: 'checkbox', sortOrder: 1, options: ['Kasir', 'Marketing', 'C', 'D'].map(opt) }),
+        ...['U3', 'U4', 'U5', 'U6', 'Q6'].map((id, i) => q({ id, type: 'short_text', sortOrder: i + 2 })),
+      ],
+    }
+    return { r: new SurveyRunner({ getSurvey: () => survey, onFinish }), onFinish }
+  }
+  const at = (r: SurveyRunner) => r.currentPage?.questions[0].id
+
+  it('rute C+D: Qp, U4, U5, Q6 dan Sebelumnya menelusuri jalur', async () => {
+    const { r } = routeRunner(routes)
+    expect(r.effectiveDisplayMode).toBe('one_per_page')
+    r.handleAnswer('Qp', ['C', 'D'])
+    const visited = [at(r)]
+    for (let i = 0; i < 3; i++) { await r.handleNext(); visited.push(at(r)) }
+    expect(visited).toEqual(['Qp', 'U4', 'U5', 'Q6'])
+    r.handleBack(); expect(at(r)).toBe('U5')
+    r.handleBack(); expect(at(r)).toBe('U4')
+    r.handleBack(); expect(at(r)).toBe('Qp')
+  })
+
+  it('mengubah pilihan setelah Back mengubah jalur', async () => {
+    const { r } = routeRunner(routes)
+    r.handleAnswer('Qp', ['C', 'D'])
+    await r.handleNext(); r.handleBack()
+    r.handleAnswer('Qp', ['Kasir'])
+    await r.handleNext(); expect(at(r)).toBe('U3')
+    await r.handleNext(); expect(at(r)).toBe('Q6')
+  })
+
+  it('tanpa rute cocok: berurutan; selesai di pertanyaan terakhir', async () => {
+    const { r, onFinish } = routeRunner(routes)
+    r.handleAnswer('Qp', ['Marketing'])
+    const visited = [at(r)]
+    for (let i = 0; i < 5; i++) { await r.handleNext(); visited.push(at(r)) }
+    expect(visited).toEqual(['Qp', 'U3', 'U4', 'U5', 'U6', 'Q6'])
+    await r.handleNext()
+    expect(onFinish).toHaveBeenCalledOnce()
+  })
+
+  it('draf: loadFrom di langkah rute lalu Lanjut tetap di jalur', async () => {
+    const { r } = routeRunner(routes)
+    r.loadFrom({ answers: { Qp: ['C', 'D'] }, currentIndex: 2 })
+    expect(at(r)).toBe('U4')
+    await r.handleNext(); expect(at(r)).toBe('U5')
+    await r.handleNext(); expect(at(r)).toBe('Q6')
+  })
+
+  it('progres mengikuti jalur rute', async () => {
+    const { r } = routeRunner(routes)
+    r.handleAnswer('Qp', ['C', 'D'])
+    expect(r.progress).toBe(25)
+    await r.handleNext()
+    expect(r.progress).toBe(50)
+  })
+
+  it('survei tanpa rute (absen atau kosong) tetap scroll/berurutan seperti dulu', () => {
+    expect(routeRunner(undefined).r.effectiveDisplayMode).toBe('scroll')
+    expect(routeRunner([]).r.effectiveDisplayMode).toBe('scroll')
+  })
+})
+
+describe('SurveyRunner — rute per_option', () => {
+  const opt = (v: string, i: number) => ({ id: v, label: v, value: v, sortOrder: i })
+  const route: SkipRoute = {
+    id: 'p', kind: 'per_option', hostQuestionId: 'U2', position: 1, connector: 'AND', conditions: [], steps: [],
+    branches: [['Marketing', 'U3'], ['CS', 'U4'], ['Kasir', 'U5'], ['ARO', 'U6']].map(([optionValue, s]) => ({ optionValue, steps: [s] })),
+    joinQuestionId: 'U7',
+  }
+  function perOptionRunner() {
+    const survey: Survey = {
+      ...makeSurvey('one_per_page'),
+      skipRoutes: [route],
+      questions: [
+        q({ id: 'U2', type: 'checkbox', sortOrder: 1, options: ['Marketing', 'CS', 'Kasir', 'ARO'].map(opt) }),
+        ...['U3', 'U4', 'U5', 'U6', 'U7'].map((id, i) => q({ id, type: 'short_text', sortOrder: i + 2 })),
+      ],
+    }
+    return new SurveyRunner({ getSurvey: () => survey, onFinish: vi.fn() })
+  }
+  const at = (r: SurveyRunner) => r.currentPage?.questions[0].id
+  const walk = async (r: SurveyRunner, n: number) => {
+    const v = [at(r)]
+    for (let i = 0; i < n; i++) { await r.handleNext(); v.push(at(r)) }
+    return v
+  }
+
+  it('Marketing+CS+ARO: U2, U3, U4, U6, U7', async () => {
+    const r = perOptionRunner()
+    r.handleAnswer('U2', ['Marketing', 'CS', 'ARO'])
+    expect(await walk(r, 4)).toEqual(['U2', 'U3', 'U4', 'U6', 'U7'])
+  })
+
+  it('tanpa pilihan: U2 langsung U7', async () => {
+    const r = perOptionRunner()
+    r.handleAnswer('U2', [])
+    expect(await walk(r, 1)).toEqual(['U2', 'U7'])
+  })
+
+  it('Back lalu ubah pilihan mengubah jalur', async () => {
+    const r = perOptionRunner()
+    r.handleAnswer('U2', ['Marketing', 'CS', 'ARO'])
+    await r.handleNext(); await r.handleNext()
+    r.handleBack(); r.handleBack()
+    expect(at(r)).toBe('U2')
+    r.handleAnswer('U2', ['Kasir'])
+    expect(await walk(r, 2)).toEqual(['U2', 'U5', 'U7'])
   })
 })

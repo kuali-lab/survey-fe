@@ -48,6 +48,7 @@ const id = {
   errEmail: 'Format email belum sesuai.',
   errPhone: 'Format nomor telepon belum sesuai.',
   errUploading: 'Tunggu hingga berkas selesai diunggah.',
+  errTableCell: 'Lengkapi kolom «{col}» pada baris «{row}».',
 
   other: 'Lainnya',
   otherPlaceholder: 'Tuliskan jawaban Anda...',
@@ -76,6 +77,8 @@ const id = {
   tomRestLimit: 'Bisa pilih hingga {limit} jawaban lagi ({n}/{limit}).',
 
   matrixProgress: '{n} dari {total} terjawab',
+  tableNextRow: 'Baris berikutnya',
+  tableSelectPlaceholder: 'Pilih',
 
   ddPlaceholder: '-- Pilih salah satu --',
   ddSearch: 'Cari pilihan...',
@@ -129,6 +132,7 @@ const en: Record<MessageKey, string> = {
   errEmail: 'That email format does not look right.',
   errPhone: 'That phone number format does not look right.',
   errUploading: 'Please wait until the file has finished uploading.',
+  errTableCell: 'Fill in the «{col}» column in the «{row}» row.',
 
   other: 'Other',
   otherPlaceholder: 'Type your answer...',
@@ -157,6 +161,8 @@ const en: Record<MessageKey, string> = {
   tomRestLimit: 'You can choose up to {limit} more ({n}/{limit}).',
 
   matrixProgress: '{n} of {total} answered',
+  tableNextRow: 'Next row',
+  tableSelectPlaceholder: 'Choose',
 
   ddPlaceholder: '-- Choose one --',
   ddSearch: 'Search options...',

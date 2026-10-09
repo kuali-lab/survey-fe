@@ -55,6 +55,10 @@
   --warning-tint:   #fef3c7;
   --warning-strong: #b45309;
 
+  --accent-orange:        #f97316;
+  --accent-orange-tint:   #ffedd5;
+  --accent-orange-strong: #c2410c;
+
   --info:           #3b82f6;
   --info-tint:      #dbeafe;
   --info-strong:    #1d4ed8;
@@ -239,6 +243,42 @@ body {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-30);
+}
+
+/* Isian survei (QuestionInput, sel tabel). Global supaya satu sumber gaya. */
+.text-input {
+  width: 100%;
+  height: 52px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-input);
+  padding: 0 16px;
+  font-family: var(--font);
+  font-size: 16px;
+  color: var(--text-primary);
+  background: var(--canvas-soft);
+  transition: background 0.15s, border-color 0.15s;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.text-input::placeholder { color: var(--text-muted); }
+
+/* Varian tumbuh: tinggi minimal sama dengan kotak biasa, sisanya mengikuti isi. */
+.grow-input {
+  height: auto;
+  min-height: 52px;
+  padding: 14px 16px;
+  line-height: 1.4;
+  resize: none;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.text-input:focus {
+  outline: none;
+  background: var(--canvas);
+  border-color: var(--ink);
+  border-width: 2px;
 }
 
 /* ── Cards ──────────────────────────────────────────────────────────────

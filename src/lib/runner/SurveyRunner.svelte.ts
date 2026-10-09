@@ -11,8 +11,8 @@
  */
 
 import type { Survey, Question, Answers, AnswerValue, SurveySettings } from '$lib/types.js'
-import { getAnswerableQuestions } from '$lib/utils.js'
-import { findFiredRule } from '$lib/skipLogic.js'
+import { getAnswerableQuestions, scalarRuleError } from '$lib/utils.js'
+import { findFiredRule, walkVisited } from '$lib/skipLogic.js'
 import { isValidPhoneFormat } from '$lib/phone.js'
 import { collectDependents, pruneDependentAnswers, visibleOptions } from '$lib/optionDependency.js'
 import {
@@ -20,6 +20,8 @@ import {
   remainingOptions, setTopOfMindFirst, toggleTopOfMindRest, topOfMindFirst,
 } from '$lib/topOfMind.js'
 import { LEGACY_LOCALE, t, type MessageKey } from '$lib/i18n/messages.js'
+import { surveyLanguages } from '$lib/i18n/content.js'
+import { activeRows, firstInvalidCellTarget, isTableTouched, pruneTableAnswer, rescrollDelay, validateTable, type TableIssue } from '$lib/table.js'
 import { buildSurveySections, type SurveyPage } from './sections.js'
 
 export type { SurveyPage }
@@ -155,6 +157,8 @@ export class SurveyRunner {
     return t(this._getLocale(), key, params)
   }
 
+  private readonly msgFn = (key: MessageKey, params?: Record<string, string | number>) => this.msg(key, params)
+
   /** Update the onFinish callback. Used by the surveyor flow where each
    *  route (/interview vs implicit nav from elsewhere) wants a different
    *  next step but the runner instance is shared. */
@@ -167,7 +171,16 @@ export class SurveyRunner {
   private settings = $derived<SurveySettings>(this.survey?.settings ?? DEFAULT_SETTINGS)
   questions = $derived(this.survey?.questions ?? [])
   private skipRules = $derived(this.survey?.skipRules ?? [])
+  private skipRoutes = $derived(this.survey?.skipRoutes ?? [])
   answerableQuestions = $derived(getAnswerableQuestions(this.questions))
+
+  // Rute berurutan: posisi berikutnya diturunkan dari jawaban saat ini lewat walk yang
+  // sama dengan backend, jadi Sebelumnya, draf, dan perubahan jawaban tak butuh state tambahan.
+  private routeWalk = $derived(
+    this.skipRoutes.length > 0
+      ? walkVisited(this.answerableQuestions, this.questions, this.skipRules, this.skipRoutes, this.answers)
+      : [],
+  )
 
   // Skip logic requires per-page evaluation, so any active skip rule forces
   // one_per_page. Everything that branches on display mode — pagination, the
@@ -178,7 +191,7 @@ export class SurveyRunner {
   // own screen, which only exists one per page (the backend forces the same in
   // the public payload; this covers cached survey copies and preview drafts).
   effectiveDisplayMode = $derived<'scroll' | 'one_per_page'>(
-    this.skipRules.length > 0 || this.questions.some((q) => isTopOfMindQuestion(q))
+    this.skipRules.length > 0 || this.skipRoutes.length > 0 || this.questions.some((q) => isTopOfMindQuestion(q))
       ? 'one_per_page'
       : (this.settings.displayMode || 'one_per_page'),
   )
@@ -266,10 +279,13 @@ export class SurveyRunner {
     if (mode === 'scroll') {
       let answered = 0
       for (const q of this.answerableQuestions) {
-        if (isAnsweredValue(this.answers[q.id])) answered++
+        const a = this.answers[q.id]
+        if (q.type === 'table' ? isTableTouched(a, activeRows(q)) : isAnsweredValue(a)) answered++
       }
       return Math.round((answered / total) * 100)
     }
+    const k = this.routeStepIndex()
+    if (k >= 0) return Math.round(((k + 1) / this.routeWalk.length) * 100)
     return this.surveyPages.length > 0
       ? Math.round(((this.currentIndex + 1) / this.surveyPages.length) * 100)
       : 0
@@ -283,6 +299,10 @@ export class SurveyRunner {
 
   // ---- Validation ----
   private validateOne(q: Question, answer: AnswerValue): string | null {
+    // Tabel: aturan wajib + K108 di table.ts; sel terisi dinilai scalarRuleError,
+    // penilai yang sama dengan penanda sel di TableInput.
+    if (q.type === 'table') return this.tableIssue(q, answer)?.message ?? null
+
     // Pilihan Bertingkat D-1: a required dependent the respondent cannot answer
     // is treated as satisfied, so it never traps them. That is the case when the
     // parent is answered but leaves no mapped option ('empty'), and when the
@@ -371,28 +391,8 @@ export class SurveyRunner {
     const isEmpty = isEmptyAnswer(answer)
     if (!requiredHere && isEmpty && q.type !== 'file_upload') return null
 
-    if (!isEmpty) {
-      let strVal = ''
-      if (typeof answer === 'string') strVal = answer.trim()
-      else if (typeof answer === 'number') strVal = String(answer)
-      
-      if (strVal !== '') {
-        const len = strVal.length
-        if (q.minLength && len < q.minLength) return this.msg('errMinLength', { n: q.minLength })
-        if (q.maxLength && len > q.maxLength) return this.msg('errMaxLength', { n: q.maxLength })
-      }
-    }
-
-    if (q.type === 'number') {
-      let answerNum: unknown = answer
-      if (typeof answer === 'string' && answer.trim() !== '') answerNum = Number(answer)
-      if (typeof answerNum === 'number' && !isNaN(answerNum)) {
-        const minVal = q.minValue !== undefined && q.minValue !== null ? Number(q.minValue) : null
-        const maxVal = q.maxValue !== undefined && q.maxValue !== null ? Number(q.maxValue) : null
-        if (minVal !== null && answerNum < minVal) return this.msg('errMinValue', { n: minVal })
-        if (maxVal !== null && answerNum > maxVal) return this.msg('errMaxValue', { n: maxVal })
-      }
-    }
+    const scalarErr = scalarRuleError(q, answer, this.msgFn)
+    if (scalarErr) return scalarErr
 
     if (q.type === 'email' && typeof answer === 'string' && answer.trim() !== '') {
       if (!EMAIL_RE.test(answer.trim())) return this.msg('errEmail')
@@ -409,6 +409,12 @@ export class SurveyRunner {
     return null
   }
 
+  private tableIssue(q: Question, answer: AnswerValue): TableIssue | null {
+    const primary = surveyLanguages(this.survey).primary
+    const cellError = (col: Question, v: AnswerValue) => scalarRuleError(col, v, this.msgFn)
+    return validateTable(q, answer, cellError, this._getLocale(), primary)
+  }
+
   private validateCurrentPage(): boolean {
     if (!this.currentPage) return true
     const errors: Record<string, string> = {}
@@ -419,9 +425,19 @@ export class SurveyRunner {
     this.questionErrors = errors
     const isValid = Object.keys(errors).length === 0
     if (!isValid) {
-      setTimeout(() => {
-        const firstErrorEl = document.querySelector('.error')
+      // Tabel: gulir ke sel salah (TableInput sudah membuka barisnya di accordion), lalu fokus.
+      const target = firstInvalidCellTarget(this.currentPage.questions, errors, (q) => this.tableIssue(q, this.answers[q.id]))
+      const scrollToError = () => {
+        const cell = target ? document.querySelector<HTMLElement>(target.cell) : null
+        const firstErrorEl = cell ?? (target && document.querySelector(target.row)) ?? document.querySelector('.error')
         if (firstErrorEl) firstErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        return cell
+      }
+      setTimeout(() => {
+        scrollToError()?.querySelector<HTMLElement>('input, textarea, select, button')?.focus({ preventScroll: true })
+        // Accordion: baris terbuka di atas target menutup (slide) sesudah tujuan gulir dihitung.
+        const again = target ? rescrollDelay(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false) : null
+        if (again !== null) setTimeout(scrollToError, again)
       }, 50)
     }
     return isValid
@@ -450,7 +466,20 @@ export class SurveyRunner {
     // Push current page to navigation history before moving forward.
     this.navHistory.push(this.currentIndex)
 
-    const rule = this.firedRule()
+    const k = this.routeStepIndex()
+    // Dalam rute, logika biasa tidak dievaluasi; di luarnya hanya go_back (aksi klien) yang masih milik runner.
+    const rule = k >= 0 && this.routeWalk[k].routed ? null : this.firedRule()
+    if (k >= 0 && rule?.action !== 'go_back') {
+      const nextId = this.routeWalk[k + 1]?.id
+      const idx = nextId ? this.surveyPages.findIndex((p) => p.questions.some((x) => x.id === nextId)) : -1
+      if (idx < 0) {
+        await this._onFinish()
+        return
+      }
+      this.currentIndex = idx
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
     const next = rule ? (rule.action === 'end_survey' ? 'END' : rule.targetQuestionId) : null
 
     if (next === 'END') {
@@ -544,6 +573,12 @@ export class SurveyRunner {
     if (cleared.length > 0) this._onDependentsCleared?.(cleared)
   }
 
+  // Indeks halaman saat ini pada jalur rute, atau -1 bila tanpa rute / di luar jalur.
+  private routeStepIndex(): number {
+    const id = this.currentPage?.questions[0]?.id
+    return id ? this.routeWalk.findIndex((s) => s.id === id) : -1
+  }
+
   // First satisfied skip rule across the current page's questions (priority order).
   private firedRule() {
     for (const q of this.currentPage?.questions ?? []) {
@@ -579,6 +614,13 @@ export class SurveyRunner {
     // visible under the drafted parent answers (cascading) and let the page
     // trim the server draft exactly like handleAnswer does.
     const { answers, cleared } = pruneDependentAnswers(state.answers ?? {}, this.questions)
+    // Draf tabel: kunci baris/kolom/label opsi yang sudah diubah ditolak BE, jadi dibuang.
+    for (const q of this.questions) {
+      if (q.type !== 'table' || !(q.id in answers)) continue
+      const pruned = pruneTableAnswer(q, answers[q.id])
+      if (Object.keys(pruned).length > 0) answers[q.id] = pruned
+      else delete answers[q.id]
+    }
     this.answers = answers
     const maxIdx = Math.max(0, this.surveyPages.length - 1)
     this.currentIndex = Math.min(state.currentIndex, maxIdx)

@@ -11,6 +11,9 @@ export type QuestionType =
   // berulang adalah KARTU-nya. Induk tidak menyimpan jawaban sendiri — field-nya
   // yang menyimpan, masing-masing dengan `repeat_index` = nomor kartu.
   | 'repeat_group'
+  // Tabel: baris tetap dari pembuat survei (`tableRows`), kolom = pertanyaan anak
+  // di `fields`. Jawabannya `TableAnswer`, dikunci key baris lalu id kolom.
+  | 'table'
 
 // ── Two-language surveys ─────────────────────────────────────────────────────
 // The same shape the builder writes (dashboard-fe). ALL optional: older surveys,
@@ -52,6 +55,21 @@ export interface MatrixRow {
   label: string
   sortOrder: number
   translations?: TranslatedText
+}
+
+/**
+ * Baris tipe Tabel. `key` stabil walau label diganti, dan dipakai sebagai kunci
+ * jawaban (bentuk string, "1" bukan "01"). Payload publik sudah membuang baris
+ * `deleted`; tanda itu tetap dibaca untuk salinan survei di singgahan lama.
+ */
+export interface TableRow {
+  key: number
+  label: string
+  group?: string
+  translations?: TranslatedText
+  /** Terjemahan `group`; BE mengisinya sama di setiap baris sekelompok. */
+  groupTranslations?: TranslatedText
+  deleted?: boolean
 }
 
 export interface MatrixCol {
@@ -195,6 +213,7 @@ export interface Question {
   showLabel?: boolean | null
   matrixRows?: MatrixRow[]
   matrixCols?: MatrixCol[]
+  tableRows?: TableRow[]
   /** Scalar text translations per language code. Option/row/column labels carry their own. */
   translations?: Record<string, QuestionTextTranslation>
 }
@@ -203,11 +222,37 @@ export interface SkipRule {
   id: string
   questionId: string
   sourceQuestionId: string
-  operator: 'equals' | 'not_equals' | 'empty' | 'not_empty' | 'contains' | 'not_contains' | 'greater_than' | 'less_than' | 'greater_than_equals' | 'less_than_equals' | 'before' | 'after'
+  /** Keduanya terisi hanya bila sumbernya sel tabel (`sourceQuestionId` = pertanyaan tabel). */
+  sourceRowKey?: string
+  sourceColumnId?: string
+  operator: 'equals' | 'not_equals' | 'empty' | 'not_empty' | 'contains' | 'not_contains' | 'greater_than' | 'less_than' | 'greater_than_equals' | 'less_than_equals' | 'before' | 'after' | 'always'
+  /** Kosong untuk `always` (kondisi tanpa syarat). */
   value: string
   action: 'skip_to' | 'end_survey' | 'go_back'
   targetQuestionId: string
   logicGroup: string
+}
+
+/** Kondisi rute: bentuk yang sama dengan kondisi SkipRule, nilai opsional (mis. `always`). */
+export type SkipCondition = Pick<SkipRule, 'sourceQuestionId' | 'sourceRowKey' | 'sourceColumnId' | 'operator'> & {
+  value?: string
+}
+
+/** Rute berurutan: bila kondisi di host terpenuhi, kunjungi `steps` lalu `joinQuestionId`. */
+export interface SkipRoute {
+  id: string
+  /** Absen = 'sequence'. 'per_option': langkah diambil dari cabang opsi host yang dipilih. */
+  kind?: 'sequence' | 'per_option'
+  hostQuestionId: string
+  /** Prioritas; kecil = dievaluasi lebih dulu. */
+  position: number
+  connector: 'AND' | 'OR'
+  conditions: SkipCondition[]
+  steps: string[]
+  /** Hanya untuk `per_option`; `joinQuestionId` wajib di mode ini. */
+  branches?: { optionValue: string; steps: string[] }[]
+  /** Null/absen = lanjut berurutan setelah langkah terakhir. */
+  joinQuestionId?: string | null
 }
 
 export interface SurveySettings {
@@ -267,6 +312,8 @@ export interface Survey {
   settings: SurveySettings
   questions: Question[]
   skipRules: SkipRule[]
+  /** Absen = survei tanpa rute (muatan lama). */
+  skipRoutes?: SkipRoute[]
   /** Absen = survei satu bahasa (perilaku lama). */
   languages?: SurveyLanguages
   closeMessage: string | null
@@ -311,7 +358,13 @@ export interface TopOfMindAnswer {
  */
 export type RepeatGroupAnswer = Record<string, string>[]
 
-export type AnswerValue = string | number | string[] | Record<string, string> | RepeatGroupAnswer | ContactInfo | TopOfMindAnswer | null
+/**
+ * Jawaban tipe Tabel: `{ "<key baris>": { "<id kolom>": nilai } }`. Sel kosong =
+ * kuncinya tidak ada, baris tanpa sel = kunci barisnya tidak ada (kontrak BE).
+ */
+export type TableAnswer = Record<string, Record<string, string | number>>
+
+export type AnswerValue = string | number | string[] | Record<string, string> | RepeatGroupAnswer | TableAnswer | ContactInfo | TopOfMindAnswer | null
 
 export type Answers = Record<string, AnswerValue>
 
