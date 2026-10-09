@@ -238,6 +238,17 @@ describe('operator always (Selalu)', () => {
     expect(evaluateNext('q2', { q1: 'y' }, QUESTIONS, [last, first])).toBe('q3')
   })
 
+  it('dalam grup AND: always + equals yang gagal tidak menyala', () => {
+    const rules = [rule('always', ''), rule('equals', 'x')]
+    expect(evaluateNext('q2', { q1: 'y' }, QUESTIONS, rules)).toBeNull()
+    expect(findFiredRule('q2', { q1: 'y' }, QUESTIONS, rules)).toBeNull()
+  })
+
+  it('dalam grup OR: always + equals yang gagal tetap menyala', () => {
+    const rules = [rule('always', ''), rule('equals', 'x')].map((r, i) => ({ ...r, id: `o${i}`, logicGroup: 'OR:0' }))
+    expect(evaluateNext('q2', { q1: 'y' }, QUESTIONS, rules)).toBe('q3')
+  })
+
   it('operator tak dikenal tidak melompat', () => {
     const unknown = rule('mirip_selalu' as SkipRule['operator'], '')
     expect(evaluateNext('q2', { q1: 'x' }, QUESTIONS, [unknown])).toBeNull()
