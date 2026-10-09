@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import type { AnswerValue, Question, SkipRule, Survey } from '$lib/types.js'
+import type { AnswerValue, Question, SkipRoute, SkipRule, Survey } from '$lib/types.js'
 import { SurveyRunner } from './SurveyRunner.svelte.js'
 
 /**
@@ -1235,5 +1235,79 @@ describe('SurveyRunner — rantai logika always (antrean checkbox)', () => {
     r.handleAnswer('Qp', [])
     await r.handleNext()
     expect(pageOf(r)).toBe('Q6')
+  })
+})
+
+describe('SurveyRunner — rute berurutan', () => {
+  const cond = (v: string) => ({ sourceQuestionId: 'Qp', operator: 'contains' as const, value: v })
+  const routes: SkipRoute[] = [
+    { id: 'r1', hostQuestionId: 'Qp', position: 1, connector: 'AND', conditions: [cond('C'), cond('D')], steps: ['U4', 'U5'], joinQuestionId: 'Q6' },
+    { id: 'r2', hostQuestionId: 'Qp', position: 2, connector: 'AND', conditions: [cond('Kasir')], steps: ['U3'], joinQuestionId: 'Q6' },
+  ]
+  const opt = (v: string, i: number) => ({ id: v, label: v, value: v, sortOrder: i })
+
+  function routeRunner(skipRoutes: SkipRoute[] | undefined, onFinish = vi.fn()) {
+    const survey: Survey = {
+      ...makeSurvey('scroll'),
+      skipRoutes,
+      questions: [
+        q({ id: 'Qp', type: 'checkbox', sortOrder: 1, options: ['Kasir', 'Marketing', 'C', 'D'].map(opt) }),
+        ...['U3', 'U4', 'U5', 'U6', 'Q6'].map((id, i) => q({ id, type: 'short_text', sortOrder: i + 2 })),
+      ],
+    }
+    return { r: new SurveyRunner({ getSurvey: () => survey, onFinish }), onFinish }
+  }
+  const at = (r: SurveyRunner) => r.currentPage?.questions[0].id
+
+  it('rute C+D: Qp, U4, U5, Q6 dan Sebelumnya menelusuri jalur', async () => {
+    const { r } = routeRunner(routes)
+    expect(r.effectiveDisplayMode).toBe('one_per_page')
+    r.handleAnswer('Qp', ['C', 'D'])
+    const visited = [at(r)]
+    for (let i = 0; i < 3; i++) { await r.handleNext(); visited.push(at(r)) }
+    expect(visited).toEqual(['Qp', 'U4', 'U5', 'Q6'])
+    r.handleBack(); expect(at(r)).toBe('U5')
+    r.handleBack(); expect(at(r)).toBe('U4')
+    r.handleBack(); expect(at(r)).toBe('Qp')
+  })
+
+  it('mengubah pilihan setelah Back mengubah jalur', async () => {
+    const { r } = routeRunner(routes)
+    r.handleAnswer('Qp', ['C', 'D'])
+    await r.handleNext(); r.handleBack()
+    r.handleAnswer('Qp', ['Kasir'])
+    await r.handleNext(); expect(at(r)).toBe('U3')
+    await r.handleNext(); expect(at(r)).toBe('Q6')
+  })
+
+  it('tanpa rute cocok: berurutan; selesai di pertanyaan terakhir', async () => {
+    const { r, onFinish } = routeRunner(routes)
+    r.handleAnswer('Qp', ['Marketing'])
+    const visited = [at(r)]
+    for (let i = 0; i < 5; i++) { await r.handleNext(); visited.push(at(r)) }
+    expect(visited).toEqual(['Qp', 'U3', 'U4', 'U5', 'U6', 'Q6'])
+    await r.handleNext()
+    expect(onFinish).toHaveBeenCalledOnce()
+  })
+
+  it('draf: loadFrom di langkah rute lalu Lanjut tetap di jalur', async () => {
+    const { r } = routeRunner(routes)
+    r.loadFrom({ answers: { Qp: ['C', 'D'] }, currentIndex: 2 })
+    expect(at(r)).toBe('U4')
+    await r.handleNext(); expect(at(r)).toBe('U5')
+    await r.handleNext(); expect(at(r)).toBe('Q6')
+  })
+
+  it('progres mengikuti jalur rute', async () => {
+    const { r } = routeRunner(routes)
+    r.handleAnswer('Qp', ['C', 'D'])
+    expect(r.progress).toBe(25)
+    await r.handleNext()
+    expect(r.progress).toBe(50)
+  })
+
+  it('survei tanpa rute (absen atau kosong) tetap scroll/berurutan seperti dulu', () => {
+    expect(routeRunner(undefined).r.effectiveDisplayMode).toBe('scroll')
+    expect(routeRunner([]).r.effectiveDisplayMode).toBe('scroll')
   })
 })
