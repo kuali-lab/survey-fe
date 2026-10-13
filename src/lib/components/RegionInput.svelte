@@ -2,7 +2,8 @@
   import type { AnswerValue } from '$lib/types.js'
   import { fetchRegions, type RegionOption } from '$lib/api.js'
   import { rememberRegionNames } from '$lib/regionNames.js'
-  import { untrack } from 'svelte'
+  import { normalizeRegionQuery } from '$lib/regionQuery.js'
+  import { tick, untrack } from 'svelte'
 
   let {
     value,
@@ -51,7 +52,7 @@
     // Deeper levels can only load once their parent is chosen.
     if (level > 0 && !selected[level - 1]) return
     loading[level] = true
-    const rows = await fetchRegions(parentCodeFor(level), q || undefined)
+    const rows = await fetchRegions(parentCodeFor(level), normalizeRegionQuery(q) || undefined)
     // Guard against a stale response landing after the parent changed.
     loading[level] = false
     lists[level] = rows
@@ -69,14 +70,21 @@
     }, 220)
   }
 
-  function openLevel(level: number) {
+  // Each level's search box, so opening a level can put the cursor in it.
+  let searchEls = $state<(HTMLInputElement | undefined)[]>([undefined, undefined, undefined, undefined])
+
+  async function openLevel(level: number) {
     if (level > 0 && !selected[level - 1]) return
-    open[level] = true
+    // One list at a time: an open sibling panel (z-index 20, absolutely
+    // positioned) would sit on top of this one and hide its options.
+    open = open.map((_, i) => i === level)
     // Load the initial children page lazily the first time the dropdown opens
     // (or whenever it's empty), respecting any text already typed.
     if (lists[level].length === 0 && !loading[level]) {
       void loadLevel(level, query[level])
     }
+    await tick()
+    searchEls[level]?.focus()
   }
 
   function closeLevel(level: number) {
@@ -85,6 +93,10 @@
 
   function pickRegion(level: number, opt: RegionOption) {
     selected[level] = opt
+    // The list still holds the search results; with the query cleared, the
+    // next open would show only those under an empty search box. Drop them so
+    // reopening reloads the full list.
+    if (query[level]) lists[level] = []
     query[level] = ''
     open[level] = false
 
@@ -158,7 +170,7 @@
   let rootEl: HTMLDivElement | undefined = $state()
 </script>
 
-<svelte:window onclick={onWindowClick} />
+<svelte:window onclick={onWindowClick} onkeydown={(e) => { if (e.key === 'Escape' && open.some(Boolean)) open = [false, false, false, false] }} />
 
 <div class="region-input" bind:this={rootEl}>
   {#each Array(depth) as _, level}
@@ -186,6 +198,7 @@
         {#if open[level]}
           <div class="region-panel" role="listbox">
             <input
+              bind:this={searchEls[level]}
               class="region-search"
               type="text"
               placeholder="Cari {LEVEL_LABELS[level]}…"
