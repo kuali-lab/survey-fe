@@ -1,5 +1,14 @@
+# 🔴 Satu versi Node untuk kedua tahap, dipatok ke rilis patch — bukan tag
+# mengambang `node:<major>-alpine`. Tahap runtime menjalankan server SSR publik,
+# jadi versinya harus pasti sudah memuat perbaikan keamanan.
+#
+# Node 20 sudah EOL (30 Apr 2026) dan tidak lagi menerima perbaikan; rilis
+# keamanan 21 Okt 2026 (Brotli/zlib, DNS, TLS, keep-alive http) baru tertutup di
+# 22.23.4. Naikkan angka ini setiap ada rilis keamanan Node 22 berikutnya.
+ARG NODE_VERSION=22.23.4
+
 # Stage 1: Builder
-FROM node:20-alpine AS builder
+FROM node:${NODE_VERSION}-alpine AS builder
 
 WORKDIR /app
 
@@ -41,7 +50,7 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 # Stage 2: Runtime
-FROM node:20-alpine AS runtime
+FROM node:${NODE_VERSION}-alpine AS runtime
 
 WORKDIR /app
 
