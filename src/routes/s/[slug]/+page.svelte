@@ -3,7 +3,7 @@
   import type { ViewState, Answers } from '$lib/types.js'
   import { parseSavedState, serializeSavedState, type SavedState } from '$lib/savedState.js'
   import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress, getInvitationStatus, getDeviceStatus, getLinkStatus, OptionOutOfFilterError } from '$lib/api.js'
-  import { readLinkCodeFromUrl, stripLinkCodeFromUrl, resolveResumeLinkCode, requiresLinkGate } from '$lib/linkCode.js'
+  import { readLinkCodeFromUrl, stripLinkCodeFromUrl, resolveResumeLinkCode, requiresLinkGate, rememberLinkCode, recallLinkCode, forgetLinkCode, type SessionStoreLike } from '$lib/linkCode.js'
   import { computeFingerprint } from '$lib/fingerprint.js'
   import { serverMessageOf } from '$lib/submitError.js'
   import { page } from '$app/stores'
@@ -142,6 +142,10 @@
   // intentionally NOT persisted (privacy + size).
   // Kode cabang tautan (?c=, M6a); ikut tersimpan di draf lokal + server (K60).
   let linkCode = $state<string | null>(null)
+  // Ingatan sesi tab untuk kode itu: `?c=` dihapus dari URL saat dimuat, jadi muat ulang tak punya sumber lain.
+  function sessionStore(): SessionStoreLike | null {
+    try { return typeof sessionStorage === 'undefined' ? null : sessionStorage } catch { return null }
+  }
   // Draft state is scoped per invitation token (not just per survey slug). This is
   // the fix for the reopen bug: a respondent who completed the survey and is then
   // re-invited arrives with a NEW token, so there is no saved state under the new
@@ -266,14 +270,19 @@
       const codeFromUrl = readLinkCodeFromUrl($page.url)
       if (codeFromUrl) {
         linkCode = codeFromUrl
+        rememberLinkCode(sessionStore(), data.slug, codeFromUrl, Date.now())
         try { history.replaceState({}, '', stripLinkCodeFromUrl(new URL(window.location.href))) } catch {}
         // Gerbang dini, fail-open; gerbang undangan/perangkat yang sudah terpasang menang.
         getLinkStatus(data.slug, codeFromUrl).then((st) => {
           if (st === 'invalid' && !inviteBlocked) {
+            forgetLinkCode(sessionStore(), data.slug)
             linkBlockReason = 'invalid'
             inviteBlocked = 'link'
           }
         })
+      } else {
+        // Muat ulang atau pemulihan tab: URL sudah tanpa `?c=`, tab ini masih ingat kodenya.
+        linkCode = recallLinkCode(sessionStore(), data.slug, Date.now())
       }
 
       // Ihatec F1 — gerbang "hanya lewat tautan cabang": kalau sakelar hidup,
@@ -550,6 +559,7 @@
       await submitSurveyAnswers(slug, runner.answers, respondentEmail, location, durationSeconds, fingerprintHash, selfie, undefined, undefined, invitationToken, linkCode, locale)
 
       clearSavedState()
+      forgetLinkCode(sessionStore(), data.slug)
       if (fingerprintHash && slug) deleteDraft(slug, draftSessionKey(fingerprintHash)).catch(() => {})
       if (invitationToken) reportInvitationProgress(invitationToken, 'completed')
       viewState = 'closing'
@@ -576,9 +586,11 @@
         submitError = i18n.t('alreadySubmitted')
         viewState = 'question'
         clearSavedState()
+        forgetLinkCode(sessionStore(), data.slug)
       } else if (msg === 'link_invalid') {
         // Gerbang, bukan toast — dan draf TIDAK dihapus: kalau petugas memberi
         // tautan baru, jawabannya masih ada.
+        forgetLinkCode(sessionStore(), data.slug)
         linkBlockReason = 'invalid'
         inviteBlocked = 'link'
       } else if (msg === 'link_required') {
