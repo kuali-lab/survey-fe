@@ -23,17 +23,6 @@ export function readLinkCodeFromUrl(url: URL): string | null {
 }
 
 /**
- * Salinan URL tanpa `c` — parameter lain dan hash dipertahankan. Input tidak
- * diubah. Dipakai untuk `history.replaceState` supaya tautan yang disalin
- * responden tidak menyeret kode cabang ke orang lain.
- */
-export function stripLinkCodeFromUrl(url: URL): URL {
-  const copy = new URL(url.href)
-  copy.searchParams.delete(LINK_CODE_PARAM)
-  return copy
-}
-
-/**
  * Kode yang berlaku saat responden melanjutkan draf: URL menang atas draf (QR
  * yang baru dipindai adalah kebenaran terbaru); kalau URL kosong, pakai yang
  * tersimpan di draf; kalau dua-duanya kosong, null. String kosong di draf
