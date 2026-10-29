@@ -3,7 +3,7 @@
   import type { ViewState, Answers } from '$lib/types.js'
   import { parseSavedState, serializeSavedState, type SavedState } from '$lib/savedState.js'
   import { submitSurveyAnswers, saveDraft, getDraft, deleteDraft, trackInvitationClick, reportInvitationProgress, getInvitationStatus, getDeviceStatus, getLinkStatus, OptionOutOfFilterError } from '$lib/api.js'
-  import { readLinkCodeFromUrl, stripLinkCodeFromUrl, resolveResumeLinkCode, requiresLinkGate, rememberLinkCode, recallLinkCode, forgetLinkCode, type SessionStoreLike } from '$lib/linkCode.js'
+  import { readLinkCodeFromUrl, resolveResumeLinkCode, requiresLinkGate, rememberLinkCode, recallLinkCode, forgetLinkCode, type SessionStoreLike } from '$lib/linkCode.js'
   import { computeFingerprint } from '$lib/fingerprint.js'
   import { serverMessageOf } from '$lib/submitError.js'
   import { page } from '$app/stores'
@@ -271,7 +271,7 @@
       if (codeFromUrl) {
         linkCode = codeFromUrl
         rememberLinkCode(sessionStore(), data.slug, codeFromUrl, Date.now())
-        try { history.replaceState({}, '', stripLinkCodeFromUrl(new URL(window.location.href))) } catch {}
+        // `?c=` SENGAJA dibiarkan di URL: tautan yang disalin, dibagikan, atau dibuka di browser lain tetap membawa cabang.
         // Gerbang dini, fail-open; gerbang undangan/perangkat yang sudah terpasang menang.
         getLinkStatus(data.slug, codeFromUrl).then((st) => {
           if (st === 'invalid' && !inviteBlocked) {
