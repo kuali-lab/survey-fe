@@ -10,6 +10,7 @@
     toAbsoluteUrl,
   } from '$lib/branding.js'
   import { resolveMediaUrl } from '$lib/mediaUrl.js'
+  import ExternalLinkDialog from '$lib/components/ExternalLinkDialog.svelte'
 
   let { children } = $props()
 
@@ -87,3 +88,4 @@
 </svelte:head>
 
 {@render children()}
+<ExternalLinkDialog />

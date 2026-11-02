@@ -5,6 +5,7 @@ import {
 	CARD_SURFACES,
 	LEGACY_CARD_DEFAULT,
 	cardBackground,
+	contrastRatio,
 	shadeHex,
 	surveyStyleVars,
 	surveyStyleAttr,
@@ -353,6 +354,8 @@ describe('keluaran gaya lama tanpa cards', () => {
 				'--primary-60': '#1f54c8',
 				'--primary-70': '#1f54c8',
 				'--ink-elevated': '#1f54c8',
+				// Satu-satunya tambahan sejak tautan teks kaya: warna tombol yang terbaca ikut jadi warna tautan.
+				'--link': '#2563eb',
 				'--radius-card': '8px',
 				'--radius-input': '6px',
 				'--radius-option': '8px',
@@ -615,5 +618,59 @@ describe('permukaan kerangka survei (R3)', () => {
 		// tertinggal di berkas ini, karena satu saja yang tertinggal sudah cukup
 		// untuk memunculkan kembali balok putihnya.
 		expect(src).not.toContain('background: var(--canvas);')
+	})
+})
+
+describe('warna tautan mengikuti gaya survei (hanya yang terbaca)', () => {
+	const link = (style: SurveyStyle) => {
+		const vars = surveyStyleVars(style)
+		return { color: vars['--link'], decoration: vars['--link-decoration'] }
+	}
+
+	it('contrastRatio: hitam di putih 21, putih di putih 1', () => {
+		expect(contrastRatio('#000000', '#ffffff')).toBeCloseTo(21, 0)
+		expect(contrastRatio('#fff', '#ffffff')).toBeCloseTo(1, 5)
+	})
+
+	it('tanpa gaya atau tanpa warna: token platform berlaku (tidak ada --link)', () => {
+		expect(link({})).toEqual({ color: undefined, decoration: undefined })
+		expect(link({ borderRadius: 'small' }).color).toBeUndefined()
+	})
+
+	it('warna tombol yang terbaca di atas latar putih dipakai sebagai warna tautan', () => {
+		expect(link({ colors: { button: '#15803d' } })).toEqual({ color: '#15803d', decoration: undefined })
+	})
+
+	it('warna tombol terang (kuning) tidak terbaca di putih: jatuh ke biru platform', () => {
+		expect(link({ colors: { button: '#f7bb00' } }).color).toBeUndefined()
+	})
+
+	it('kartu gelap: biru platform gagal, warna tombol terang dipakai bila lolos', () => {
+		const dark = { card: '#111827', background: '#111827' }
+		expect(link({ colors: { ...dark, button: '#f7bb00' } }).color).toBe('#f7bb00')
+	})
+
+	it('kartu gelap tanpa tombol terbaca: warna teks pertanyaan + garis bawah', () => {
+		const style: SurveyStyle = { colors: { card: '#111827', background: '#111827', question: '#ffffff' } }
+		expect(link(style)).toEqual({ color: '#ffffff', decoration: 'underline' })
+	})
+
+	it('dua permukaan berbeda: calon harus lolos di KEDUANYA; tak ada yang lolos = token platform', () => {
+		const style: SurveyStyle = { colors: { card: '#ffffff', background: '#0f172a', button: '#15803d', question: '#ffffff' } }
+		expect(link(style)).toEqual({ color: undefined, decoration: undefined })
+	})
+
+	it('latar gambar: hanya warna teks pertanyaan yang pasti terbaca', () => {
+		const image = { imageUrl: '/api/v1/media/abc123/file' }
+		expect(link({ background: image, colors: { question: '#ffffff', button: '#15803d' } })).toEqual({
+			color: '#ffffff',
+			decoration: 'underline'
+		})
+		expect(link({ background: image, colors: { button: '#15803d' } }).color).toBeUndefined()
+	})
+
+	it('nilai bukan heks tidak pernah sampai ke --link', () => {
+		const style = { colors: { button: 'red;} body{display:none', question: 'url(x)' } } as unknown as SurveyStyle
+		expect(link(style)).toEqual({ color: undefined, decoration: undefined })
 	})
 })

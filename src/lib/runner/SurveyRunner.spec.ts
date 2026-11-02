@@ -1359,3 +1359,15 @@ describe('SurveyRunner — rute per_option', () => {
     expect(await walk(r, 2)).toEqual(['U2', 'U5', 'U7'])
   })
 })
+
+describe('SurveyRunner - Enter pada tautan teks kaya', () => {
+  it('Enter pada <a> tidak dicegah dan tidak melanjutkan halaman', () => {
+    const r = makeTomRunner({ displayMode: 'one_per_page' })
+    const preventDefault = vi.fn()
+    ;(r as unknown as { handleKeydown: (e: KeyboardEvent) => void }).handleKeydown(
+      { key: 'Enter', preventDefault, target: { tagName: 'A' } } as unknown as KeyboardEvent,
+    )
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(r.currentIndex).toBe(0)
+  })
+})
