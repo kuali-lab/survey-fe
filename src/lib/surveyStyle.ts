@@ -192,6 +192,54 @@ export function shadeHex(hex: string, amount: number): string | null {
 	return `#${shaded.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`
 }
 
+/** Biru bawaan platform untuk tautan (`--link` di app.css); dipakai bila lolos kontras. */
+const DEFAULT_LINK = '#1d4ed8'
+/** Ambang WCAG AA untuk teks biasa. */
+const LINK_MIN_CONTRAST = 4.5
+
+function relativeLuminance(hex: string): number {
+	const [red, green, blue] = hexChannels(hex).map((channel) => {
+		const unit = channel / 255
+		return unit <= 0.03928 ? unit / 12.92 : ((unit + 0.055) / 1.055) ** 2.4
+	})
+	return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+}
+
+/** Rasio kontras WCAG antara dua heks yang sudah lolos isHex. */
+export function contrastRatio(a: string, b: string): number {
+	const [light, dark] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x)
+	return (light + 0.05) / (dark + 0.05)
+}
+
+/**
+ * Warna tautan teks kaya mengikuti gaya survei, tapi hanya yang terbaca.
+ *
+ * Urutan calon: warna tombol (identitas pemilik), biru platform, warna teks
+ * pertanyaan. Yang dipilih calon pertama yang lolos AA terhadap SEMUA permukaan
+ * tempat teks bisa berdiri: kartu dan latar halaman (sambutan/penutup tanpa
+ * kartu berdiri di atas latar). Warna teks pertanyaan dipakai sebagai pilihan
+ * terakhir dan diberi garis bawah supaya tautan tetap beda dari teks sekitarnya.
+ *
+ * Latar GAMBAR tidak bisa diukur, jadi satu-satunya warna yang pasti terbaca
+ * adalah warna teks yang dipilih pemilik (peringatan kontras di dashboard
+ * menjaganya terhadap gambar). Tanpa warna itu, token platform tetap berlaku.
+ */
+function linkVars(style: SurveyStyle): Record<string, string> {
+	const colors = style.colors ?? {}
+	const imageBackground = Boolean(style.background?.imageUrl && isPlatformMediaUrl(style.background.imageUrl))
+	const question = isHex(colors.question) ? colors.question : null
+	const asText = question ? { '--link': question, '--link-decoration': 'underline' } : {}
+
+	if (imageBackground) return asText
+
+	const surfaces = [isHex(colors.card) ? colors.card : '#ffffff', isHex(colors.background) ? colors.background : '#ffffff']
+	const readable = (color: string) => surfaces.every((surface) => contrastRatio(color, surface) >= LINK_MIN_CONTRAST)
+
+	if (isHex(colors.button) && readable(colors.button)) return { '--link': colors.button }
+	if (readable(DEFAULT_LINK)) return {}
+	return question && readable(question) ? asText : {}
+}
+
 /**
  * Menerjemahkan dokumen gaya ke peta custom property CSS. Slot yang tidak diatur
  * TIDAK menghasilkan entri, sehingga token platform tetap berlaku — itulah cara
@@ -322,6 +370,8 @@ export function surveyStyleVars(style: SurveyStyle | null | undefined): Record<s
 
 	const radius = style.borderRadius
 	if (radius && radius in RADIUS_PRESETS) Object.assign(vars, RADIUS_PRESETS[radius])
+
+	Object.assign(vars, linkVars(style))
 
 	return vars
 }

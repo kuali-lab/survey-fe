@@ -170,14 +170,12 @@ body {
 [data-rich-text] a {
   color: var(--link);
   font-weight: 600;
-  text-decoration: none;
+  /* Garis bawah hanya bila gaya survei memaksa (tautan berwarna sama dengan teks). */
+  text-decoration: var(--link-decoration, none);
   text-underline-offset: 2px;
   overflow-wrap: anywhere;
 }
-[data-rich-text] a:hover {
-  color: color-mix(in srgb, var(--link) 75%, black);
-  text-decoration: underline;
-}
+[data-rich-text] a:hover { text-decoration: underline; }
 [data-rich-text] a:focus-visible {
   outline: 2px solid var(--link);
   outline-offset: 2px;
