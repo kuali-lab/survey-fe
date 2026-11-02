@@ -1266,7 +1266,7 @@
 {:else if question.type === 'statement'}
   {#if question.description}
     <div class="statement-body">
-      <p>{@html i18n.text(question, 'description')}</p>
+      <p data-rich-text>{@html i18n.text(question, 'description')}</p>
     </div>
   {/if}
 

@@ -89,6 +89,11 @@ const id = {
   ddLoading: 'Memuat...',
   ddEmpty: 'Tidak ada pilihan yang cocok.',
   ddMultiCount: '{n} dipilih',
+  extLinkTitle: 'Buka tautan di tab baru?',
+  extLinkLabel: 'Teks tautan:',
+  extLinkBody: 'Jawaban survei kamu tetap aman. Pastikan kamu mengenali alamat tujuan berikut.',
+  extLinkCancel: 'Batal',
+  extLinkVisit: 'Kunjungi',
   ddTypeToSearch: 'Ketik untuk mencari…',
 }
 
@@ -173,6 +178,11 @@ const en: Record<MessageKey, string> = {
   ddLoading: 'Loading...',
   ddEmpty: 'No matching options.',
   ddMultiCount: '{n} selected',
+  extLinkTitle: 'Open link in a new tab?',
+  extLinkLabel: 'Link text:',
+  extLinkBody: 'Your survey answers stay safe. Make sure you recognize the destination address below.',
+  extLinkCancel: 'Cancel',
+  extLinkVisit: 'Visit',
   ddTypeToSearch: 'Type to search…',
 }
 
