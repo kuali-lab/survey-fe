@@ -57,14 +57,14 @@
   {/if}
 
   <h2 class="question-title" data-question-heading tabindex="-1">
-    <div class="title-text">{@html title}</div>
+    <div class="title-text" data-rich-text>{@html title}</div>
     {#if question.required}
       <span class="required" aria-label={i18n.t('requiredMark')}>*</span>
     {/if}
   </h2>
 
   {#if description && question.type !== 'statement'}
-    <div class="description">{@html description}</div>
+    <div class="description" data-rich-text>{@html description}</div>
   {/if}
 
   {#if question.imageUrl}

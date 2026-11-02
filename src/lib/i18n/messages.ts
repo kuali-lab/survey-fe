@@ -89,6 +89,10 @@ const id = {
   ddLoading: 'Memuat...',
   ddEmpty: 'Tidak ada pilihan yang cocok.',
   ddMultiCount: '{n} dipilih',
+  extLinkTitle: 'Buka tautan eksternal?',
+  extLinkBody: 'Kamu akan meninggalkan halaman ini. Pastikan kamu mempercayai alamat berikut.',
+  extLinkCancel: 'Batal',
+  extLinkVisit: 'Kunjungi',
   ddTypeToSearch: 'Ketik untuk mencari…',
 }
 
@@ -173,6 +177,10 @@ const en: Record<MessageKey, string> = {
   ddLoading: 'Loading...',
   ddEmpty: 'No matching options.',
   ddMultiCount: '{n} selected',
+  extLinkTitle: 'Open external link?',
+  extLinkBody: 'You are about to leave this page. Make sure you trust the address below.',
+  extLinkCancel: 'Cancel',
+  extLinkVisit: 'Visit',
   ddTypeToSearch: 'Type to search…',
 }
 
