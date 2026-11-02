@@ -139,6 +139,7 @@
     flex-direction: column;
     gap: 12px;
     padding: 24px;
+    text-align: center;
   }
 
   .title {
@@ -195,6 +196,7 @@
 
   .actions {
     display: flex;
+    justify-content: center;
     gap: 10px;
     margin-top: 8px;
   }

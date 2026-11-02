@@ -99,5 +99,7 @@ describe('ExternalLinkDialog', () => {
       }
     }
     expect(t('id', 'extLinkVisit')).toBe('Kunjungi')
+    expect(t('id', 'extLinkTitle')).toBe('Buka tautan di tab baru?')
+    expect(t('id', 'extLinkBody')).toBe('Jawaban survei kamu tetap aman. Pastikan kamu mengenali alamat tujuan berikut.')
   })
 })
