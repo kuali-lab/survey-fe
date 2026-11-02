@@ -1,16 +1,21 @@
 <script lang="ts">
+  import { tick } from 'svelte'
   import { interceptRichLink } from '$lib/externalLink.js'
   import { t } from '$lib/i18n/messages.js'
 
   let dialog: HTMLDialogElement
   // Tidak dikosongkan saat ditutup supaya isi tetap ada selama animasi keluar.
   let url = $state<URL | null>(null)
+  let label = $state<string | null>(null)
   let locale = $state('id')
 
   // Dipasang di akar layout, di luar provider i18n halaman survei: bahasa dibaca dari <html lang>.
-  function open(next: URL) {
+  async function open(next: URL, nextLabel: string | null) {
     url = next
+    label = nextLabel
     locale = document.documentElement.lang || 'id'
+    // Isi dirender setelah state berubah; showModal sebelum itu membuat autofocus tak punya target.
+    await tick()
     dialog.showModal()
   }
 
@@ -46,6 +51,9 @@
     <div class="box">
       <h2 id="ext-link-title" class="title">{t(locale, 'extLinkTitle')}</h2>
       <p class="body">{t(locale, 'extLinkBody')}</p>
+      {#if label}
+        <p class="label" data-testid="external-link-label"><span>{t(locale, 'extLinkLabel')}</span> {label}</p>
+      {/if}
       <p class="url" data-testid="external-link-url"><span class="dim">{parts.before}</span><strong>{parts.host}</strong><span class="dim">{parts.rest}</span></p>
       <div class="actions">
         <!-- svelte-ignore a11y_autofocus -->
@@ -67,6 +75,8 @@
   dialog {
     width: min(440px, calc(100vw - 32px));
     max-width: none;
+    /* Reset global menghapus margin:auto bawaan <dialog>, tanpa ini ia menempel di pojok. */
+    margin: auto;
     padding: 0;
     border: 1px solid var(--hairline);
     border-radius: var(--radius-card);
@@ -147,11 +157,23 @@
     color: var(--text-body);
   }
 
+  .label {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+  }
+
+  .label span {
+    color: var(--text-body);
+  }
+
   /* Monospace hanya di sini: setiap karakter alamat harus bisa diperiksa. */
   .url {
     margin: 0;
     padding: 12px 14px;
-    max-height: 168px;
+    max-height: min(40dvh, 320px);
     overflow-y: auto;
     border: 1px solid var(--hairline);
     border-radius: var(--radius-lg);

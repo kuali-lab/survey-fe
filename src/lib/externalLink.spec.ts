@@ -21,8 +21,8 @@ describe('parseExternalUrl', () => {
 })
 
 // Tanpa DOM di vitest (environment node): target dan anchor ditiru seperlunya.
-function fakeClick(href: string | null, insideRichText = true) {
-  const anchor = { getAttribute: () => href }
+function fakeClick(href: string | null, insideRichText = true, text = href ?? '') {
+  const anchor = { getAttribute: () => href, textContent: text }
   const target = {
     closest: (sel: string) => (insideRichText && sel === '[data-rich-text] a[href]' ? anchor : null),
   }
@@ -37,6 +37,14 @@ describe('interceptRichLink', () => {
     expect(ev.preventDefault).toHaveBeenCalledOnce()
     expect(open).toHaveBeenCalledOnce()
     expect(open.mock.calls[0][0].href).toBe('https://contoh.id/panjang/sekali?q=1')
+  })
+
+  it('teks tampil beda dari alamat: diteruskan sebagai label; sama: null', () => {
+    const open = vi.fn()
+    interceptRichLink(fakeClick('https://contoh.id/x', true, '  Ini Teks '), open)
+    interceptRichLink(fakeClick('https://contoh.id/x', true, 'https://contoh.id/x'), open)
+    expect(open.mock.calls[0][1]).toBe('Ini Teks')
+    expect(open.mock.calls[1][1]).toBeNull()
   })
 
   it('tautan di luar [data-rich-text]: tidak dicegat', () => {
@@ -86,7 +94,7 @@ describe('ExternalLinkDialog', () => {
 
   it('teks lewat i18n untuk semua bahasa', () => {
     for (const lang of ['id', 'en']) {
-      for (const key of ['extLinkTitle', 'extLinkBody', 'extLinkCancel', 'extLinkVisit'] as const) {
+      for (const key of ['extLinkTitle', 'extLinkLabel', 'extLinkBody', 'extLinkCancel', 'extLinkVisit'] as const) {
         expect(t(lang, key)).not.toBe('')
       }
     }
