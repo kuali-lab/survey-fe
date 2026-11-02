@@ -169,11 +169,15 @@ body {
 /* Tautan di teks kaya buatan pengguna (judul, deskripsi, halaman sambutan/penutup). */
 [data-rich-text] a {
   color: var(--link);
-  text-decoration: underline;
+  font-weight: 600;
+  text-decoration: none;
   text-underline-offset: 2px;
   overflow-wrap: anywhere;
 }
-[data-rich-text] a:hover { color: color-mix(in srgb, var(--link) 75%, black); }
+[data-rich-text] a:hover {
+  color: color-mix(in srgb, var(--link) 75%, black);
+  text-decoration: underline;
+}
 [data-rich-text] a:focus-visible {
   outline: 2px solid var(--link);
   outline-offset: 2px;
