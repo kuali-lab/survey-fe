@@ -736,7 +736,7 @@ export class SurveyRunner {
     if (!this.currentPage || this.currentPage.questions.length !== 1) return
 
     if (e.key === 'Enter') {
-      if (tag === 'BUTTON') return
+      if (tag === 'BUTTON' || tag === 'A') return // Enter pada tautan teks kaya harus membukanya, bukan lanjut
       e.preventDefault()
       void this.handleNext()
       return

@@ -59,9 +59,9 @@
         </svg>
       </div>
     {/if}
-    <h1 class="title" class:center-text={layout === 'center'}>{@html title}</h1>
+    <h1 class="title" class:center-text={layout === 'center'} data-rich-text>{@html title}</h1>
     {#if description}
-      <p class="description">{@html description}</p>
+      <p class="description" data-rich-text>{@html description}</p>
     {:else}
       <p class="description">{i18n.t('closingBody')}</p>
     {/if}
