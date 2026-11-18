@@ -6,7 +6,7 @@
    * Gaya isian = `.text-input` global (app.css); grid menambah `.cell-dense`.
    */
   import type { AnswerValue, Question } from '$lib/types.js'
-  import { applyNumberInput, noWheelChange, numberInputCompare, numberInputText } from '$lib/numberInput.js'
+  import { applyNumberInput, numberInputCompare, numberInputText } from '$lib/numberInput.js'
   import { autoExpand } from '$lib/growTextarea.js'
   import { useI18n } from '$lib/i18n/context.js'
   import { shouldShowSearchBar } from '$lib/optionSearch.js'
@@ -70,17 +70,15 @@
   <input
     class="text-input"
     class:cell-dense={wrapValue}
-    type="number"
-    inputmode="decimal"
-    min={column.minValue}
-    max={column.maxValue}
+    type="text"
+    inputmode="numeric"
+    autocomplete="off"
     value={numberInputText(value)}
     aria-label={label}
     aria-invalid={invalid || undefined}
     aria-describedby={ariaDescribedBy}
     oninput={onNumberInput}
     onblur={onNumberBlur}
-    use:noWheelChange
   />
 {:else if column.type === 'dropdown'}
   <!-- Semua kolom pilihan memakai SearchableDropdown seperti pertanyaan dropdown biasa. Menu floating (fixed)

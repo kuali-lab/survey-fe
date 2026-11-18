@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { applyNumberInput, noWheelChange, numberInputText, numberInputCompare } from './numberInput.js'
+import { applyNumberInput, numberInputText, numberInputCompare } from './numberInput.js'
 
 describe('applyNumberInput — leading zeros', () => {
   it('keeps a leading-zero identifier intact (NISN)', () => {
@@ -22,14 +22,39 @@ describe('applyNumberInput — leading zeros', () => {
     expect(r.text).toBe('42')
     expect(r.warn).toBeNull()
   })
+})
 
-  it('keeps decimals as typed', () => {
-    expect(applyNumberInput('3.14', {}).value).toBe('3.14')
-    expect(applyNumberInput('0.5', {}).value).toBe('0.5')
+describe('applyNumberInput — digits only', () => {
+  it('drops the characters of the reported case (minus and dot)', () => {
+    const r = applyNumberInput('-4.352354235325', {})
+    expect(r.text).toBe('4352354235325')
+    expect(r.value).toBe('4352354235325')
   })
 
-  it('keeps a negative number as typed', () => {
-    expect(applyNumberInput('-5', {}).value).toBe('-5')
+  it.each(['1e5', '12abc', '+62 812', '1,5', ' 7 '])('strips non-digits from %j', (raw) => {
+    expect(applyNumberInput(raw, {}).text).toMatch(/^\d*$/)
+  })
+
+  it('a pasted formatted number keeps its digits', () => {
+    expect(applyNumberInput('3201-0112-3456', {}).value).toBe('320101123456')
+  })
+
+  it('only junk reads as an empty answer', () => {
+    expect(applyNumberInput('abc', {})).toEqual({ text: '', value: null, warn: null })
+  })
+
+  it('strips before truncating, so junk never eats the length budget', () => {
+    expect(applyNumberInput('1-2-3-4', { maxLength: 3 }).text).toBe('123')
+  })
+
+  it('keeps a leading minus only when the minimum is negative', () => {
+    expect(applyNumberInput('-5', { minValue: -10 }).value).toBe('-5')
+    expect(applyNumberInput('-5', { minValue: 0 }).value).toBe('5')
+    expect(applyNumberInput('-5', {}).value).toBe('5')
+  })
+
+  it('drops a minus that is not leading', () => {
+    expect(applyNumberInput('5-3', { minValue: -10 }).value).toBe('53')
   })
 })
 
@@ -55,7 +80,7 @@ describe('applyNumberInput — zero is a real answer', () => {
 })
 
 describe('applyNumberInput — maxLength truncation', () => {
-  it('truncates while typing (type=number ignores native maxlength)', () => {
+  it('truncates while typing', () => {
     const r = applyNumberInput('00763597612345', { maxLength: 10 })
     expect(r.text).toBe('0076359761')
     expect(r.value).toBe('0076359761')
@@ -217,54 +242,16 @@ describe('scope guard — the bounded scales must keep sending real numbers', ()
   })
 })
 
-describe('noWheelChange — roda mouse tidak mengubah isian angka', () => {
-  // Vitest tanpa DOM: elemen tiruan dengan ownerDocument.activeElement dan blur().
-  function fakeInput(focused: boolean) {
-    const listeners = new Map<string, { fn: () => void; opts: unknown }>()
-    const node = {
-      blurred: false,
-      ownerDocument: { activeElement: null as unknown },
-      blur() { this.blurred = true },
-      addEventListener: (type: string, fn: () => void, opts: unknown) => listeners.set(type, { fn, opts }),
-      removeEventListener: (type: string, fn: () => void) => {
-        if (listeners.get(type)?.fn === fn) listeners.delete(type)
-      },
-    }
-    if (focused) node.ownerDocument.activeElement = node
-    return { node, listeners }
-  }
-
-  it.each([[true, true], [false, false]])('fokus %s → blur %s; listener pasif sehingga halaman tetap bergulir', (focused, blurred) => {
-    const { node, listeners } = fakeInput(focused)
-    noWheelChange(node as unknown as HTMLInputElement)
-    listeners.get('wheel')?.fn()
-    expect(node.blurred).toBe(blurred)
-    expect(listeners.get('wheel')?.opts).toEqual({ passive: true })
-  })
-
-  it('destroy melepas listener wheel', () => {
-    const { node, listeners } = fakeInput(true)
-    noWheelChange(node as unknown as HTMLInputElement).destroy()
-    expect(listeners.has('wheel')).toBe(false)
-  })
-
-  // SSR tidak merender action, jadi dijaga dari sumber: hanya input type="number" pertanyaan number.
-  it('QuestionInput: hanya input type="number" yang memakai noWheelChange', () => {
-    const src = readFileSync(fileURLToPath(new URL('./components/QuestionInput.svelte', import.meta.url)), 'utf8')
-    const inputs = src.match(/<input\b.*?\/>/gs) ?? []
-    const guarded = inputs.filter((tag) => tag.includes('use:noWheelChange'))
-    expect(guarded).toHaveLength(1)
-    expect(guarded[0]).toContain('type="number"')
-    expect(inputs.filter((tag) => tag.includes('type="number"'))).toHaveLength(1)
+describe('applyNumberInput — kolom dengan min 0 tidak menerima minus', () => {
+  it('di atas max dijepit ke max (termasuk hasil panah atas yang memicu input)', () => {
+    expect(applyNumberInput('101', { minValue: 0, maxValue: 100 })).toEqual({ text: '100', value: '100', warn: 'Nilai maksimal 100.' })
   })
 })
 
-describe('applyNumberInput — kolom dengan min 0 tidak menerima minus', () => {
-  it('minus diberi peringatan saat mengetik (dinaikkan ke min saat blur)', () => {
-    expect(applyNumberInput('-3', { minValue: 0 })).toEqual({ text: '-3', value: '-3', warn: 'Nilai minimal 0.' })
-  })
-
-  it('di atas max dijepit ke max (termasuk hasil panah atas yang memicu input)', () => {
-    expect(applyNumberInput('101', { minValue: 0, maxValue: 100 })).toEqual({ text: '100', value: '100', warn: 'Nilai maksimal 100.' })
+describe('input angka memakai type=text (type=number membiarkan e, + dan - lolos)', () => {
+  it.each(['QuestionInput', 'TableCellInput'])('%s tidak lagi memakai type="number"', (name) => {
+    const src = readFileSync(fileURLToPath(new URL(`./components/${name}.svelte`, import.meta.url)), 'utf8')
+    expect(src).not.toContain('type="number"')
+    expect(src).toContain('inputmode="numeric"')
   })
 })
