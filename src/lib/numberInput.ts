@@ -19,7 +19,7 @@
 import type { AnswerValue } from './types.js'
 
 export type NumberInputRules = {
-  /** Max digit count. type=number ignores the native maxlength attribute. */
+  /** Max character count. */
   maxLength?: number | null
   minValue?: number | null
   maxValue?: number | null
@@ -34,10 +34,21 @@ export type NumberInputResult = {
   warn: string | null
 }
 
-export function applyNumberInput(raw: string, rules: NumberInputRules): NumberInputResult {
-  let v = raw
+/**
+ * Digits only. A leading minus survives only when the field's minimum is
+ * negative; everywhere else it is just a stray character. Decimals are not
+ * supported (the field is also used for identifiers: NIK, NISN, postal code).
+ * Applied to every keystroke and every paste, because the input is type=text.
+ */
+function keepDigits(raw: string, allowMinus: boolean): string {
+  const minus = allowMinus && raw.startsWith('-') ? '-' : ''
+  return minus + raw.replace(/\D/g, '')
+}
 
-  // Limit digit count (maxLength). type=number ignores native maxlength.
+export function applyNumberInput(raw: string, rules: NumberInputRules): NumberInputResult {
+  let v = keepDigits(raw, rules.minValue != null && rules.minValue < 0)
+
+  // Limit character count (maxLength).
   if (rules.maxLength && v.length > rules.maxLength) {
     v = v.slice(0, rules.maxLength)
   }
@@ -88,19 +99,4 @@ export function numberInputCompare(value: AnswerValue | undefined): number | nul
     return isNaN(n) ? null : n
   }
   return null
-}
-
-/**
- * Action: roda mouse di atas input angka yang fokus mengubah nilainya (bisa
- * sampai negatif). Blur, bukan preventDefault, supaya roda yang sama tetap
- * menggulir halaman. Tombol panah dibiarkan bawaan: sudah menghormati min/max.
- */
-export function noWheelChange(node: HTMLInputElement) {
-  const onWheel = () => {
-    if (node.ownerDocument.activeElement === node) node.blur()
-  }
-  node.addEventListener('wheel', onWheel, { passive: true })
-  return {
-    destroy() { node.removeEventListener('wheel', onWheel) }
-  }
 }
