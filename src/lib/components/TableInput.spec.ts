@@ -33,14 +33,12 @@ const table: Question = {
 const noop = () => {}
 
 describe('TableCellInput', () => {
-  it('angka: input number dengan rentang kolom dan label "Baris — Kolom"; 0 tampil', () => {
+  it('angka: input numerik (hanya digit) dan label "Baris — Kolom"; 0 tampil', () => {
     const { body } = render(TableCellInput, {
       props: { column: col('Murid', 'number', { minValue: 0, maxValue: 99 }), value: 0, label: 'Matematika — Murid', onChange: noop },
     })
-    expect(body).toContain('type="number"')
+    expect(body).toContain('inputmode="numeric"')
     expect(body).toContain('value="0"')
-    expect(body).toContain('min="0"')
-    expect(body).toContain('max="99"')
     expect(body).toContain('aria-label="Matematika — Murid"')
     expect(body).not.toContain('aria-invalid')
   })

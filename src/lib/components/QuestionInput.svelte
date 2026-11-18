@@ -17,7 +17,7 @@
   } from '$lib/optionDependency.js'
   import { getRegionName, resolveRegionName } from '$lib/regionNames.js'
   import { SEARCH_DEBOUNCE_MS, filterBySearch, effectiveMinChars, debounce, shouldShowSearchBar } from '$lib/optionSearch.js'
-  import { applyNumberInput, noWheelChange, numberInputText, numberInputCompare } from '$lib/numberInput.js'
+  import { applyNumberInput, numberInputText, numberInputCompare } from '$lib/numberInput.js'
   import { autoExpand } from '$lib/growTextarea.js'
   import { fade, fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
@@ -728,10 +728,9 @@
 {:else if question.type === 'number'}
   <input
     class="text-input"
-    type="number"
-    inputmode="decimal"
-    min={question.minValue}
-    max={question.maxValue}
+    type="text"
+    inputmode="numeric"
+    autocomplete="off"
     value={numText}
     oninput={(e) => {
       // Truncation, the maxValue hard cap and the minValue warning all live in
@@ -762,7 +761,6 @@
       numberWarn = null
       onBlur?.()
     }}
-    use:noWheelChange
   />
   {#if numberWarn}
     {#key shakeKey}
